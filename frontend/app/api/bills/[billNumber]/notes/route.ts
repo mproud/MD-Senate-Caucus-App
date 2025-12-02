@@ -1,0 +1,45 @@
+import { type NextRequest, NextResponse } from "next/server"
+import { mockNotes } from "@/lib/mock-data"
+
+interface CreateNoteRequest {
+    content: string
+}
+
+export async function GET(request: NextRequest, { params }: { params: Promise<{ billNumber: string }> }) {
+    try {
+        const { billNumber } = await params
+
+        const notes = mockNotes[billNumber] || []
+
+        return NextResponse.json(notes)
+    } catch (error) {
+        console.error("[v0] Notes GET API error:", error)
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    }
+}
+
+export async function POST(request: NextRequest, { params }: { params: Promise<{ billNumber: string }> }) {
+    try {
+        const { billNumber } = await params
+        const body = (await request.json()) as CreateNoteRequest
+
+        const newNote = {
+            id: `note${Date.now()}`,
+            billNumber,
+            content: body.content,
+            createdAt: new Date().toISOString(),
+            userId: "user_demo",
+        }
+
+        // Add to mock data
+        if (!mockNotes[billNumber]) {
+            mockNotes[billNumber] = []
+        }
+        mockNotes[billNumber].push(newNote)
+
+        return NextResponse.json(newNote)
+    } catch (error) {
+        console.error("[v0] Notes POST API error:", error)
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    }
+}
