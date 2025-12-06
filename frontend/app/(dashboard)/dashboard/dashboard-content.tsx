@@ -121,8 +121,8 @@ export const DashboardContent = () => {
                 <div className="mt-8">
                     <Card>
                         <CardHeader>
-                            <CardTitle>Today's Bills</CardTitle>
-                            <CardDescription>Recent bills on today's calendar</CardDescription>
+                            <CardTitle>At A Glance</CardTitle>
+                            <CardDescription>Recent changes to bills you're following</CardDescription>
                         </CardHeader>
                         <CardContent>
                             <div className="space-y-4">
@@ -142,8 +142,8 @@ export const DashboardContent = () => {
                     <div className="mt-8">
                         <Card>
                             <CardHeader>
-                                <CardTitle>Today's Bills</CardTitle>
-                                <CardDescription>Recent bills on today's calendar</CardDescription>
+                                <CardTitle>At A Glance</CardTitle>
+                            <CardDescription>Recent changes to bills you're following</CardDescription>
                             </CardHeader>
                             <CardContent>
                                 <div className="space-y-4">

@@ -1,0 +1,615 @@
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// 
+// Definitions
+// 
+enum Chamber {
+    SENATE
+    HOUSE
+    JOINT
+}
+
+/// Where this action came from (MGA JSON, scraped HTML, or a manual entry by staff)
+enum ActionSource {
+    MGA_JSON
+    MGA_SCRAPE
+    MANUAL
+}
+
+/// Type of floor or committee calendar
+/// Adjust as any edge cases are discovered
+enum CalendarType {
+    SECOND_READING
+    THIRD_READING
+    CONSENT
+    LAID_OVER
+    COMMITTEE
+    SPECIAL_ORDER
+    OTHER
+}
+
+/// High-level alert category (what the user cares about)
+enum AlertType {
+    BILL_STATUS
+    CALENDAR
+    COMMITTEE_ACTION
+    HEARING
+    CUSTOM
+}
+
+/// How alerts should be delivered -- default to email but just in case...
+enum AlertDeliveryChannel {
+    EMAIL
+    SMS
+    WEBHOOK
+    PUSH
+}
+
+/// Normalized event types that can trigger alerts
+enum BillEventType {
+    BILL_STATUS_CHANGED
+    BILL_NEW_ACTION
+    BILL_ADDED_TO_CALENDAR
+    BILL_REMOVED_FROM_CALENDAR
+    COMMITTEE_REFERRAL
+    COMMITTEE_VOTE_RECORDED
+    HEARING_SCHEDULED
+    HEARING_CHANGED
+    HEARING_CANCELED
+    CALENDAR_PUBLISHED
+    CALENDAR_UPDATED
+}
+
+
+//
+// Core Tables
+//
+
+model Legislator {
+    id  Int  @id @default(autoincrement())
+
+    firstName   String
+    middleName  String?
+    lastName    String
+    suffix      String?
+    nickname    String?
+    fullName    String
+    party       String
+    district    String
+
+    /// No idea if this is needed
+    isActive    Boolean  @default(true)
+
+    /// Relations
+    terms                 LegislatorTerm[]
+    committeeMemberships  CommitteeMember[]
+    delegationMemberships DelegationMember[]
+    primarySponsoredBills Bill[] @relation("PrimarySponsor")
+    alerts Alert[]
+
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+
+    @@map("legislators")
+}
+
+/// A legislator’s membership in a chamber/district for a specific period
+/// This way we can handle when a legislator has moved to different chamber/district
+model LegislatorTerm {
+    id           Int       @id @default(autoincrement())
+    legislator   Legislator @relation(fields: [legislatorId], references: [id])
+    legislatorId Int
+    chamber      Chamber
+    district     String?
+    room         String?
+    building     String?
+    
+    startDate    DateTime?
+    endDate      DateTime?
+
+    /// Raw or extra data from the scrapes
+    dataSource  Json?
+
+    createdAt    DateTime  @default(now())
+    updatedAt    DateTime  @updatedAt
+
+    @@index([chamber, district])
+
+    @@map("legislators_terms")
+}
+
+/// Committees!
+model Committee {
+    id                Int       @id @default(autoincrement())
+    externalId        String?   @unique
+    chamber           Chamber?  /// This may be null or JOINT if it's a joint committee
+
+    abbreviation      String?   /// JPR, EHEA, etc
+    name              String
+    
+    /// Committee type - "Standing", "Joint", "Subcommittee"
+    committeeType     String?
+    parentCommittee   Committee? @relation("CommitteeChildren", fields: [parentCommitteeId], references: [id])
+    parentCommitteeId Int?
+
+    /// Subcommittees, if any
+    subcommittees    Committee[] @relation("CommitteeChildren")
+
+    /// Relations
+    members          CommitteeMember[]
+    currentBills     BillCurrentCommittee[]
+    
+    /// Historical referrals/reports
+    history          BillCommitteeHistory[]
+    calendarItems    CalendarItem[]
+    alerts           Alert[]
+
+    dataSource       Json?
+
+    createdAt        DateTime   @default(now())
+    updatedAt        DateTime   @updatedAt
+
+    @@unique([chamber, abbreviation], map: "committees_chamber_abbreviation_unique")
+
+    @@map("committees")
+}
+
+/// Membership of a legislator in a committee for a given time window
+model CommitteeMember {
+    id           Int        @id @default(autoincrement())
+    committee    Committee  @relation(fields: [committeeId], references: [id])
+    committeeId  Int
+    legislator   Legislator @relation(fields: [legislatorId], references: [id])
+    legislatorId Int
+
+    /// Role such as "Chair", "Vice Chair", "Member"
+    role         String?
+    /// Optional ordering within the committee
+    rank         Int?
+
+    startDate    DateTime?
+    endDate      DateTime?
+
+    createdAt    DateTime   @default(now())
+    updatedAt    DateTime   @updatedAt
+
+    @@unique([committeeId, legislatorId, startDate])
+    @@index([committeeId])
+
+    @@map("committee_members")
+}
+
+/// A county/region delegation (ex - "Caroline County Delegation")
+model Delegation {
+    id          Int      @id @default(autoincrement())
+    externalId  String?  @unique
+    code        String?
+    name        String
+    sortOrder   Int?
+    dataSource  Json?
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+
+    members     DelegationMember[]
+    /// Bills associated with this delegation.
+    bills       BillDelegation[]
+    alerts      Alert[]
+
+    @@unique([code], map: "delegations_code_unique")
+}
+
+model DelegationMember {
+    id            Int         @id @default(autoincrement())
+    delegation    Delegation  @relation(fields: [delegationId], references: [id])
+    delegationId  Int
+    legislator    Legislator  @relation(fields: [legislatorId], references: [id])
+    legislatorId  Int
+    role          String?
+    startDate     DateTime?
+    endDate       DateTime?
+    createdAt     DateTime    @default(now())
+    updatedAt     DateTime    @updatedAt
+
+    @@unique([delegationId, legislatorId, startDate])
+    @@index([delegationId])
+}
+
+//
+// BILLS
+//
+
+/// I'm just a bill (or resolutions, etc)
+model Bill {
+    id                 Int       @id @default(autoincrement())
+    externalId         String?   @unique
+
+    /// Session year (ex 2025, 2026) and Session Code (ex 2025RS, 2026RS)
+    sessionYear        Int
+    sessionCode        String
+    
+    chamber            Chamber
+    
+    /// Full bill number, "SB0186"
+    billNumber         String
+    
+    /// Numeric part only, for sorting
+    billNumberNumeric  Int?
+    
+    /// Kind of bill - "SB", "HB", "SJ", etc
+    billType           String?
+    
+    /// Bill title -- TODO -- this may need to be modified based on what the scraper gives us
+    shortTitle         String
+    longTitle          String?
+
+    synopsis           String?
+
+    /// Machine-readable status code from MGA, if they expose it
+    statusCode         String?
+
+    /// Human-friendly status.
+    statusDesc         String?
+
+    lastActionDate     DateTime?
+    lastAction         String?
+
+    /// Cross-file MGA external id (if any)
+    crossFileExternalId String?
+
+    /// Cross-file resolved in this DB (points to another Bill).
+    crossFileBill      Bill?     @relation("CrossFile", fields: [crossFileBillId], references: [id])
+    crossFileBillId    Int?
+    crossFileOf        Bill[]    @relation("CrossFile")
+
+    /// Local bill / emergency bill flags.
+    isLocal            Boolean   @default(false)
+    isEmergency        Boolean   @default(false)
+
+    /// Primary sponsor (legislator or President/Administration special handling).
+    primarySponsor     Legislator? @relation("PrimarySponsor", fields: [primarySponsorId], references: [id])
+    primarySponsorId   Int?
+
+    /// For things like "Sponsored by the President (by request of the Administration)".
+    sponsorDisplay     String?
+
+    /// Versions (First Reader, Third Reader, Enrolled, etc.)
+    versions           BillVersion[]
+    /// Full action history, including committee reports and floor actions
+    actions            BillAction[]
+    /// User / internal notes about the bill
+    notes              BillNote[]
+    /// The current primary committee assignment (fast lookup)
+    currentCommittee   BillCurrentCommittee?
+    /// Historical committee referrals / reports.
+    committeeHistory   BillCommitteeHistory[]
+    /// Links to delegations affected by this bill.
+    delegations        BillDelegation[]
+    /// Calendar items where this bill appears.
+    calendarItems      CalendarItem[]
+    /// Events for "something changed on this bill"
+    events             BillEvent[]
+    alerts             Alert[]
+
+    /// Raw MGA JSON or extra metadata.
+    dataSource         Json?
+    createdAt          DateTime  @default(now())
+    updatedAt          DateTime  @updatedAt
+
+    @@map("bills")
+}
+
+/// A specific version of a bill (First Reader, Third Reader, Enrolled, etc)
+model BillVersion {
+    id            Int      @id @default(autoincrement())
+    bill          Bill     @relation(fields: [billId], references: [id])
+    billId        Int
+    versionCode   String   // "First Reader", "Third Reader", etc
+    versionOrder  Int
+    label         String?
+    introducedDate DateTime?
+    urlPdf        String?
+    urlHtml       String?
+    dataSource    Json?
+    createdAt     DateTime @default(now())
+    updatedAt     DateTime @updatedAt
+
+    @@unique([billId, versionCode])
+    @@index([billId, versionOrder])
+}
+
+/// A single action in a bill's history (floor action, committee report, vote, etc.)
+/// Vote-related fields are optional and can be used only when this action represents a vote
+model BillAction {
+    id            Int       @id @default(autoincrement())
+    bill          Bill      @relation(fields: [billId], references: [id])
+    billId        Int
+    actionDate    DateTime
+    actionTime    DateTime?
+    chamber       Chamber?
+    actionCode    String?
+    description   String
+    committee     Committee? @relation(fields: [committeeId], references: [id])
+    committeeId   Int?
+    calendarType  CalendarType?
+    calendarNumber Int?
+    sequence      Int?
+
+    /// Whether this action is a committee/floor vote.
+    isVote        Boolean   @default(false)
+    motion        String?
+    voteResult    String?   // "Favorable", "Favorable w/ Amendments", "Unfavorable"
+    yesVotes      Int?
+    noVotes       Int?
+    excused       Int?
+    notVoting     Int?
+    
+    // Where the action came from - the JSON feed, a manual entry, or the web scraper
+    source        ActionSource @default(MGA_JSON)
+    
+    dataSource    Json?
+    createdAt     DateTime  @default(now())
+    updatedAt     DateTime  @updatedAt
+
+    @@index([billId, actionDate, sequence])
+}
+
+/// Notes for the bill
+model BillNote {
+    id         Int      @id @default(autoincrement())
+    bill       Bill     @relation(fields: [billId], references: [id])
+    billId     Int
+
+    /// User ID from Clerk, etc
+    userId     String?
+
+    visibility String?
+    note       String
+
+    createdAt DateTime @default(now())
+}
+
+/// The committee a bill is currently assigned to (fast lookup)
+model BillCurrentCommittee {
+    bill             Bill      @relation(fields: [billId], references: [id])
+    billId           Int       @id
+    committee        Committee @relation(fields: [committeeId], references: [id])
+    committeeId      Int
+    referredDate     DateTime?
+    dataSource       Json?
+    updatedAt        DateTime  @updatedAt
+
+    /// The BillAction representing the latest vote we show in the UI
+    /// (could be manual or official)
+    lastVoteAction   BillAction? @relation(fields: [lastVoteActionId], references: [id])
+    lastVoteActionId Int?
+}
+
+/// Historical committee referrals + reports for a bill.
+model BillCommitteeHistory {
+    id              Int        @id @default(autoincrement())
+    bill            Bill       @relation(fields: [billId], references: [id])
+    billId          Int
+    committee       Committee  @relation(fields: [committeeId], references: [id])
+    committeeId     Int
+    referredDate    DateTime?
+    reportedOutDate DateTime?
+    reportAction    String?    // "Favorable", "Unfavorable", "Favorable with Amendments"
+    dataSource      Json?
+    createdAt       DateTime   @default(now())
+    updatedAt       DateTime   @updatedAt
+
+    @@index([billId])
+}
+
+/// Join table between bills and delegations -- 'local bill for X delegation"
+model BillDelegation {
+    id               Int        @id @default(autoincrement())
+    bill             Bill       @relation(fields: [billId], references: [id])
+    billId           Int
+    delegation       Delegation @relation(fields: [delegationId], references: [id])
+    delegationId     Int
+    relationshipType String? // "LOCAL_BILL", "AFFECTS"
+    dataSource       Json?
+    createdAt        DateTime @default(now())
+    updatedAt        DateTime @updatedAt
+
+    @@unique([billId, delegationId])
+    @@index([billId])
+    @@index([delegationId])
+}
+
+//
+// FLOOR CALENDARS
+//
+
+/// A floor calendar (Second Reading, Third Reading, Consent, Special Order, etc.)
+/// for a specific chamber + proceedings number on a given day
+model FloorCalendar {
+    id                Int           @id @default(autoincrement())
+    sessionYear       Int
+    sessionCode       String
+    chamber           Chamber
+    proceedingsNumber Int
+    calendarType      CalendarType
+    calendarNumber    Int?
+
+    /// Full heading text from the agenda -- "Senate Third Reading Calendar No. 37 (General Senate Bills)"
+    label             String
+    calendarDate      DateTime
+    legislativeDay    Int?
+    sourceUrl         String
+    scrapedAt         DateTime
+    dataSource        Json?
+    createdAt         DateTime      @default(now())
+    updatedAt         DateTime      @updatedAt
+
+    items             CalendarItem[]
+    events            BillEvent[]
+
+    @@unique([sessionYear, chamber, proceedingsNumber, calendarType, calendarNumber])
+    @@index([sessionYear, chamber, calendarDate, calendarType])
+}
+
+/// A single bill entry on a floor calendar (ordered list)
+model CalendarItem {
+    id               Int            @id @default(autoincrement())
+    floorCalendar    FloorCalendar  @relation(fields: [floorCalendarId], references: [id])
+    floorCalendarId  Int
+
+    /// Order within the calendar.
+    position         Int
+
+    /// Raw bill number as it appears (e.g. "SB0186").
+    billNumber       String
+
+    /// Resolved bill record if you can match it.
+    bill             Bill?          @relation(fields: [billId], references: [id])
+    billId           Int?
+    committee        Committee?     @relation(fields: [committeeId], references: [id])
+    committeeId      Int?
+
+    /// Text describing the committee report / action, e.g. "Favorable with Amendments(2)".
+    actionText       String?
+
+    /// Extra descriptive text or notes parsed from the agenda.
+    notes            String?
+    dataSource       Json?
+    createdAt        DateTime       @default(now())
+    updatedAt        DateTime       @updatedAt
+
+    @@unique([floorCalendarId, position])
+    @@index([floorCalendarId, position])
+    @@index([billId])
+}
+
+//
+// EVENTS + ALERTS
+//
+
+/// A normalized "something happened to this bill" event,
+/// used for triggering alerts (committee vote, added to calendar, status change, etc.)
+model BillEvent {
+    id               Int            @id @default(autoincrement())
+    bill             Bill           @relation(fields: [billId], references: [id])
+    billId           Int
+    eventType        BillEventType
+    eventTime        DateTime       @default(now())
+    chamber          Chamber?
+    committee        Committee?     @relation(fields: [committeeId], references: [id])
+    committeeId      Int?
+    floorCalendar    FloorCalendar? @relation(fields: [floorCalendarId], references: [id])
+    floorCalendarId  Int?
+    calendarType     CalendarType?
+    calendarNumber   Int?
+
+    /// Human-readable summary used in notifications.
+    summary          String
+
+    /// Extra context: before/after snapshots, raw action, etc.
+    payload          Json?
+
+    /// Used by a worker to ensure we only process each event for alerts once.
+    processedForAlerts Boolean      @default(false)
+    createdAt        DateTime       @default(now())
+
+    @@index([billId, eventTime])
+    @@index([eventType, eventTime])
+    @@index([processedForAlerts, eventTime])
+}
+
+/// An alert subscription for a user; can watch a bill, committee, delegation,
+/// or specific calendar types and event types
+model Alert {
+    id                 Int                 @id @default(autoincrement())
+
+    /// Auth user id from your auth system (Clerk, etc.)
+    userId             String?
+    active             Boolean             @default(true)
+    alertType          AlertType
+
+    /// Optional filters: which entity/calendar this alert watches
+    bill               Bill?               @relation(fields: [billId], references: [id])
+    billId             Int?
+    legislator         Legislator?         @relation(fields: [legislatorId], references: [id])
+    legislatorId       Int?
+    committee          Committee?          @relation(fields: [committeeId], references: [id])
+    committeeId        Int?
+    delegation         Delegation?         @relation(fields: [delegationId], references: [id])
+    delegationId       Int?
+    chamber            Chamber?
+    calendarType       CalendarType?
+
+    /// Optional event-type filter. If null, any event for the entity can trigger this alert
+    eventTypeFilter    BillEventType?
+
+    /// Delivery configuration
+    deliveryChannel    AlertDeliveryChannel @default(EMAIL)
+
+    /// Target address/phone/webhook, depending on deliveryChannel
+    target             String
+
+    /// Optional status threshold logic or extra filters (free-form)
+    statusThreshold    String?
+    includeHistory     Boolean             @default(false)
+    lastTriggeredAt    DateTime?
+
+    metadata           Json?
+    createdAt          DateTime            @default(now())
+    updatedAt          DateTime            @updatedAt
+
+    @@index([userId, active])
+    @@index([billId, active])
+    @@index([committeeId, active])
+    @@index([delegationId, active])
+    @@index([chamber, calendarType, active])
+}
+
+//
+// SCRAPE / SESSION SCHEDULE
+//
+
+/// Per-day session/scraping behavior for a given chamber
+/// The scraper checks this to decide whether to hit MGA every minute,
+/// every 30 minutes, or only on manual request -- TODO find out how long the scraper takes.
+/// That runtime may be the minimum frequency the scraper can run
+/// TODO -- actually I don't like this. Choose a date range or something, I'm not sure
+model SessionSchedule {
+    id           Int      @id @default(autoincrement())
+    sessionYear  Int
+    chamber      Chamber
+    date         DateTime
+    
+    /// True if this is a session day for this chamber.
+    isSessionDay Boolean  @default(false)
+    
+    /// Peak-times (e.g. floor session hours)
+    peakStart    DateTime?
+    peakEnd      DateTime?
+    offpeakStart DateTime?
+    offpeakEnd   DateTime?
+
+    /// 'AUTO', 'OFF', 'FORCE_PEAK', etc. Simple free-form mode flag.
+    mode         String   @default("AUTO")
+    notes        String?
+    createdAt    DateTime @default(now())
+    updatedAt    DateTime @updatedAt
+
+    @@unique([sessionYear, chamber, date])
+    @@index([sessionYear, chamber, date])
+}
+
+//
+// LOGGING, AUDITING, AND ANALYTICS
+//
+
+/// TODO

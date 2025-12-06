@@ -181,7 +181,8 @@ export function VoteForm({ billNumber, voteType }: VoteFormProps) {
                                             <SelectItem value="Favorable">Favorable</SelectItem>
                                             <SelectItem value="Unfavorable">Unfavorable</SelectItem>
                                             <SelectItem value="Favorable with Amendments">Favorable with Amendments</SelectItem>
-                                            <SelectItem value="No Recommendation">No Recommendation</SelectItem>
+                                            <SelectItem value="Reassigned">Reassigned to another Committee</SelectItem>
+                                            <SelectItem value="Other">Other</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -280,32 +281,28 @@ export function VoteForm({ billNumber, voteType }: VoteFormProps) {
                                 />
                             </div>
 
-                            {voteType === "floor" && (
-                                <div className="space-y-2">
-                                    <Label htmlFor="notVoting">Not Voting (optional)</Label>
-                                    <Input
-                                        id="notVoting"
-                                        type="number"
-                                        min="0"
-                                        value={formData.notVoting}
-                                        onChange={(e) => setFormData({ ...formData, notVoting: e.target.value })}
-                                    />
-                                </div>
-                            )}
-                        </div>
-
-                        {voteType === "committee" && (
                             <div className="space-y-2">
-                                <Label htmlFor="details">Details (optional)</Label>
-                                <Textarea
-                                    id="details"
-                                    placeholder="Additional notes about the vote..."
-                                    value={formData.details}
-                                    onChange={(e) => setFormData({ ...formData, details: e.target.value })}
-                                    rows={3}
+                                <Label htmlFor="notVoting">Excused (optional)</Label>
+                                <Input
+                                    id="excused"
+                                    type="number"
+                                    min="0"
+                                    value={formData.notVoting}
+                                    onChange={(e) => setFormData({ ...formData, excused: e.target.value })}
                                 />
                             </div>
-                        )}
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="details">Details (optional)</Label>
+                            <Textarea
+                                id="details"
+                                placeholder="Additional notes about the vote..."
+                                value={formData.details}
+                                onChange={(e) => setFormData({ ...formData, details: e.target.value })}
+                                rows={3}
+                            />
+                        </div>
                     </div>
 
                     <DialogFooter>
