@@ -57421,7 +57421,11 @@ var adapter3 = new import_adapter_pg.PrismaPg(pool);
 var prisma = new import_client.PrismaClient({
   adapter: adapter3
 });
-var MGA_BASE = "https://mgaleg.maryland.gov/mgawebsite";
+var LIVE_MGA_BASE = "https://mgaleg.maryland.gov/mgawebsite";
+var MGA_SOURCE = process.env.MGA_SOURCE ?? "live";
+var MGA_WAYBACK_BASE = process.env.MGA_WAYBACK_BASE;
+var MGA_BASE = MGA_SOURCE === "archive" && MGA_WAYBACK_BASE ? MGA_WAYBACK_BASE : LIVE_MGA_BASE;
+var USING_WAYBACK = MGA_SOURCE === "archive" && !!MGA_WAYBACK_BASE;
 var MEMBERS_INDEX_SENATE = `${MGA_BASE}/Members/Index/senate`;
 var MEMBERS_INDEX_HOUSE = `${MGA_BASE}/Members/Index/house`;
 var COMMITTEES_INDEX_SENATE = `${MGA_BASE}/Committees/Index/senate`;
@@ -57441,11 +57445,16 @@ async function scrapeMemberDetailLinks(indexUrl) {
   $2("a[href*='/Members/Details/']").each((_, el) => {
     const href = $2(el).attr("href");
     if (!href) return;
-    if (href.startsWith("http")) {
+    if (href.startsWith("http://") || href.startsWith("https://")) {
       links.add(href);
-    } else {
-      links.add(new URL(href, MGA_BASE).toString());
+      return;
     }
+    if (USING_WAYBACK && href.startsWith("/web/")) {
+      links.add(`https://web.archive.org${href}`);
+      return;
+    }
+    const full = new URL(href, MGA_BASE).toString();
+    links.add(full);
   });
   return Array.from(links);
 }
@@ -57467,7 +57476,7 @@ async function scrapeLegislatorDetail(url2, chamber) {
   $2("a[href^='mailto:']").each((_, el) => {
     const href = $2(el).attr("href");
     if (href && href.startsWith("mailto:")) {
-      email = href.replace("mailto:", "").trim();
+      email = href.replace("mailto:", "").split("?")[0].trim();
     }
   });
   return {
@@ -57494,7 +57503,7 @@ async function scrapeAllLegislators() {
   }
   return results;
 }
-async function scrapeCommitteesFromIndex(indexUrl, chamber, kind) {
+async function scrapeCommitteesFromIndex(indexUrl, chamber, committeeType) {
   const $2 = await fetchHtml(indexUrl);
   const committees = [];
   $2("a[href*='Committees/Details']").each((_, el) => {
@@ -57509,7 +57518,7 @@ async function scrapeCommitteesFromIndex(indexUrl, chamber, kind) {
       code: code.toLowerCase(),
       name,
       chamber,
-      kind
+      committeeType
     });
   });
   const deduped = Object.values(
@@ -57591,44 +57600,96 @@ async function scrapeAllCommitteesAndMemberships() {
   }
   return { committees: dedupedCommittees, memberships };
 }
+function splitName(fullName) {
+  const trimmed = fullName.trim();
+  if (!trimmed) return { firstName: null, lastName: null };
+  const parts = trimmed.split(/\s+/);
+  if (parts.length === 1) {
+    return { firstName: parts[0], lastName: null };
+  }
+  const firstName = parts[0];
+  const lastName = parts.slice(1).join(" ");
+  return { firstName, lastName };
+}
 async function upsertLegislators(scraped) {
   for (const leg of scraped) {
-    await prisma.legislator.upsert({
+    const { firstName, lastName } = splitName(leg.name);
+    const district = leg.district ?? "UNKNOWN";
+    const party = leg.party ?? "Unknown";
+    const legislator = await prisma.legislator.upsert({
       where: { externalId: leg.externalId },
       update: {
-        name: leg.name,
-        chamber: leg.chamber,
-        district: leg.district,
-        county: leg.county,
-        party: leg.party,
-        email: leg.email
+        fullName: leg.name,
+        firstName: firstName ?? void 0,
+        lastName: lastName ?? void 0,
+        party,
+        district,
+        isActive: true
       },
       create: {
         externalId: leg.externalId,
-        name: leg.name,
-        chamber: leg.chamber,
-        district: leg.district,
-        county: leg.county,
-        party: leg.party,
-        email: leg.email
+        fullName: leg.name,
+        firstName: firstName ?? void 0,
+        lastName: lastName ?? void 0,
+        party,
+        district,
+        isActive: true
       }
     });
+    const existingTerm = await prisma.legislatorTerm.findFirst({
+      where: {
+        legislatorId: legislator.id,
+        chamber: leg.chamber,
+        endDate: null
+      }
+    });
+    const termDataSource = {
+      county: leg.county ?? null,
+      email: leg.email ?? null
+    };
+    if (existingTerm) {
+      await prisma.legislatorTerm.update({
+        where: { id: existingTerm.id },
+        data: {
+          district: leg.district ?? existingTerm.district,
+          dataSource: {
+            ...existingTerm.dataSource || {},
+            ...termDataSource
+          }
+        }
+      });
+    } else {
+      await prisma.legislatorTerm.create({
+        data: {
+          legislatorId: legislator.id,
+          chamber: leg.chamber,
+          district: leg.district,
+          startDate: /* @__PURE__ */ new Date(),
+          dataSource: termDataSource
+        }
+      });
+    }
   }
 }
 async function upsertCommittees(scraped) {
   for (const cmte of scraped) {
+    const externalId = cmte.code.toLowerCase();
+    const abbreviation = cmte.code.toUpperCase();
     await prisma.committee.upsert({
-      where: { code: cmte.code },
+      where: { externalId },
       update: {
+        externalId,
         name: cmte.name,
         chamber: cmte.chamber ?? null,
-        kind: cmte.kind
+        abbreviation,
+        committeeType: cmte.committeeType
       },
       create: {
-        code: cmte.code,
+        externalId,
         name: cmte.name,
         chamber: cmte.chamber ?? null,
-        kind: cmte.kind
+        abbreviation,
+        committeeType: cmte.committeeType
       }
     });
   }
@@ -57639,11 +57700,12 @@ async function upsertCommitteeMemberships(scraped) {
     (byCommittee[m.committeeCode] ??= []).push(m);
   }
   for (const [committeeCode, memberships] of Object.entries(byCommittee)) {
+    const externalId = committeeCode.toLowerCase();
     const committee = await prisma.committee.findUnique({
-      where: { code: committeeCode }
+      where: { externalId }
     });
     if (!committee) continue;
-    await prisma.committeeMembership.deleteMany({
+    await prisma.committeeMember.deleteMany({
       where: { committeeId: committee.id }
     });
     for (const m of memberships) {
@@ -57656,7 +57718,7 @@ async function upsertCommitteeMemberships(scraped) {
         );
         continue;
       }
-      await prisma.committeeMembership.create({
+      await prisma.committeeMember.create({
         data: {
           committeeId: committee.id,
           legislatorId: legislator.id,
@@ -57666,28 +57728,76 @@ async function upsertCommitteeMemberships(scraped) {
     }
   }
 }
+function getArchiveSnapshotIdentifier(waybackBase) {
+  if (!waybackBase) return null;
+  const match = waybackBase.match(/\/web\/(\d{14})\//);
+  if (match) return match[1];
+  return waybackBase;
+}
 var handler = async () => {
+  const kind = "MGA_LEGISLATOR_COMMITTEES";
+  const source = USING_WAYBACK ? "ARCHIVE" : "LIVE";
+  const archiveSnapshot = USING_WAYBACK ? getArchiveSnapshotIdentifier(MGA_WAYBACK_BASE) : null;
+  const run = await prisma.scrapeRun.create({
+    data: {
+      kind,
+      source,
+      baseUrl: MGA_BASE,
+      archiveSnapshot,
+      metadata: {
+        MGA_SOURCE,
+        MGA_WAYBACK_BASE: MGA_WAYBACK_BASE ?? null
+      }
+    }
+  });
+  let legislatorsCount = 0;
+  let committeesCount = 0;
+  let membershipsCount = 0;
   try {
     console.log("Scraping legislators...");
     const legislators = await scrapeAllLegislators();
-    console.log(`Scraped ${legislators.length} legislators. Persisting...`);
+    legislatorsCount = legislators.length;
+    console.log(`Scraped ${legislatorsCount} legislators. Persisting...`);
     await upsertLegislators(legislators);
     console.log("Scraping committees & memberships...");
     const { committees, memberships } = await scrapeAllCommitteesAndMemberships();
-    console.log(`Scraped ${committees.length} committees, ${memberships.length} memberships.`);
+    committeesCount = committees.length;
+    membershipsCount = memberships.length;
+    console.log(`Scraped ${committeesCount} committees, ${membershipsCount} memberships.`);
     await upsertCommittees(committees);
     await upsertCommitteeMemberships(memberships);
+    await prisma.scrapeRun.update({
+      where: { id: run.id },
+      data: {
+        success: true,
+        finishedAt: /* @__PURE__ */ new Date(),
+        legislatorsCount,
+        committeesCount,
+        membershipsCount
+      }
+    });
     return {
       statusCode: 200,
       body: JSON.stringify({
         ok: true,
-        legislators: legislators.length,
-        committees: committees.length,
-        memberships: memberships.length
+        legislators: legislatorsCount,
+        committees: committeesCount,
+        memberships: membershipsCount
       })
     };
   } catch (err) {
     console.error("MGA scraper error", err);
+    await prisma.scrapeRun.update({
+      where: { id: run.id },
+      data: {
+        success: false,
+        finishedAt: /* @__PURE__ */ new Date(),
+        legislatorsCount,
+        committeesCount,
+        membershipsCount,
+        error: String(err)
+      }
+    });
     return {
       statusCode: 500,
       body: JSON.stringify({ ok: false, error: String(err) })

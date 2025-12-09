@@ -81,9 +81,9 @@ model Legislator {
   /// Do we need this?
   externalId  String?  @unique
 
-  firstName  String
+  firstName  String?
   middleName String?
-  lastName   String
+  lastName   String?
   suffix     String?
   nickname   String?
   fullName   String
@@ -614,5 +614,41 @@ model SessionSchedule {
 //
 // LOGGING, AUDITING, AND ANALYTICS
 //
+
+/// A log of each scraper run (for dashboard + debugging)
+model ScrapeRun {
+  id Int @id @default(autoincrement())
+
+  /// What this run was doing ("MGA_LEGISLATOR_COMMITTEES", "MGA_FLOOR_CALENDARS", etc.)
+  kind            String
+
+  // LIVE or ARCHIVE
+  source          String @default("LIVE")
+
+  // Show the actual base used and the snapshot id
+  baseUrl         String?
+  archiveSnapshot String?
+
+  startedAt  DateTime @default(now())
+  finishedAt DateTime?
+  success    Boolean  @default(false)
+
+  legislatorsCount Int?
+  committeesCount  Int?
+  membershipsCount Int?
+
+  error    String?
+  metadata Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([kind, startedAt])
+  @@index([kind, source, startedAt])
+  @@map("scrape_runs")
+}
+
+
+
 
 /// TODO

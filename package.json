@@ -11,18 +11,20 @@
     "prisma:update-db": "prisma migrate dev --schema=frontend/prisma/schema.prisma --config=frontend/prisma.config.ts",
     "prisma:generate": "prisma generate --schema=frontend/prisma/schema.prisma",
     "build:scraper": "npm run build --workspace mga-scraper",
-    "build:frontend": "npm run build --workspace frontend"
+    "build:frontend": "npm run build --workspace frontend",
+    "scraper": "node frontend/dist/index.js"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/mproud/MD-Senate-Caucus-App.git"
   },
   "devDependencies": {
+    "@types/pg": "^8.15.6",
     "prisma": "^7.1.0"
   },
   "dependencies": {
-    "@prisma/client": "^7.1.0",
     "@prisma/adapter-pg": "^7.1.0",
+    "@prisma/client": "^7.1.0",
     "pg": "^8.12.0"
   }
 }
