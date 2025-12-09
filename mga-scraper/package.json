@@ -1,0 +1,21 @@
+{
+  "name": "mga-scraper",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist/index.js --external:@prisma/client --external:@prisma/adapter-pg --external:pg --external:.prisma/*",
+    "invoke-local": "node dist/index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "axios": "^1.13.2",
+    "cheerio": "^1.1.2"
+  },
+  "devDependencies": {
+    "esbuild": "^0.27.1",
+    "typescript": "^5.9.3"
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "name": "md-senate-caucus-app",
+  "version": "1.0.0",
+  "author": "Matt Proud | CampaignFoundry <campaignfoundry.dev>",
+  "private": "true",
+  "workspaces": [
+    "frontend",
+    "mga-scraper"
+  ],
+  "scripts": {
+    "prisma:update-db": "prisma migrate dev --schema=frontend/prisma/schema.prisma --config=frontend/prisma.config.ts",
+    "prisma:generate": "prisma generate --schema=frontend/prisma/schema.prisma",
+    "build:scraper": "npm run build --workspace mga-scraper",
+    "build:frontend": "npm run build --workspace frontend"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mproud/MD-Senate-Caucus-App.git"
+  },
+  "devDependencies": {
+    "prisma": "^7.1.0"
+  },
+  "dependencies": {
+    "@prisma/client": "^7.1.0",
+    "@prisma/adapter-pg": "^7.1.0",
+    "pg": "^8.12.0"
+  }
+}
