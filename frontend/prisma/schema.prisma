@@ -58,6 +58,7 @@ enum AlertDeliveryChannel {
 
 /// Normalized event types that can trigger alerts
 enum BillEventType {
+  BILL_INTRODUCED
   BILL_STATUS_CHANGED
   BILL_NEW_ACTION
   BILL_ADDED_TO_CALENDAR
@@ -277,7 +278,6 @@ model Bill {
   isLocal     Boolean @default(false)
   isEmergency Boolean @default(false)
 
-  /// Primary sponsor (legislator or President/Administration special handling).
   primarySponsor   Legislator? @relation("PrimarySponsor", fields: [primarySponsorId], references: [id])
   primarySponsorId Int?
 
@@ -636,6 +636,7 @@ model ScrapeRun {
   legislatorsCount Int?
   committeesCount  Int?
   membershipsCount Int?
+  calendarsCount Int?
 
   error    String?
   metadata Json?

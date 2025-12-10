@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "BillEventType" ADD VALUE 'BILL_INTRODUCED';

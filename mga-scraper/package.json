@@ -3,8 +3,9 @@
   "version": "1.0.0",
   "main": "dist/index.js",
   "scripts": {
-    "build": "esbuild src/index.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist/index.js --external:@prisma/client --external:@prisma/adapter-pg --external:pg --external:.prisma/*",
-    "invoke-local": "node dist/index.js"
+    "build": "esbuild src/index.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist/index.js --external:@prisma/client --external:.prisma/*",
+    "build:local": "esbuild src/local-run.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist/local-run.js --external:@prisma/client --external:.prisma/*",
+    "local": "npm run build:local && node dist/local-run.js"
   },
   "keywords": [],
   "author": "",

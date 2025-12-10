@@ -1,9 +1,12 @@
+// Scrape legislators and committees from the website
+
 import 'dotenv/config';
 import axios from "axios";
 import * as cheerio from "cheerio";
 import { PrismaClient, Chamber } from "@prisma/client";
 import { Pool } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
+import { fetchHtml } from './shared/http';
 
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
@@ -18,56 +21,147 @@ const prisma = new PrismaClient({
 // ---- Base URL selection: live vs archive.org snapshot ----
 const LIVE_MGA_BASE = "https://mgaleg.maryland.gov/mgawebsite";
 
-const MGA_SOURCE = process.env.MGA_SOURCE ?? "live"; // "live" or "archive"
-const MGA_WAYBACK_BASE = process.env.MGA_WAYBACK_BASE;
+const MGA_SOURCE = process.env.MGA_SOURCE ?? "live" // "live" or "archive"
+const MGA_WAYBACK_BASE = process.env.MGA_WAYBACK_BASE
 
 const MGA_BASE =
   MGA_SOURCE === "archive" && MGA_WAYBACK_BASE
     ? MGA_WAYBACK_BASE
-    : LIVE_MGA_BASE;
+    : LIVE_MGA_BASE
 
-const USING_WAYBACK = MGA_SOURCE === "archive" && !!MGA_WAYBACK_BASE;
+const USING_WAYBACK = MGA_SOURCE === "archive" && !!MGA_WAYBACK_BASE
 
-const MEMBERS_INDEX_SENATE = `${MGA_BASE}/Members/Index/senate`;
-const MEMBERS_INDEX_HOUSE = `${MGA_BASE}/Members/Index/house`;
-const COMMITTEES_INDEX_SENATE = `${MGA_BASE}/Committees/Index/senate`;
-const COMMITTEES_INDEX_HOUSE = `${MGA_BASE}/Committees/Index/house`;
-const COMMITTEES_INDEX_OTHER = `${MGA_BASE}/Committees/Index/other`;
+const MEMBERS_INDEX_SENATE = `${MGA_BASE}/Members/Index/senate`
+const MEMBERS_INDEX_HOUSE = `${MGA_BASE}/Members/Index/house`
+const COMMITTEES_INDEX_SENATE = `${MGA_BASE}/Committees/Index/senate`
+const COMMITTEES_INDEX_HOUSE = `${MGA_BASE}/Committees/Index/house`
+const COMMITTEES_INDEX_OTHER = `${MGA_BASE}/Committees/Index/other`
 
-// ---- Types for scraped data (in-memory only) ----
+// ---- Types for scraped data ----
+
+type ParsedName = {
+    firstName: string | null
+    middleName: string | null
+    lastName: string | null
+    suffix: string | null
+}
+
+// Common generational suffixes used in names
+const KNOWN_SUFFIXES = new Set([
+    "Jr",
+    "Jr.",
+    "Sr",
+    "Sr.",
+    "II",
+    "III",
+    "IV",
+    "V",
+    "VI",
+    "VII",
+    "VIII",
+])
 
 type ScrapedLegislator = {
-    externalId: string;      // e.g. "attar02"
-    name: string;            // full name as displayed ("Dalya Attar")
-    chamber: Chamber;        // SENATE | HOUSE
-    district?: string;
-    county?: string;
-    party?: string;
-    email?: string;
+    externalId: string      // e.g. "attar02"
+    name: string            // full name as displayed ("Dalya Attar")
+    chamber: Chamber        // SENATE | HOUSE
+    district?: string
+    county?: string
+    party?: string
+    email?: string
 };
 
 type ScrapedCommittee = {
-    code: string;            // e.g. "fin", "app", "eee"
-    name: string;
-    chamber?: Chamber;
-    committeeType: string;   // "STANDING", "OTHER", etc.
+    code: string            // e.g. "fin", "app", "eee"
+    name: string
+    chamber?: Chamber
+    committeeType: string   // "STANDING", "OTHER", etc.
 };
 
 type ScrapedCommitteeMembership = {
-    committeeCode: string;       // "fin"
-    legislatorExternalId: string;
-    role: string;                // "CHAIR" | "VICE_CHAIR" | "MEMBER"
-};
+    committeeCode: string       // "fin"
+    legislatorExternalId: string
+    role: string                // "CHAIR" | "VICE_CHAIR" | "MEMBER"
+}
 
-// ---- HTTP helper ----
+function normalizeSuffixToken(token: string): string {
+    return token.replace(/\./g, "").toUpperCase()
+}
 
-async function fetchHtml(url: string): Promise<cheerio.CheerioAPI> {
-    const res = await axios.get(url, {
-        headers: {
-            "User-Agent": "MarylandLegTrackerBot/1.0 (contact: your-email@example.com)"
+function parseLegislatorName(fullName: string): ParsedName {
+    let name = fullName.trim().replace(/\s+/g, " ")
+    if (!name) {
+        return { firstName: null, middleName: null, lastName: null, suffix: null }
+    }
+
+    let suffix: string | null = null
+
+    // 1) Handle suffix if separated by a comma: "William C. Smith, Jr."
+    const commaParts = name.split(",")
+    if (commaParts.length > 1) {
+        const possibleSuffixPart = commaParts.slice(1).join(",").trim() // anything after first comma
+        if (possibleSuffixPart) {
+            const suffixTokens = possibleSuffixPart.split(/\s+/)
+            const firstToken = suffixTokens[0]
+            const normalized = normalizeSuffixToken(firstToken)
+
+            if (KNOWN_SUFFIXES.has(firstToken) || KNOWN_SUFFIXES.has(normalized)) {
+                suffix = firstToken // keep as displayed
+                name = commaParts[0].trim() // strip suffix from main name
+            }
         }
-    });
-    return cheerio.load(res.data);
+    }
+
+    // 2) Split remaining name into parts
+    let parts = name.split(/\s+/)
+
+    // 3) Handle suffix at the end without a comma: "William C. Smith Jr."
+    if (!suffix && parts.length > 1) {
+        const lastToken = parts[parts.length - 1]
+        const normalizedLast = normalizeSuffixToken(lastToken)
+        if (KNOWN_SUFFIXES.has(lastToken) || KNOWN_SUFFIXES.has(normalizedLast)) {
+            suffix = lastToken
+            parts = parts.slice(0, -1) // drop suffix from the name tokens
+        }
+    }
+
+    // After stripping suffix, figure out first / middle / last
+    if (parts.length === 0) {
+        return { firstName: null, middleName: null, lastName: null, suffix }
+    }
+
+    if (parts.length === 1) {
+        return {
+            firstName: parts[0],
+            middleName: null,
+            lastName: null,
+            suffix,
+        }
+    }
+
+    if (parts.length === 2) {
+        return {
+            firstName: parts[0],
+            middleName: null,
+            lastName: parts[1],
+            suffix,
+        }
+    }
+
+    // 3+ tokens: "William C. Smith", "Mary-Dulany James", etc.
+    //   - first token = firstName
+    //   - last token = lastName
+    //   - everything in the middle = middleName (can be multiple tokens)
+    const firstName = parts[0]
+    const lastName = parts[parts.length - 1]
+    const middleTokens = parts.slice(1, -1)
+
+    return {
+        firstName,
+        middleName: middleTokens.length ? middleTokens.join(" ") : null,
+        lastName,
+        suffix,
+    }
 }
 
 // ---- Legislators scraping ----
@@ -333,16 +427,18 @@ function splitName(fullName: string): { firstName: string | null; lastName: stri
 async function upsertLegislators(scraped: ScrapedLegislator[]) {
     for (const leg of scraped) {
         // Prisma schema: Legislator.fullName, firstName, lastName, party, district (required)
-        const { firstName, lastName } = splitName(leg.name);
-        const district = leg.district ?? "UNKNOWN";
-        const party = leg.party ?? "Unknown";
+        const parsed = parseLegislatorName(leg.name)
+        const district = leg.district ?? "UNKNOWN"
+        const party = leg.party ?? "Unknown"
 
         const legislator = await prisma.legislator.upsert({
             where: { externalId: leg.externalId },
             update: {
                 fullName: leg.name,
-                firstName: firstName ?? undefined,
-                lastName: lastName ?? undefined,
+                firstName: parsed.firstName ?? undefined,
+                middleName: parsed.middleName ?? undefined,
+                lastName: parsed.lastName ?? undefined,
+                suffix: parsed.suffix ?? undefined,
                 party,
                 district,
                 isActive: true,
@@ -350,8 +446,10 @@ async function upsertLegislators(scraped: ScrapedLegislator[]) {
             create: {
                 externalId: leg.externalId,
                 fullName: leg.name,
-                firstName: firstName ?? undefined,
-                lastName: lastName ?? undefined,
+                firstName: parsed.firstName ?? undefined,
+                middleName: parsed.middleName ?? undefined,
+                lastName: parsed.lastName ?? undefined,
+                suffix: parsed.suffix ?? undefined,
                 party,
                 district,
                 isActive: true,
