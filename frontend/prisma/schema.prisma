@@ -158,6 +158,8 @@ model Committee {
   calendarItems CalendarItem[]
   alerts        Alert[]
 
+  floorCalendars FloorCalendar[]
+
   dataSource Json?
 
   createdAt   DateTime     @default(now())
@@ -443,12 +445,12 @@ model FloorCalendar {
   sessionYear       Int
   sessionCode       String
   chamber           Chamber
-  proceedingsNumber Int
+  proceedingsNumber Int?         // Unsure about this
   calendarType      CalendarType
   calendarNumber    Int?
 
   /// Full heading text from the agenda -- "Senate Third Reading Calendar No. 37 (General Senate Bills)"
-  label          String
+  calendarName   String
   calendarDate   DateTime
   legislativeDay Int?
   sourceUrl      String
@@ -456,6 +458,9 @@ model FloorCalendar {
   dataSource     Json?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+
+  committee   Committee?   @relation(fields: [committeeId], references: [id])
+  committeeId Int?
 
   items  CalendarItem[]
   events BillEvent[]
@@ -502,10 +507,11 @@ model CalendarItem {
 
 /// A normalized "something happened to this bill" event,
 /// used for triggering alerts (committee vote, added to calendar, status change, etc.)
+/// This is also used for calendar events, other things. Probably not the best name but...?
 model BillEvent {
   id              Int            @id @default(autoincrement())
-  bill            Bill           @relation(fields: [billId], references: [id])
-  billId          Int
+  bill            Bill?          @relation(fields: [billId], references: [id])
+  billId          Int?
   eventType       BillEventType
   eventTime       DateTime       @default(now())
   chamber         Chamber?

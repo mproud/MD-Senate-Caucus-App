@@ -1,16 +1,23 @@
 import { PrismaClient } from '@prisma/client'
+import { Pool } from 'pg'
+import { PrismaPg } from '@prisma/adapter-pg'
 
-let prisma: PrismaClient
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+})
 
-// Check if we are in development and if the global Prisma instance exists
-// This prevents multiple instances of Prisma Client in development hot reloading
-if (process.env.NODE_ENV === 'production') {
-    prisma = new PrismaClient()
-} else {
-    if (!global.prisma) {
-        global.prisma = new PrismaClient()
-    }
-    prisma = global.prisma
+const adapter = new PrismaPg(pool);
+
+const globalForPrisma = globalThis as unknown as {
+    prisma: PrismaClient | undefined;
 }
 
-export default prisma
+export const prisma =
+    globalForPrisma.prisma ??
+    new PrismaClient({
+        adapter,
+    })
+
+if (process.env.NODE_ENV !== 'production') {
+    globalForPrisma.prisma = prisma;
+}

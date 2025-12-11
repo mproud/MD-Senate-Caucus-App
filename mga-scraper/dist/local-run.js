@@ -63657,6 +63657,19 @@ async function scrapeAgendaUrl(url2) {
   });
   return sections;
 }
+function extractCommitteeNameFromHeader(header) {
+  if (!header) return null;
+  if (!header.calendarType) return null;
+  const type = header.calendarType.toLowerCase();
+  if (type !== "committee_report") return null;
+  const heading = header.heading ?? "";
+  if (!heading) return null;
+  const match = heading.match(/^(.*?)\s+Committee Report/i);
+  if (match && match[1]) {
+    return match[1].trim();
+  }
+  return null;
+}
 function mapCalendarType(type) {
   if (!type) return null;
   const t = type.toLowerCase();
@@ -63666,39 +63679,263 @@ function mapCalendarType(type) {
   if (t === "consent_calendar") return "CONSENT";
   return null;
 }
+async function createCalendarPublishedEvent(opts) {
+  const { chamber, floorCalendarId, committeeId: committeeId2, header, agendaUrl } = opts;
+  const calendarTypeEnum = mapCalendarType(header?.calendarType ?? null);
+  const calendarNumber = header?.calendarNumber ?? null;
+  const calendarName = header?.heading ?? null;
+  const calendarDateStr = header?.readingDate ?? header?.distributionDate ?? null;
+  const calendarDate = calendarDateStr ? new Date(calendarDateStr) : null;
+  const existingEvent = await prisma.billEvent.findFirst({
+    where: {
+      eventType: import_client2.BillEventType.CALENDAR_PUBLISHED,
+      floorCalendarId,
+      calendarType: calendarTypeEnum,
+      calendarNumber
+    }
+  });
+  if (existingEvent) return;
+  const summary = `Calendar ${calendarNumber ?? ""}${calendarName ? ` - ${calendarName}` : ""} published`.trim();
+  await prisma.billEvent.create({
+    data: {
+      // NOTE: billId is intentionally omitted here; this assumes billId is optional.
+      eventType: import_client2.BillEventType.CALENDAR_PUBLISHED,
+      chamber,
+      floorCalendarId,
+      committeeId: committeeId2,
+      calendarType: calendarTypeEnum,
+      calendarNumber,
+      eventTime: calendarDate ?? /* @__PURE__ */ new Date(),
+      summary,
+      payload: {
+        calendarName,
+        calendarType: header?.calendarType ?? null,
+        calendarNumber,
+        calendarDate: calendarDateStr,
+        distributionDate: header?.distributionDate ?? null,
+        readingDate: header?.readingDate ?? null,
+        heading: header?.heading ?? null,
+        agendaUrl
+      }
+    }
+  });
+}
+async function createBillRemovedFromCalendarEvent(opts) {
+  const { billId, billNumber, chamber, floorCalendarId, header, agendaUrl } = opts;
+  const calendarTypeEnum = mapCalendarType(header?.calendarType ?? null);
+  const calendarNumber = header?.calendarNumber ?? null;
+  const calendarName = header?.heading ?? null;
+  const calendarDateStr = header?.readingDate ?? header?.distributionDate ?? null;
+  const calendarDate = calendarDateStr ? new Date(calendarDateStr) : null;
+  const existing = await prisma.billEvent.findFirst({
+    where: {
+      billId,
+      eventType: import_client2.BillEventType.BILL_REMOVED_FROM_CALENDAR,
+      floorCalendarId,
+      calendarType: calendarTypeEnum,
+      calendarNumber
+    }
+  });
+  if (existing) return;
+  const summary = `${billNumber} removed from calendar ${calendarNumber ?? ""}${calendarName ? ` \u2013 ${calendarName}` : ""}`.trim();
+  await prisma.billEvent.create({
+    data: {
+      billId,
+      eventType: import_client2.BillEventType.BILL_REMOVED_FROM_CALENDAR,
+      chamber,
+      floorCalendarId,
+      committeeId,
+      calendarType: calendarTypeEnum,
+      calendarNumber,
+      eventTime: calendarDate ?? /* @__PURE__ */ new Date(),
+      summary,
+      payload: {
+        calendarName,
+        calendarType: header?.calendarType ?? null,
+        calendarNumber,
+        calendarDate: calendarDateStr,
+        distributionDate: header?.distributionDate ?? null,
+        readingDate: header?.readingDate ?? null,
+        heading: header?.heading ?? null,
+        agendaUrl
+      }
+    }
+  });
+}
+async function createCalendarUpdatedEvent(opts) {
+  const { chamber, floorCalendarId, committeeId: committeeId2, header, agendaUrl, changes } = opts;
+  if (!changes.length) return;
+  const calendarTypeEnum = mapCalendarType(header?.calendarType ?? null);
+  const calendarNumber = header?.calendarNumber ?? null;
+  const calendarName = header?.heading ?? null;
+  const calendarDateStr = header?.readingDate ?? header?.distributionDate ?? null;
+  const calendarDate = calendarDateStr ? new Date(calendarDateStr) : null;
+  const summary = `Calendar ${calendarNumber ?? ""}${calendarName ? ` \u2013 ${calendarName}` : ""} updated (${changes.length} change${changes.length === 1 ? "" : "s"})`.trim();
+  await prisma.billEvent.create({
+    data: {
+      // calendar-level, no billId
+      eventType: import_client2.BillEventType.CALENDAR_UPDATED,
+      chamber,
+      floorCalendarId,
+      committeeId: committeeId2,
+      calendarType: calendarTypeEnum,
+      calendarNumber,
+      eventTime: calendarDate ?? /* @__PURE__ */ new Date(),
+      summary,
+      payload: {
+        calendarName,
+        calendarType: header?.calendarType ?? null,
+        calendarNumber,
+        calendarDate: calendarDateStr,
+        distributionDate: header?.distributionDate ?? null,
+        readingDate: header?.readingDate ?? null,
+        heading: header?.heading ?? null,
+        agendaUrl,
+        changes
+      }
+    }
+  });
+}
+async function upsertCalendarItem(opts) {
+  const {
+    floorCalendarId,
+    position,
+    billNumber,
+    billId,
+    committeeId: committeeId2,
+    actionText,
+    notes,
+    rawItem
+  } = opts;
+  await prisma.calendarItem.upsert({
+    where: {
+      floorCalendarId_position: {
+        floorCalendarId,
+        position
+      }
+    },
+    update: {
+      billNumber,
+      billId,
+      committeeId: committeeId2,
+      actionText,
+      notes,
+      dataSource: rawItem
+    },
+    create: {
+      floorCalendarId,
+      position,
+      billNumber,
+      billId,
+      committeeId: committeeId2,
+      actionText,
+      notes,
+      dataSource: rawItem
+    }
+  });
+}
 async function upsertFloorCalendar(opts) {
-  const { chamber, header, agendaUrl } = opts;
+  const { chamber, header, agendaUrl, sessionYear, sessionCode } = opts;
   if (!header) return null;
   const calendarTypeEnum = mapCalendarType(header.calendarType);
   const calendarNumber = header.calendarNumber ?? null;
   const calendarDateStr = header.readingDate ?? header.distributionDate ?? null;
   const calendarDate = calendarDateStr ? new Date(calendarDateStr) : null;
   const calendarName = header.heading ?? null;
+  let committee = null;
+  const committeeName = extractCommitteeNameFromHeader(header);
+  if (committeeName) {
+    console.log(">>> Find committee", { committeeName });
+    const normalized = committeeName.replace(/committee$/i, "").replace(/committee\s*$/i, "").trim();
+    const withCommittee = `${normalized} Committee`;
+    const candidates = [normalized, withCommittee];
+    committee = await prisma.committee.findFirst({
+      where: {
+        chamber,
+        OR: [
+          // exact name match
+          { name: committeeName },
+          // normalized matches
+          { name: normalized },
+          { name: withCommittee },
+          // lowercase-insensitive contains
+          { name: { contains: normalized, mode: "insensitive" } },
+          // in case DB has more words (e.g. "Senate Education, Energy, and the Environment")
+          { name: { startsWith: normalized, mode: "insensitive" } }
+        ]
+      },
+      select: { id: true, name: true }
+    });
+    if (!committee) {
+      console.warn(
+        `upsertFloorCalendar: could not find committee "${committeeName}" (normalized: "${normalized}") for chamber ${chamber}`
+      );
+    } else {
+      console.log(`>>> Matched committee "${committee.name}" (id=${committee.id}) to header "${committeeName}"`);
+    }
+  }
   const existing = await prisma.floorCalendar.findFirst({
     where: {
       chamber,
       calendarType: calendarTypeEnum,
       calendarNumber,
-      calendarDate
+      calendarDate,
+      calendarName,
+      sessionYear,
+      sessionCode
+    },
+    select: {
+      id: true,
+      committeeId: true
     }
   });
-  if (existing) return existing;
-  return prisma.floorCalendar.create({
+  if (existing) {
+    if (!existing.committeeId && committee) {
+      const existingCommitteeCal = await prisma.floorCalendar.update({
+        where: { id: existing.id },
+        data: {
+          committee: {
+            connect: { id: committee.id }
+          }
+        }
+      });
+      return { calendar: existingCommitteeCal, wasNew: false };
+    }
+    const existingCalendar = await prisma.floorCalendar.findUnique({
+      where: { id: existing.id }
+    });
+    return { calendar: existingCalendar, wasNew: false };
+  }
+  const created = await prisma.floorCalendar.create({
     data: {
       chamber,
       calendarType: calendarTypeEnum,
       calendarNumber,
-      date: calendarDate,
-      name: calendarName,
+      calendarDate,
+      calendarName,
       sourceUrl: agendaUrl,
+      sessionYear,
+      sessionCode,
       dataSource: {
         header
-      }
+      },
+      scrapedAt: /* @__PURE__ */ new Date(),
+      committee: committee ? {
+        connect: { id: committee.id }
+      } : void 0
     }
   });
+  await createCalendarPublishedEvent({
+    chamber,
+    floorCalendarId: created.id,
+    committeeId: created.committeeId ?? null,
+    header,
+    agendaUrl
+  });
+  return { calendar: created, wasNew: true };
 }
 async function createBillAddedToCalendarEvent(opts) {
-  const { billId, billNumber, chamber, floorCalendarId, header, agendaUrl } = opts;
+  const { billId, billNumber, chamber, floorCalendarId, committeeId: committeeId2, header, agendaUrl } = opts;
   const calendarTypeEnum = mapCalendarType(header?.calendarType ?? null);
   const calendarNumber = header?.calendarNumber ?? null;
   const calendarName = header?.heading ?? null;
@@ -63721,6 +63958,7 @@ async function createBillAddedToCalendarEvent(opts) {
       eventType: import_client2.BillEventType.BILL_ADDED_TO_CALENDAR,
       chamber,
       floorCalendarId,
+      committeeId: committeeId2,
       calendarType: calendarTypeEnum,
       calendarNumber,
       eventTime: calendarDate ?? /* @__PURE__ */ new Date(),
@@ -63743,9 +63981,9 @@ var handler = async (event, context) => {
   const url2 = "http://localhost:8000/20250327131337-senate-agenda.html";
   const chamber = "SENATE";
   const run = await startScrapeRun(`MGA_${chamber}_AGENDA`);
+  let agendaCount = 1;
   try {
     const scrapeResult = await scrapeAgendaUrl(url2);
-    console.log("Result", { scrapeResult });
     for (const section of scrapeResult) {
       const header = section.header;
       if (!header) continue;
@@ -63753,11 +63991,37 @@ var handler = async (event, context) => {
       const dateObj = dateStr ? new Date(dateStr) : /* @__PURE__ */ new Date();
       const sessionYear = dateObj.getFullYear();
       const sessionCode = `${sessionYear}RS`;
-      const floorCalendar = await upsertFloorCalendar({
+      const result = await upsertFloorCalendar({
         chamber,
         header,
-        agendaUrl: url2
+        agendaUrl: url2,
+        sessionYear,
+        sessionCode
       });
+      const { calendar: floorCalendar, wasNew } = result;
+      if (!floorCalendar) {
+        console.warn("Agenda scraper: no floorCalendar returned for header", header);
+        continue;
+      }
+      const committeeId2 = floorCalendar.committeeId ?? null;
+      const existingItems = await prisma.calendarItem.findMany({
+        where: { floorCalendarId: floorCalendar.id },
+        orderBy: { position: "asc" },
+        select: {
+          id: true,
+          position: true,
+          billId: true,
+          billNumber: true
+        }
+      });
+      const existingByKey = /* @__PURE__ */ new Map();
+      for (const ci of existingItems) {
+        const key = ci.billId != null ? `bill:${ci.billId}` : `num:${ci.billNumber.toUpperCase()}`;
+        existingByKey.set(key, ci);
+      }
+      const touchedKeys = /* @__PURE__ */ new Set();
+      const changes = [];
+      let position = 1;
       for (const item of section.items) {
         const billNumber = item.billNumber;
         const externalId = `${sessionCode}-${billNumber}`;
@@ -63765,20 +64029,92 @@ var handler = async (event, context) => {
           where: { externalId },
           select: { id: true, billNumber: true }
         });
-        if (!bill) {
-          console.warn(
-            `Agenda scraper: could not find bill for externalId=${externalId} (billNumber=${billNumber})`
-          );
-          continue;
-        }
-        await createBillAddedToCalendarEvent({
-          billId: bill.id,
-          billNumber: bill.billNumber,
-          chamber,
-          floorCalendarId: floorCalendar ? floorCalendar.id : null,
-          header,
-          agendaUrl: url2
+        const key = bill?.id != null ? `bill:${bill.id}` : `num:${billNumber.toUpperCase()}`;
+        const existing = existingByKey.get(key);
+        const oldPosition = existing?.position ?? null;
+        touchedKeys.add(key);
+        const committeeId3 = floorCalendar.committeeId ?? null;
+        await upsertCalendarItem({
+          floorCalendarId: floorCalendar.id,
+          position,
+          billNumber: bill?.billNumber ?? billNumber,
+          billId: bill?.id ?? null,
+          committeeId: committeeId3,
+          actionText: item.disposition ?? null,
+          notes: item.description ?? null,
+          rawItem: item
         });
+        if (!existing) {
+          changes.push({
+            billNumber: bill?.billNumber ?? billNumber,
+            changeType: "added",
+            oldPosition: null,
+            newPosition: position
+          });
+          if (bill) {
+            await createBillAddedToCalendarEvent({
+              billId: bill.id,
+              billNumber: bill.billNumber,
+              chamber,
+              floorCalendarId: floorCalendar.id,
+              committeeId: committeeId3,
+              header,
+              agendaUrl: url2
+            });
+          } else {
+            console.warn(
+              `Agenda scraper: could not find bill for externalId=${externalId} (billNumber=${billNumber})`
+            );
+          }
+        } else if (existing.position !== position) {
+          changes.push({
+            billNumber: bill?.billNumber ?? billNumber,
+            changeType: "moved",
+            oldPosition,
+            newPosition: position
+          });
+        }
+        position++;
+      }
+      const removedItems = existingItems.filter((ci) => {
+        const key = ci.billId != null ? `bill:${ci.billId}` : `num:${ci.billNumber.toUpperCase()}`;
+        return !touchedKeys.has(key);
+      });
+      for (const ci of removedItems) {
+        changes.push({
+          billNumber: ci.billNumber,
+          changeType: "removed",
+          oldPosition: ci.position,
+          newPosition: null
+        });
+        if (ci.billId != null) {
+          await createBillRemovedFromCalendarEvent({
+            billId: ci.billId,
+            billNumber: ci.billNumber,
+            chamber,
+            floorCalendarId: floorCalendar.id,
+            committeeId: committeeId2,
+            header,
+            agendaUrl: url2
+          });
+        }
+        await prisma.calendarItem.delete({
+          where: { id: ci.id }
+        });
+      }
+      if (changes.length > 0 && !wasNew) {
+        await createCalendarUpdatedEvent({
+          chamber,
+          floorCalendarId: floorCalendar.id,
+          committeeId: committeeId2,
+          header,
+          agendaUrl: url2,
+          changes
+        });
+      }
+      agendaCount++;
+      if (agendaCount > 3) {
+        return false;
       }
     }
     await finishScrapeRun(run.id, {

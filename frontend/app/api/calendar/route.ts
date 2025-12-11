@@ -1,11 +1,34 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { prisma } from "@/lib/prisma"
 import { filterProceedings, getBillsByNumbers } from "@/lib/mock-data"
 import type { CalendarItem } from "@/lib/types"
 
 // This doesn't appear to be used for anything
 // const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000"
 
-export async function GET(request: NextRequest) {
+export async function GET( request: NextRequest ) {
+    try {
+        const calendars = await prisma.floorCalendar.findMany({
+            orderBy: {
+                calendarDate: 'desc',
+            }
+        })
+
+        return NextResponse.json({ items: calendars }, { status: 200 })
+    } catch (error) {
+        console.error('Error fetching calendars:', error)
+
+        return NextResponse.json(
+            { error: 'Failed to fetch calendars' },
+            { status: 500 },
+        )
+    }
+}
+
+
+
+
+export async function legacy__GET(request: NextRequest) {
     try {
         const searchParams = request.nextUrl.searchParams
         const chambers = searchParams.get("chambers")?.split(",").filter(Boolean) || undefined

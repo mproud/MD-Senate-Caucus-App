@@ -10,7 +10,7 @@ interface CalendarTableProps {
 }
 
 export function CalendarTable({ data }: CalendarTableProps) {
-    if (!data.items || data.items.length === 0) {
+    if ( ! data.items || data.items.length === 0 ) {
         return (
             <Card>
                 <CardContent className="py-8">
