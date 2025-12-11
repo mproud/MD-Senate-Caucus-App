@@ -1,34 +1,84 @@
-import { type NextRequest, NextResponse } from "next/server"
+// app/api/calendar/route.ts (or wherever this GET lives)
+import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { filterProceedings, getBillsByNumbers } from "@/lib/mock-data"
-import type { CalendarItem } from "@/lib/types"
+import { CalendarType, Chamber, Prisma } from "@prisma/client"
 
-// This doesn't appear to be used for anything
-// const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000"
+// Map human section labels to CalendarType enum values in Prisma
+function sectionLabelToCalendarType(section: string): CalendarType | undefined {
+    const normalized = section.trim().toLowerCase()
+
+    switch (normalized) {
+        case "second reading":
+            return CalendarType.SECOND_READING
+        case "third reading":
+            return CalendarType.THIRD_READING
+        case "consent":
+            return CalendarType.CONSENT
+        case "laid over":
+            return CalendarType.LAID_OVER
+        case "committee":
+            return CalendarType.COMMITTEE
+        case "committee report":
+            return CalendarType.COMMITTEE_REPORT
+        case "special order":
+            return CalendarType.SPECIAL_ORDER
+        default:
+            return undefined
+    }
+}
+
+// Map CalendarType enum back to your section label strings
+function calendarTypeToSectionLabel(calendarType: CalendarType): string {
+    switch (calendarType) {
+        case CalendarType.SECOND_READING:
+            return "Second Reading"
+        case CalendarType.THIRD_READING:
+            return "Third Reading"
+        case CalendarType.CONSENT:
+            return "Consent"
+        case CalendarType.LAID_OVER:
+            return "Laid Over"
+        case CalendarType.COMMITTEE:
+            return "Committee"
+        case CalendarType.COMMITTEE_REPORT:
+            return "Committee Report"
+        case CalendarType.SPECIAL_ORDER:
+            return "Special Order"
+        default:
+            return "Other"
+    }
+}
 
 export async function GET( request: NextRequest ) {
+    // @TODO get and apply search parameters!
     try {
         const calendars = await prisma.floorCalendar.findMany({
             orderBy: {
                 calendarDate: 'desc',
-            }
+            },
+            include: {
+                items: true,
+            },
         })
 
-        return NextResponse.json({ items: calendars }, { status: 200 })
-    } catch (error) {
-        console.error('Error fetching calendars:', error)
+        const response = {
+            items: calendars,
+            chamber: 'SENATE', // placeholder
+            date: 'today', // placeholder
+        }
 
+        return NextResponse.json( response, { status: 200 })
+    } catch (error) {
+        console.error("Calendar API error:", error)
+        
         return NextResponse.json(
-            { error: 'Failed to fetch calendars' },
+            { error: "Internal server error" },
             { status: 500 },
         )
     }
 }
 
-
-
-
-export async function legacy__GET(request: NextRequest) {
+async function legacy___GET(request: NextRequest) {
     try {
         const searchParams = request.nextUrl.searchParams
         const chambers = searchParams.get("chambers")?.split(",").filter(Boolean) || undefined
@@ -41,91 +91,204 @@ export async function legacy__GET(request: NextRequest) {
         const subjects = searchParams.get("subjects")?.split(",").filter(Boolean) || undefined
         const searchText = searchParams.get("searchText") || undefined
 
-        let dates: string[] | undefined
-        if (startDate && endDate) {
-            dates = []
-            const start = new Date(startDate)
-            const end = new Date(endDate)
-            const current = new Date(start)
+        // Build Prisma where for FloorCalendar
+        const where: Prisma.FloorCalendarWhereInput = {}
 
-            while (current <= end) {
-                dates.push(current.toISOString().split("T")[0])
-                current.setDate(current.getDate() + 1)
+        if (chambers && chambers.length > 0) {
+            const normalizedChambers = chambers
+                .map((c) => c.trim().toUpperCase())
+                .filter((c): c is "SENATE" | "HOUSE" => c === "SENATE" || c === "HOUSE")
+
+            if (normalizedChambers.length > 0) {
+                where.chamber = {
+                    in: normalizedChambers as Chamber[],
+                }
             }
-        } else if (startDate) {
-            dates = [startDate]
-        } else if (endDate) {
-            dates = [endDate]
         }
 
-        const proceedings = filterProceedings(chambers, sections, dates, sponsors, committees, subjects, searchText)
+        if (sections && sections.length > 0) {
+            const calendarTypes = sections
+                .map(sectionLabelToCalendarType)
+                .filter((t): t is CalendarType => !!t)
 
-        const allItems: CalendarItem[] = []
+            if (calendarTypes.length > 0) {
+                where.calendarType = { in: calendarTypes }
+            }
+        }
 
-        proceedings.forEach((proc) => {
-            const bills = getBillsByNumbers(proc.bills)
-            const voteResultsMap = (proc as any).voteResults || {}
+        if (startDate || endDate) {
+            const dateFilter: Prisma.DateTimeFilter = {}
 
-            bills.forEach((bill) => {
-                const voteResult = voteResultsMap[bill.billNumber]
+            if (startDate) {
+                // Start of the day in local time; adjust to taste / UTC if needed
+                dateFilter.gte = new Date(`${startDate}T00:00:00`)
+            }
 
+            if (endDate) {
+                // End of the day; inclusive
+                dateFilter.lte = new Date(`${endDate}T23:59:59.999`)
+            }
+
+            where.calendarDate = dateFilter
+        }
+
+        console.log('Query', where )
+
+        // Fetch calendars + items + bills + actions in one go
+        const calendars = await prisma.floorCalendar.findMany({
+            where,
+            orderBy: {
+                calendarDate: "desc",
+            },
+            include: {
+                items: {
+                    include: {
+                        bill: {
+                            include: {
+                                primarySponsor: true,
+                                actions: {
+                                    include: {
+                                        committee: true,
+                                    },
+                                    orderBy: {
+                                        actionDate: "desc",
+                                    },
+                                },
+                            },
+                        },
+                        committee: true,
+                    },
+                },
+            },
+        })
+
+        const allItems: any[] = []
+
+        calendars.forEach((cal) => {
+            cal.items.forEach((item) => {
+                const bill = item.bill
+                if (!bill) return
+
+                // Try to find the latest vote action
+                const latestVoteAction = bill.actions.find(
+                    (a) => a.isVote && a.voteResult,
+                )
+                const voteResult = latestVoteAction?.voteResult || null
+
+                // voteResults filter
                 if (voteResults && voteResults.length > 0) {
-                    if (!voteResult || !voteResults.includes(voteResult.result)) {
+                    if (!voteResult || !voteResults.includes(voteResult)) {
                         return // Skip this bill if it doesn't match the vote filter
                     }
                 }
 
-                if (sponsors && sponsors.length > 0 && !sponsors.includes(bill.sponsor)) {
-                    return
+                // sponsors filter (using primarySponsor.fullName or sponsorDisplay)
+                if (sponsors && sponsors.length > 0) {
+                    const sponsorName =
+                        bill.primarySponsor?.fullName || bill.sponsorDisplay || ""
+                    if (!sponsors.includes(sponsorName)) {
+                        return
+                    }
                 }
 
+                // committees filter - look at:
+                //  - committee on the calendar item
+                //  - committees on bill.actions
                 if (committees && committees.length > 0) {
-                    const billCommittees = bill.committeeVotes?.map((v) => v.committee) || []
-                    if (!committees.some((c) => billCommittees.includes(c))) {
+                    const billCommittees: string[] = []
+
+                    if (item.committee) {
+                        billCommittees.push(
+                            item.committee.name,
+                            item.committee.abbreviation ?? "",
+                        )
+                    }
+
+                    bill.actions.forEach((a) => {
+                        if (a.committee) {
+                            billCommittees.push(
+                                a.committee.name,
+                                a.committee.abbreviation ?? "",
+                            )
+                        }
+                    })
+
+                    if (
+                        !committees.some((c) =>
+                            billCommittees.filter(Boolean).includes(c),
+                        )
+                    ) {
                         return
                     }
                 }
 
+                // subjects filter – schema doesn’t have explicit subjects,
+                // so approximate by title/synopsis text for now.
                 if (subjects && subjects.length > 0) {
-                    if (!subjects.some((s) => bill.subjects.includes(s))) {
+                    const subjectText = [
+                        bill.shortTitle,
+                        bill.longTitle ?? "",
+                        bill.synopsis ?? "",
+                    ]
+                        .join(" ")
+                        .toLowerCase()
+
+                    const matchesSubject = subjects.some((s) =>
+                        subjectText.includes(s.toLowerCase()),
+                    )
+
+                    if (!matchesSubject) {
                         return
                     }
                 }
 
+                // searchText filter
                 if (searchText) {
                     const search = searchText.toLowerCase()
-                    const matchesSearch =
-                        bill.billNumber.toLowerCase().includes(search) ||
-                        bill.title.toLowerCase().includes(search) ||
-                        bill.synopsis.toLowerCase().includes(search) ||
-                        bill.sponsor.toLowerCase().includes(search)
-                    if (!matchesSearch) {
+                    const haystack = [
+                        bill.billNumber,
+                        bill.shortTitle,
+                        bill.longTitle ?? "",
+                        bill.synopsis ?? "",
+                        bill.sponsorDisplay ?? "",
+                        bill.primarySponsor?.fullName ?? "",
+                    ]
+                        .join(" ")
+                        .toLowerCase()
+
+                    if (!haystack.includes(search)) {
                         return
                     }
                 }
 
                 allItems.push({
-                    id: `${proc.id}-${bill.billNumber}`,
+                    id: `${cal.id}-${item.id}`,
                     billNumber: bill.billNumber,
-                    title: bill.title,
-                    chamber: proc.chamber as "SENATE" | "HOUSE",
-                    section: proc.section as "Second Reading" | "Third Reading",
-                    proceedings: proc.time,
-                    voteResult: voteResult,
+                    title: bill.shortTitle,
+                    chamber: cal.chamber as "SENATE" | "HOUSE",
+                    section: calendarTypeToSectionLabel(cal.calendarType) as
+                        | "Second Reading"
+                        | "Third Reading"
+                        | string,
+                    proceedings: cal.calendarName,
+                    voteResult,
                 })
             })
         })
 
-        // Group by date, chamber, and section for display
+        // Group by chamber + section for display (keeping your original grouping logic)
         const grouped = allItems.reduce(
             (acc, item) => {
                 const key = `${item.chamber}-${item.section}`
                 if (!acc[key]) {
                     acc[key] = {
-                        date: startDate || new Date().toISOString().split("T")[0],
+                        date:
+                            startDate ||
+                            (calendars[0]?.calendarDate.toISOString().split("T")[0] ??
+                                new Date().toISOString().split("T")[0]),
                         chamber: item.chamber,
                         section: item.section,
-                        items: [],
+                        items: [] as typeof allItems,
                     }
                 }
                 acc[key].items.push(item)
@@ -135,16 +298,22 @@ export async function legacy__GET(request: NextRequest) {
         )
 
         // Return the first grouped result (or empty if none)
-        const result = Object.values(grouped)[0] || {
-            date: startDate || new Date().toISOString().split("T")[0],
-            chamber: "SENATE" as const,
-            section: "Second Reading" as const,
-            items: [],
-        }
+        const result =
+            Object.values(grouped)[0] || {
+                date:
+                    startDate ||
+                    new Date().toISOString().split("T")[0],
+                chamber: "SENATE" as const,
+                section: "Second Reading" as const,
+                items: [],
+            }
 
         return NextResponse.json(result)
     } catch (error) {
         console.error("[v0] Calendar API error:", error)
-        return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+        return NextResponse.json(
+            { error: "Internal server error" },
+            { status: 500 },
+        )
     }
 }

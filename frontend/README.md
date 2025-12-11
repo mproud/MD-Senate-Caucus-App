@@ -3,7 +3,7 @@
 ## Secrets and Environment Variables
 
 ```bash
-npx wrangler secret put --env production MY_SECRET_KEY
+npx wrangler secret put --env production DATABASE_URL
 ```
 
 ## To Do

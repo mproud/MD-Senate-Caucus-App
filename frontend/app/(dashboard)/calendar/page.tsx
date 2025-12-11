@@ -57,6 +57,16 @@ async function CalendarContent({
             cache: "no-store",
         })
 
+        // return (
+        //     <>
+        //         <p>Search Params</p>
+        //         <pre>{JSON.stringify( params, null, 2)}</pre>
+        //         <br/>
+        //         <p>Calendar Data</p>
+        //         <pre>{JSON.stringify( calendarData, null, 2 )}</pre>
+        //     </>
+        // )
+
         return <CalendarTable data={calendarData} />
     } catch (error) {
         return (
@@ -88,7 +98,7 @@ function CalendarSkeleton() {
 export default async function CalendarPage({ searchParams }: CalendarPageProps) {
     const params = await searchParams
     const chambers = params.chambers ? params.chambers.split(",") : ["Senate", "House"]
-    const sections = params.sections ? params.sections.split(",") : ["Second Reading", "Third Reading"]
+    const sections = params.sections ? params.sections.split(",") : []
     const startDate = params.startDate
     const endDate = params.endDate
     const voteResults = params.voteResults ? params.voteResults.split(",") : []

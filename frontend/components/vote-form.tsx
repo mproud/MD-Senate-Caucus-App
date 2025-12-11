@@ -40,6 +40,7 @@ export function VoteForm({ billNumber, voteType }: VoteFormProps) {
         nays: "",
         absent: "",
         notVoting: "",
+        excused: "",
         details: "",
     })
 
@@ -104,6 +105,7 @@ export function VoteForm({ billNumber, voteType }: VoteFormProps) {
                 nays: "",
                 absent: "",
                 notVoting: "",
+                excused: "",
                 details: "",
             })
             router.refresh()

@@ -12,6 +12,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { ChevronDown, CalendarIcon, X, Search, RotateCcw } from "lucide-react"
 import { PdfButton } from "@/components/pdf-button"
 import { getUniqueSponsors, getUniqueCommittees, getUniqueSubjects } from "@/lib/mock-data"
+import { ExcelButton } from "./excel-button"
 
 interface FiltersBarProps {
     initialChambers: string[]
@@ -540,11 +541,18 @@ export function FiltersBar({
                                 Reset Filters
                             </Button>
                         </div>
-                        <PdfButton
-                            chambers={initialChambers}
-                            sections={initialSections}
-                            dates={initialStartDate && initialEndDate ? [initialStartDate, initialEndDate] : []}
-                        />
+                        <div className="flex gap-3">
+                            <ExcelButton
+                                chambers={initialChambers}
+                                sections={initialSections}
+                                dates={initialStartDate && initialEndDate ? [initialStartDate, initialEndDate] : []}
+                            />
+                            <PdfButton
+                                chambers={initialChambers}
+                                sections={initialSections}
+                                dates={initialStartDate && initialEndDate ? [initialStartDate, initialEndDate] : []}
+                            />
+                        </div>
                     </div>
                 </div>
             </CardContent>

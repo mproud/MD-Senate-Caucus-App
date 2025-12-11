@@ -17,8 +17,30 @@ export function CalendarTable({ data }: CalendarTableProps) {
                     <div className="text-center text-muted-foreground">
                         <p className="text-lg font-medium">No items scheduled</p>
                         <p className="mt-2 text-sm">
-                            There are no bills on the {data.section} calendar for {data.chamber} on{" "}
-                            {new Date(data.date).toLocaleDateString()}
+                            There are no bills on the calendar for {data.chamber} on{" "}
+                            {new Date(data.date).toLocaleDateString()}, or no bills match your search query
+                        </p>
+                    </div>
+                </CardContent>
+            </Card>
+        )
+    }
+
+    return (
+        <pre>{JSON.stringify( data, null, 2)}</pre>
+    )
+}
+
+export function legacy__CalendarTable({ data }: CalendarTableProps) {
+    if ( ! data.items || data.items.length === 0 ) {
+        return (
+            <Card>
+                <CardContent className="py-8">
+                    <div className="text-center text-muted-foreground">
+                        <p className="text-lg font-medium">No items scheduled</p>
+                        <p className="mt-2 text-sm">
+                            There are no bills on the calendar for {data.chamber} on{" "}
+                            {new Date(data.date).toLocaleDateString()}, or no bills match your search query
                         </p>
                     </div>
                 </CardContent>
