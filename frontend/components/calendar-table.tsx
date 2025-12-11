@@ -6,7 +6,7 @@ import type { CalendarDay } from "@/lib/types"
 import { getCommitteeAbbreviation } from "@/lib/utils"
 
 interface CalendarTableProps {
-    data: CalendarDay
+    data: any
 }
 
 interface RawCalendarItem {
@@ -178,7 +178,8 @@ export function CalendarTable({ data }: CalendarTableProps) {
 
             {/* .filter(([, items]) => items.length > 0) */}
 
-            {Object.entries( data.calendars )
+            {/* @TODO fix this - it's any for now... */}
+            {Object.entries( data.calendars as Record<string, any> )
                 .map(([ index, calendar ]) => (
                     <Card key={index}>
                         <CardHeader>
@@ -202,7 +203,7 @@ export function CalendarTable({ data }: CalendarTableProps) {
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                        {calendar.items.map((item) => (
+                                        {calendar.items.map((item: any) => (
                                             <TableRow key={item.id}>
                                                 <TableCell className="font-medium">
                                                     <Link
@@ -262,6 +263,7 @@ export function CalendarTable({ data }: CalendarTableProps) {
     )
 }
 
+/*
 export function legacy__CalendarTable({ data }: CalendarTableProps) {
     if ( ! data.items || data.items.length === 0 ) {
         return (
@@ -371,3 +373,4 @@ export function legacy__CalendarTable({ data }: CalendarTableProps) {
         </div>
     )
 }
+*/
