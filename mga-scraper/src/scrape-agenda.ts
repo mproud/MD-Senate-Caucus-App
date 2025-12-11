@@ -875,9 +875,9 @@ export const handler = async ( event: any, context: Context ) => {
             agendaCount++
 
             // stop after x calendars // @TODO remove this when done debugging
-            if ( agendaCount > 3 ) {
-                return false
-            }
+            // if ( agendaCount > 3 ) {
+            //     return false
+            // }
         }
 
         // Finished!

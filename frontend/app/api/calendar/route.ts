@@ -57,12 +57,17 @@ export async function GET( request: NextRequest ) {
                 calendarDate: 'desc',
             },
             include: {
-                items: true,
+                committee: true,
+                items: {
+                    include: {
+                        bill: true,
+                    }
+                },
             },
         })
 
         const response = {
-            items: calendars,
+            calendars,
             chamber: 'SENATE', // placeholder
             date: 'today', // placeholder
         }
