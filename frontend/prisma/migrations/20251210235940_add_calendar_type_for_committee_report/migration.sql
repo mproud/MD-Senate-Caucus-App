@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "CalendarType" ADD VALUE 'COMMITTEE_REPORT';

@@ -22898,34 +22898,34 @@ var require_util = __commonJS({
     function isBuffer2(buffer) {
       return buffer instanceof Uint8Array || Buffer.isBuffer(buffer);
     }
-    function assertRequestHandler(handler, method, upgrade) {
-      if (!handler || typeof handler !== "object") {
+    function assertRequestHandler(handler2, method, upgrade) {
+      if (!handler2 || typeof handler2 !== "object") {
         throw new InvalidArgumentError("handler must be an object");
       }
-      if (typeof handler.onRequestStart === "function") {
+      if (typeof handler2.onRequestStart === "function") {
         return;
       }
-      if (typeof handler.onConnect !== "function") {
+      if (typeof handler2.onConnect !== "function") {
         throw new InvalidArgumentError("invalid onConnect method");
       }
-      if (typeof handler.onError !== "function") {
+      if (typeof handler2.onError !== "function") {
         throw new InvalidArgumentError("invalid onError method");
       }
-      if (typeof handler.onBodySent !== "function" && handler.onBodySent !== void 0) {
+      if (typeof handler2.onBodySent !== "function" && handler2.onBodySent !== void 0) {
         throw new InvalidArgumentError("invalid onBodySent method");
       }
       if (upgrade || method === "CONNECT") {
-        if (typeof handler.onUpgrade !== "function") {
+        if (typeof handler2.onUpgrade !== "function") {
           throw new InvalidArgumentError("invalid onUpgrade method");
         }
       } else {
-        if (typeof handler.onHeaders !== "function") {
+        if (typeof handler2.onHeaders !== "function") {
           throw new InvalidArgumentError("invalid onHeaders method");
         }
-        if (typeof handler.onData !== "function") {
+        if (typeof handler2.onData !== "function") {
           throw new InvalidArgumentError("invalid onData method");
         }
-        if (typeof handler.onComplete !== "function") {
+        if (typeof handler2.onComplete !== "function") {
           throw new InvalidArgumentError("invalid onComplete method");
         }
       }
@@ -23468,7 +23468,7 @@ var require_request = __commonJS({
         servername,
         throwOnError,
         maxRedirections
-      }, handler) {
+      }, handler2) {
         if (typeof path !== "string") {
           throw new InvalidArgumentError("path must be a string");
         } else if (path[0] !== "/" && !(path.startsWith("http://") || path.startsWith("https://")) && method !== "CONNECT") {
@@ -23576,9 +23576,9 @@ var require_request = __commonJS({
         } else if (headers != null) {
           throw new InvalidArgumentError("headers must be an object or an array");
         }
-        assertRequestHandler(handler, method, upgrade);
+        assertRequestHandler(handler2, method, upgrade);
         this.servername = servername || getServerName(this.host) || null;
-        this[kHandler] = handler;
+        this[kHandler] = handler2;
         if (channels.create.hasSubscribers) {
           channels.create.publish({ request: this });
         }
@@ -23769,11 +23769,11 @@ var require_wrap_handler = __commonJS({
     var { InvalidArgumentError } = require_errors();
     module2.exports = class WrapHandler {
       #handler;
-      constructor(handler) {
-        this.#handler = handler;
+      constructor(handler2) {
+        this.#handler = handler2;
       }
-      static wrap(handler) {
-        return handler.onRequestStart ? handler : new WrapHandler(handler);
+      static wrap(handler2) {
+        return handler2.onRequestStart ? handler2 : new WrapHandler(handler2);
       }
       // Unwrap Interface
       onConnect(abort, context) {
@@ -23845,7 +23845,7 @@ var require_dispatcher = __commonJS({
     "use strict";
     var EventEmitter2 = require("node:events");
     var WrapHandler = require_wrap_handler();
-    var wrapInterceptor = (dispatch) => (opts, handler) => dispatch(opts, WrapHandler.wrap(handler));
+    var wrapInterceptor = (dispatch) => (opts, handler2) => dispatch(opts, WrapHandler.wrap(handler2));
     var Dispatcher = class extends EventEmitter2 {
       dispatch() {
         throw new Error("not implemented");
@@ -23926,11 +23926,11 @@ var require_unwrap_handler = __commonJS({
     module2.exports = class UnwrapHandler {
       #handler;
       #controller;
-      constructor(handler) {
-        this.#handler = handler;
+      constructor(handler2) {
+        this.#handler = handler2;
       }
-      static unwrap(handler) {
-        return !handler.onRequestStart ? handler : new UnwrapHandler(handler);
+      static unwrap(handler2) {
+        return !handler2.onRequestStart ? handler2 : new UnwrapHandler(handler2);
       }
       onConnect(abort, context) {
         this.#controller = new UnwrapController(abort);
@@ -24071,11 +24071,11 @@ var require_dispatcher_base = __commonJS({
           queueMicrotask(onDestroyed);
         });
       }
-      dispatch(opts, handler) {
-        if (!handler || typeof handler !== "object") {
+      dispatch(opts, handler2) {
+        if (!handler2 || typeof handler2 !== "object") {
           throw new InvalidArgumentError("handler must be an object");
         }
-        handler = UnwrapHandler.unwrap(handler);
+        handler2 = UnwrapHandler.unwrap(handler2);
         try {
           if (!opts || typeof opts !== "object") {
             throw new InvalidArgumentError("opts must be an object.");
@@ -24086,12 +24086,12 @@ var require_dispatcher_base = __commonJS({
           if (this[kClosed]) {
             throw new ClientClosedError();
           }
-          return this[kDispatch](opts, handler);
+          return this[kDispatch](opts, handler2);
         } catch (err) {
-          if (typeof handler.onError !== "function") {
+          if (typeof handler2.onError !== "function") {
             throw err;
           }
-          handler.onError(err);
+          handler2.onError(err);
           return false;
         }
       }
@@ -29596,8 +29596,8 @@ var require_client3 = __commonJS({
         connect(this);
         this.once("connect", cb);
       }
-      [kDispatch](opts, handler) {
-        const request = new Request(this[kUrl].origin, opts, handler);
+      [kDispatch](opts, handler2) {
+        const request = new Request(this[kUrl].origin, opts, handler2);
         this[kQueue].push(request);
         if (this[kResuming]) {
         } else if (util3.bodyLength(request.body) == null && util3.isIterable(request.body)) {
@@ -30042,13 +30042,13 @@ var require_pool_base = __commonJS({
         }
         return Promise.all(destroyAll);
       }
-      [kDispatch](opts, handler) {
+      [kDispatch](opts, handler2) {
         const dispatcher = this[kGetDispatcher]();
         if (!dispatcher) {
           this[kNeedDrain] = true;
-          this[kQueue].push({ opts, handler });
+          this[kQueue].push({ opts, handler: handler2 });
           this[kQueued]++;
-        } else if (!dispatcher.dispatch(opts, handler)) {
+        } else if (!dispatcher.dispatch(opts, handler2)) {
           dispatcher[kNeedDrain] = true;
           this[kNeedDrain] = !this[kGetDispatcher]();
         }
@@ -30391,7 +30391,7 @@ var require_agent = __commonJS({
         }
         return ret;
       }
-      [kDispatch](opts, handler) {
+      [kDispatch](opts, handler2) {
         let key;
         if (opts.origin && (typeof opts.origin === "string" || opts.origin instanceof URL)) {
           key = String(opts.origin);
@@ -30431,7 +30431,7 @@ var require_agent = __commonJS({
           this[kClients].set(key, { count: 0, dispatcher });
           this[kOrigins].add(key);
         }
-        return dispatcher.dispatch(opts, handler);
+        return dispatcher.dispatch(opts, handler2);
       }
       [kClose]() {
         const closePromises = [];
@@ -30509,12 +30509,12 @@ var require_proxy_agent = __commonJS({
           this.#client = new Client3(proxyUrl, { connect });
         }
       }
-      [kDispatch](opts, handler) {
-        const onHeaders = handler.onHeaders;
-        handler.onHeaders = function(statusCode, data2, resume) {
+      [kDispatch](opts, handler2) {
+        const onHeaders = handler2.onHeaders;
+        handler2.onHeaders = function(statusCode, data2, resume) {
           if (statusCode === 407) {
-            if (typeof handler.onError === "function") {
-              handler.onError(new InvalidArgumentError("Proxy Authentication Required (407)"));
+            if (typeof handler2.onError === "function") {
+              handler2.onError(new InvalidArgumentError("Proxy Authentication Required (407)"));
             }
             return;
           }
@@ -30531,7 +30531,7 @@ var require_proxy_agent = __commonJS({
           headers.host = host;
         }
         opts.headers = { ...this[kProxyHeaders], ...headers };
-        return this.#client[kDispatch](opts, handler);
+        return this.#client[kDispatch](opts, handler2);
       }
       [kClose]() {
         return this.#client.close();
@@ -30628,7 +30628,7 @@ var require_proxy_agent = __commonJS({
           }
         });
       }
-      dispatch(opts, handler) {
+      dispatch(opts, handler2) {
         const headers = buildHeaders(opts.headers);
         throwIfProxyAuthIsSent(headers);
         if (headers && !("host" in headers) && !("Host" in headers)) {
@@ -30640,7 +30640,7 @@ var require_proxy_agent = __commonJS({
             ...opts,
             headers
           },
-          handler
+          handler2
         );
       }
       /**
@@ -30724,10 +30724,10 @@ var require_env_http_proxy_agent = __commonJS({
         }
         this.#parseNoProxy();
       }
-      [kDispatch](opts, handler) {
+      [kDispatch](opts, handler2) {
         const url2 = new URL(opts.origin);
         const agent = this.#getProxyAgentForUrl(url2);
-        return agent.dispatch(opts, handler);
+        return agent.dispatch(opts, handler2);
       }
       [kClose]() {
         return Promise.all([
@@ -30832,7 +30832,7 @@ var require_retry_handler = __commonJS({
       return isNaN(retryTime) ? 0 : retryTime - Date.now();
     }
     var RetryHandler = class _RetryHandler {
-      constructor(opts, { dispatch, handler }) {
+      constructor(opts, { dispatch, handler: handler2 }) {
         const { retryOptions, ...dispatchOpts } = opts;
         const {
           // Retry scoped
@@ -30850,7 +30850,7 @@ var require_retry_handler = __commonJS({
         } = retryOptions ?? {};
         this.error = null;
         this.dispatch = dispatch;
-        this.handler = WrapHandler.wrap(handler);
+        this.handler = WrapHandler.wrap(handler2);
         this.opts = { ...dispatchOpts, body: wrapRequestBody(opts.body) };
         this.retryOpts = {
           throwOnError: throwOnError ?? true,
@@ -31138,13 +31138,13 @@ var require_retry_agent = __commonJS({
         this.#agent = agent;
         this.#options = options;
       }
-      dispatch(opts, handler) {
+      dispatch(opts, handler2) {
         const retry = new RetryHandler({
           ...opts,
           retryOptions: this.#options
         }, {
           dispatch: this.#agent.dispatch.bind(this.#agent),
-          handler
+          handler: handler2
         });
         return this.#agent.dispatch(opts, retry);
       }
@@ -31240,8 +31240,8 @@ var require_h2c_client = __commonJS({
           return socket;
         };
       }
-      dispatch(opts, handler) {
-        return this.#client.dispatch(opts, handler);
+      dispatch(opts, handler2) {
+        return this.#client.dispatch(opts, handler2);
       }
       [kClose]() {
         return this.#client.close();
@@ -31818,8 +31818,8 @@ var require_api_request = __commonJS({
         });
       }
       try {
-        const handler = new RequestHandler(opts, callback);
-        this.dispatch(opts, handler);
+        const handler2 = new RequestHandler(opts, callback);
+        this.dispatch(opts, handler2);
       } catch (err) {
         if (typeof callback !== "function") {
           throw err;
@@ -32032,8 +32032,8 @@ var require_api_stream = __commonJS({
         });
       }
       try {
-        const handler = new StreamHandler(opts, factory2, callback);
-        this.dispatch(opts, handler);
+        const handler2 = new StreamHandler(opts, factory2, callback);
+        this.dispatch(opts, handler2);
       } catch (err) {
         if (typeof callback !== "function") {
           throw err;
@@ -32100,11 +32100,11 @@ var require_api_pipeline = __commonJS({
       }
     };
     var PipelineHandler = class extends AsyncResource {
-      constructor(opts, handler) {
+      constructor(opts, handler2) {
         if (!opts || typeof opts !== "object") {
           throw new InvalidArgumentError("invalid opts");
         }
-        if (typeof handler !== "function") {
+        if (typeof handler2 !== "function") {
           throw new InvalidArgumentError("invalid handler");
         }
         const { signal, method, opaque, onInfo, responseHeaders } = opts;
@@ -32120,7 +32120,7 @@ var require_api_pipeline = __commonJS({
         super("UNDICI_PIPELINE");
         this.opaque = opaque || null;
         this.responseHeaders = responseHeaders || null;
-        this.handler = handler;
+        this.handler = handler2;
         this.abort = null;
         this.context = null;
         this.onInfo = onInfo || null;
@@ -32174,7 +32174,7 @@ var require_api_pipeline = __commonJS({
         this.context = context;
       }
       onHeaders(statusCode, rawHeaders, resume) {
-        const { opaque, handler, context } = this;
+        const { opaque, handler: handler2, context } = this;
         if (statusCode < 200) {
           if (this.onInfo) {
             const headers = this.responseHeaders === "raw" ? util3.parseRawHeaders(rawHeaders) : util3.parseHeaders(rawHeaders);
@@ -32187,7 +32187,7 @@ var require_api_pipeline = __commonJS({
         try {
           this.handler = null;
           const headers = this.responseHeaders === "raw" ? util3.parseRawHeaders(rawHeaders) : util3.parseHeaders(rawHeaders);
-          body = this.runInAsyncScope(handler, null, {
+          body = this.runInAsyncScope(handler2, null, {
             statusCode,
             headers,
             opaque,
@@ -32234,9 +32234,9 @@ var require_api_pipeline = __commonJS({
         util3.destroy(ret, err);
       }
     };
-    function pipeline(opts, handler) {
+    function pipeline(opts, handler2) {
       try {
-        const pipelineHandler = new PipelineHandler(opts, handler);
+        const pipelineHandler = new PipelineHandler(opts, handler2);
         this.dispatch({ ...opts, body: pipelineHandler.req }, pipelineHandler);
         return pipelineHandler.ret;
       } catch (err) {
@@ -32734,7 +32734,7 @@ var require_mock_utils = __commonJS({
       }
       return Buffer.concat(buffers).toString("utf8");
     }
-    function mockDispatch(opts, handler) {
+    function mockDispatch(opts, handler2) {
       const key = buildKey(opts);
       const mockDispatch2 = getMockDispatch(this[kDispatches], key);
       mockDispatch2.timesInvoked++;
@@ -32747,7 +32747,7 @@ var require_mock_utils = __commonJS({
       mockDispatch2.pending = timesInvoked < times;
       if (error !== null) {
         deleteMockDispatch(this[kDispatches], key);
-        handler.onError(error);
+        handler2.onError(error);
         return true;
       }
       if (typeof delay === "number" && delay > 0) {
@@ -32767,10 +32767,10 @@ var require_mock_utils = __commonJS({
         const responseData = getResponseData(body);
         const responseHeaders = generateKeyValues(headers);
         const responseTrailers = generateKeyValues(trailers);
-        handler.onConnect?.((err) => handler.onError(err), null);
-        handler.onHeaders?.(statusCode, responseHeaders, resume, getStatusText(statusCode));
-        handler.onData?.(Buffer.from(responseData));
-        handler.onComplete?.(responseTrailers);
+        handler2.onConnect?.((err) => handler2.onError(err), null);
+        handler2.onHeaders?.(statusCode, responseHeaders, resume, getStatusText(statusCode));
+        handler2.onData?.(Buffer.from(responseData));
+        handler2.onComplete?.(responseTrailers);
         deleteMockDispatch(mockDispatches, key);
       }
       function resume() {
@@ -32781,10 +32781,10 @@ var require_mock_utils = __commonJS({
       const agent = this[kMockAgent];
       const origin2 = this[kOrigin];
       const originalDispatch = this[kOriginalDispatch];
-      return function dispatch(opts, handler) {
+      return function dispatch(opts, handler2) {
         if (agent.isMockActive) {
           try {
-            mockDispatch.call(this, opts, handler);
+            mockDispatch.call(this, opts, handler2);
           } catch (error) {
             if (error.code === "UND_MOCK_ERR_MOCK_NOT_MATCHED") {
               const netConnect = agent[kGetNetConnect]();
@@ -32792,7 +32792,7 @@ var require_mock_utils = __commonJS({
                 throw new MockNotMatchedError(`${error.message}: subsequent request to origin ${origin2} was not allowed (net.connect disabled)`);
               }
               if (checkNetConnect(netConnect, origin2)) {
-                originalDispatch.call(this, opts, handler);
+                originalDispatch.call(this, opts, handler2);
               } else {
                 throw new MockNotMatchedError(`${error.message}: subsequent request to origin ${origin2} was not allowed (net.connect is not enabled for this origin)`);
               }
@@ -32801,7 +32801,7 @@ var require_mock_utils = __commonJS({
             }
           }
         } else {
-          originalDispatch.call(this, opts, handler);
+          originalDispatch.call(this, opts, handler2);
         }
       };
     }
@@ -33079,13 +33079,13 @@ var require_mock_call_history = __commonJS({
     "use strict";
     var { kMockCallHistoryAddLog } = require_mock_symbols();
     var { InvalidArgumentError } = require_errors();
-    function handleFilterCallsWithOptions(criteria, options, handler, store) {
+    function handleFilterCallsWithOptions(criteria, options, handler2, store) {
       switch (options.operator) {
         case "OR":
-          store.push(...handler(criteria));
+          store.push(...handler2(criteria));
           return store;
         case "AND":
-          return handler.call({ logs: store }, criteria);
+          return handler2.call({ logs: store }, criteria);
         default:
           throw new InvalidArgumentError("options.operator must to be a case insensitive string equal to 'OR' or 'AND'");
       }
@@ -33435,7 +33435,7 @@ var require_mock_agent = __commonJS({
         }
         return dispatcher;
       }
-      dispatch(opts, handler) {
+      dispatch(opts, handler2) {
         this.get(opts.origin);
         this[kMockAgentAddCallHistoryLog](opts);
         const acceptNonStandardSearchParameters = this[kMockAgentAcceptsNonStandardSearchParameters];
@@ -33445,7 +33445,7 @@ var require_mock_agent = __commonJS({
           const normalizedSearchParams = normalizeSearchParams(searchParams, acceptNonStandardSearchParameters);
           dispatchOpts.path = `${path}?${normalizedSearchParams}`;
         }
-        return this[kAgent].dispatch(dispatchOpts, handler);
+        return this[kAgent].dispatch(dispatchOpts, handler2);
       }
       async close() {
         this.clearCallHistory();
@@ -34077,41 +34077,41 @@ var require_snapshot_agent = __commonJS({
           });
         }
       }
-      dispatch(opts, handler) {
-        handler = WrapHandler.wrap(handler);
+      dispatch(opts, handler2) {
+        handler2 = WrapHandler.wrap(handler2);
         const mode = this[kSnapshotMode];
         if (mode === "playback" || mode === "update") {
           if (!this[kSnapshotLoaded]) {
-            return this.#asyncDispatch(opts, handler);
+            return this.#asyncDispatch(opts, handler2);
           }
           const snapshot = this[kSnapshotRecorder].findSnapshot(opts);
           if (snapshot) {
-            return this.#replaySnapshot(snapshot, handler);
+            return this.#replaySnapshot(snapshot, handler2);
           } else if (mode === "update") {
-            return this.#recordAndReplay(opts, handler);
+            return this.#recordAndReplay(opts, handler2);
           } else {
             const error = new UndiciError(`No snapshot found for ${opts.method || "GET"} ${opts.path}`);
-            if (handler.onError) {
-              handler.onError(error);
+            if (handler2.onError) {
+              handler2.onError(error);
               return;
             }
             throw error;
           }
         } else if (mode === "record") {
-          return this.#recordAndReplay(opts, handler);
+          return this.#recordAndReplay(opts, handler2);
         }
       }
       /**
        * Async version of dispatch for when we need to load snapshots first
        */
-      async #asyncDispatch(opts, handler) {
+      async #asyncDispatch(opts, handler2) {
         await this.loadSnapshots();
-        return this.dispatch(opts, handler);
+        return this.dispatch(opts, handler2);
       }
       /**
        * Records a real request and replays the response
        */
-      #recordAndReplay(opts, handler) {
+      #recordAndReplay(opts, handler2) {
         const responseData = {
           statusCode: null,
           headers: {},
@@ -34121,19 +34121,19 @@ var require_snapshot_agent = __commonJS({
         const self2 = this;
         const recordingHandler = {
           onRequestStart(controller, context) {
-            return handler.onRequestStart(controller, { ...context, history: this.history });
+            return handler2.onRequestStart(controller, { ...context, history: this.history });
           },
           onRequestUpgrade(controller, statusCode, headers, socket) {
-            return handler.onRequestUpgrade(controller, statusCode, headers, socket);
+            return handler2.onRequestUpgrade(controller, statusCode, headers, socket);
           },
           onResponseStart(controller, statusCode, headers, statusMessage) {
             responseData.statusCode = statusCode;
             responseData.headers = headers;
-            return handler.onResponseStart(controller, statusCode, headers, statusMessage);
+            return handler2.onResponseStart(controller, statusCode, headers, statusMessage);
           },
           onResponseData(controller, chunk) {
             responseData.body.push(chunk);
-            return handler.onResponseData(controller, chunk);
+            return handler2.onResponseData(controller, chunk);
           },
           onResponseEnd(controller, trailers) {
             responseData.trailers = trailers;
@@ -34144,9 +34144,9 @@ var require_snapshot_agent = __commonJS({
               body: responseBody,
               trailers: responseData.trailers
             }).then(() => {
-              handler.onResponseEnd(controller, trailers);
+              handler2.onResponseEnd(controller, trailers);
             }).catch((error) => {
-              handler.onResponseError(controller, error);
+              handler2.onResponseError(controller, error);
             });
           }
         };
@@ -34160,7 +34160,7 @@ var require_snapshot_agent = __commonJS({
        * @param {Object} handler - The handler to call with the response data.
        * @returns {void}
        */
-      #replaySnapshot(snapshot, handler) {
+      #replaySnapshot(snapshot, handler2) {
         try {
           const { response } = snapshot;
           const controller = {
@@ -34175,13 +34175,13 @@ var require_snapshot_agent = __commonJS({
             aborted: false,
             paused: false
           };
-          handler.onRequestStart(controller);
-          handler.onResponseStart(controller, response.statusCode, response.headers);
+          handler2.onRequestStart(controller);
+          handler2.onResponseStart(controller, response.statusCode, response.headers);
           const body = Buffer.from(response.body, "base64");
-          handler.onResponseData(controller, body);
-          handler.onResponseEnd(controller, response.trailers);
+          handler2.onResponseData(controller, body);
+          handler2.onResponseEnd(controller, response.trailers);
         } catch (error) {
-          handler.onError?.(error);
+          handler2.onError?.(error);
         }
       }
       /**
@@ -34361,11 +34361,11 @@ var require_decorator_handler = __commonJS({
       #onCompleteCalled = false;
       #onErrorCalled = false;
       #onResponseStartCalled = false;
-      constructor(handler) {
-        if (typeof handler !== "object" || handler === null) {
+      constructor(handler2) {
+        if (typeof handler2 !== "object" || handler2 === null) {
           throw new TypeError("handler must be an object");
         }
-        this.#handler = WrapHandler.wrap(handler);
+        this.#handler = WrapHandler.wrap(handler2);
       }
       onRequestStart(...args) {
         this.#handler.onRequestStart?.(...args);
@@ -34438,7 +34438,7 @@ var require_redirect_handler = __commonJS({
         const dispatch = dispatcher.dispatch.bind(dispatcher);
         return (opts, originalHandler) => dispatch(opts, new _RedirectHandler(dispatch, maxRedirections, opts, originalHandler));
       }
-      constructor(dispatch, maxRedirections, opts, handler) {
+      constructor(dispatch, maxRedirections, opts, handler2) {
         if (maxRedirections != null && (!Number.isInteger(maxRedirections) || maxRedirections < 0)) {
           throw new InvalidArgumentError("maxRedirections must be a positive number");
         }
@@ -34447,7 +34447,7 @@ var require_redirect_handler = __commonJS({
         const { maxRedirections: _, ...cleanOpts } = opts;
         this.opts = cleanOpts;
         this.maxRedirections = maxRedirections;
-        this.handler = handler;
+        this.handler = handler2;
         this.history = [];
         if (util3.isStream(this.opts.body)) {
           if (util3.bodyLength(this.opts.body) === 0) {
@@ -34573,13 +34573,13 @@ var require_redirect = __commonJS({
     var RedirectHandler = require_redirect_handler();
     function createRedirectInterceptor({ maxRedirections: defaultMaxRedirections } = {}) {
       return (dispatch) => {
-        return function Intercept(opts, handler) {
+        return function Intercept(opts, handler2) {
           const { maxRedirections = defaultMaxRedirections, ...rest } = opts;
           if (maxRedirections == null || maxRedirections === 0) {
-            return dispatch(opts, handler);
+            return dispatch(opts, handler2);
           }
           const dispatchOpts = { ...rest };
-          const redirectHandler = new RedirectHandler(dispatch, maxRedirections, dispatchOpts, handler);
+          const redirectHandler = new RedirectHandler(dispatch, maxRedirections, dispatchOpts, handler2);
           return dispatch(dispatchOpts, redirectHandler);
         };
       };
@@ -34600,8 +34600,8 @@ var require_response_error = __commonJS({
       #decoder;
       #headers;
       #body;
-      constructor(_opts, { handler }) {
-        super(handler);
+      constructor(_opts, { handler: handler2 }) {
+        super(handler2);
       }
       #checkContentType(contentType) {
         return (this.#contentType ?? "").indexOf(contentType) === 0;
@@ -34662,8 +34662,8 @@ var require_response_error = __commonJS({
     };
     module2.exports = () => {
       return (dispatch) => {
-        return function Intercept(opts, handler) {
-          return dispatch(opts, new ResponseErrorHandler(opts, { handler }));
+        return function Intercept(opts, handler2) {
+          return dispatch(opts, new ResponseErrorHandler(opts, { handler: handler2 }));
         };
       };
     };
@@ -34677,13 +34677,13 @@ var require_retry = __commonJS({
     var RetryHandler = require_retry_handler();
     module2.exports = (globalOpts) => {
       return (dispatch) => {
-        return function retryInterceptor(opts, handler) {
+        return function retryInterceptor(opts, handler2) {
           return dispatch(
             opts,
             new RetryHandler(
               { ...opts, retryOptions: { ...globalOpts, ...opts.retryOptions } },
               {
-                handler,
+                handler: handler2,
                 dispatch
               }
             )
@@ -34707,11 +34707,11 @@ var require_dump = __commonJS({
       #controller = null;
       aborted = false;
       reason = false;
-      constructor({ maxSize, signal }, handler) {
+      constructor({ maxSize, signal }, handler2) {
         if (maxSize != null && (!Number.isFinite(maxSize) || maxSize < 1)) {
           throw new InvalidArgumentError("maxSize must be a number greater than 0");
         }
-        super(handler);
+        super(handler2);
         this.#maxSize = maxSize ?? this.#maxSize;
       }
       #abort(reason) {
@@ -34769,9 +34769,9 @@ var require_dump = __commonJS({
       maxSize: 1024 * 1024
     }) {
       return (dispatch) => {
-        return function Intercept(opts, handler) {
+        return function Intercept(opts, handler2) {
           const { dumpMaxSize = defaultMaxSize } = opts;
-          const dumpHandler = new DumpHandler({ maxSize: dumpMaxSize, signal: opts.signal }, handler);
+          const dumpHandler = new DumpHandler({ maxSize: dumpMaxSize, signal: opts.signal }, handler2);
           return dispatch(opts, dumpHandler);
         };
       };
@@ -34990,8 +34990,8 @@ var require_dns = __commonJS({
       #controller = null;
       #newOrigin = null;
       #firstTry = true;
-      constructor(state, { origin: origin2, handler, dispatch, newOrigin }, opts) {
-        super(handler);
+      constructor(state, { origin: origin2, handler: handler2, dispatch, newOrigin }, opts) {
+        super(handler2);
         this.#origin = origin2;
         this.#newOrigin = newOrigin;
         this.#opts = { ...opts };
@@ -35081,14 +35081,14 @@ var require_dns = __commonJS({
       };
       const instance = new DNSInstance(opts);
       return (dispatch) => {
-        return function dnsInterceptor(origDispatchOpts, handler) {
+        return function dnsInterceptor(origDispatchOpts, handler2) {
           const origin2 = origDispatchOpts.origin.constructor === URL ? origDispatchOpts.origin : new URL(origDispatchOpts.origin);
           if (isIP(origin2.hostname) !== 0) {
-            return dispatch(origDispatchOpts, handler);
+            return dispatch(origDispatchOpts, handler2);
           }
           instance.runLookup(origin2, origDispatchOpts, (err, newOrigin) => {
             if (err) {
-              return handler.onResponseError(null, err);
+              return handler2.onResponseError(null, err);
             }
             const dispatchOpts = {
               ...origDispatchOpts,
@@ -35103,7 +35103,7 @@ var require_dns = __commonJS({
             dispatch(
               dispatchOpts,
               instance.getHandler(
-                { origin: origin2, dispatch, handler, newOrigin },
+                { origin: origin2, dispatch, handler: handler2, newOrigin },
                 origDispatchOpts
               )
             );
@@ -35926,12 +35926,12 @@ var require_cache_handler = __commonJS({
        * @param {import('../../types/cache-interceptor.d.ts').default.CacheKey} cacheKey
        * @param {import('../../types/dispatcher.d.ts').default.DispatchHandler} handler
        */
-      constructor({ store, type, cacheByDefault }, cacheKey, handler) {
+      constructor({ store, type, cacheByDefault }, cacheKey, handler2) {
         this.#store = store;
         this.#cacheType = type;
         this.#cacheByDefault = cacheByDefault;
         this.#cacheKey = cacheKey;
-        this.#handler = handler;
+        this.#handler = handler2;
       }
       onRequestStart(controller, context) {
         this.#writeStream?.destroy();
@@ -36011,13 +36011,13 @@ var require_cache_handler = __commonJS({
         if (!this.#writeStream) {
           return downstreamOnHeaders();
         }
-        const handler = this;
+        const handler2 = this;
         this.#writeStream.on("drain", () => controller.resume()).on("error", function() {
-          handler.#writeStream = void 0;
-          handler.#store.delete(handler.#cacheKey);
+          handler2.#writeStream = void 0;
+          handler2.#store.delete(handler2.#cacheKey);
         }).on("close", function() {
-          if (handler.#writeStream === this) {
-            handler.#writeStream = void 0;
+          if (handler2.#writeStream === this) {
+            handler2.#writeStream = void 0;
           }
           controller.resume();
         });
@@ -36375,12 +36375,12 @@ var require_cache_revalidation_handler = __commonJS({
        * @param {import('../../types/dispatcher.d.ts').default.DispatchHandlers} handler
        * @param {boolean} allowErrorStatusCodes
        */
-      constructor(callback, handler, allowErrorStatusCodes) {
+      constructor(callback, handler2, allowErrorStatusCodes) {
         if (typeof callback !== "function") {
           throw new TypeError("callback must be a function");
         }
         this.#callback = callback;
-        this.#handler = handler;
+        this.#handler = handler2;
         this.#allowErrorStatusCodes = allowErrorStatusCodes;
       }
       onRequestStart(_, context) {
@@ -36480,38 +36480,38 @@ var require_cache2 = __commonJS({
       const staleWhileRevalidateExpiry = result.staleAt + staleWhileRevalidate * 1e3;
       return now <= staleWhileRevalidateExpiry;
     }
-    function handleUncachedResponse(dispatch, globalOpts, cacheKey, handler, opts, reqCacheControl) {
+    function handleUncachedResponse(dispatch, globalOpts, cacheKey, handler2, opts, reqCacheControl) {
       if (reqCacheControl?.["only-if-cached"]) {
         let aborted = false;
         try {
-          if (typeof handler.onConnect === "function") {
-            handler.onConnect(() => {
+          if (typeof handler2.onConnect === "function") {
+            handler2.onConnect(() => {
               aborted = true;
             });
             if (aborted) {
               return;
             }
           }
-          if (typeof handler.onHeaders === "function") {
-            handler.onHeaders(504, [], () => {
+          if (typeof handler2.onHeaders === "function") {
+            handler2.onHeaders(504, [], () => {
             }, "Gateway Timeout");
             if (aborted) {
               return;
             }
           }
-          if (typeof handler.onComplete === "function") {
-            handler.onComplete([]);
+          if (typeof handler2.onComplete === "function") {
+            handler2.onComplete([]);
           }
         } catch (err) {
-          if (typeof handler.onError === "function") {
-            handler.onError(err);
+          if (typeof handler2.onError === "function") {
+            handler2.onError(err);
           }
         }
         return true;
       }
-      return dispatch(opts, new CacheHandler(globalOpts, cacheKey, handler));
+      return dispatch(opts, new CacheHandler(globalOpts, cacheKey, handler2));
     }
-    function sendCachedValue(handler, opts, result, age, context, isStale) {
+    function sendCachedValue(handler2, opts, result, age, context, isStale) {
       const stream4 = util3.isStream(result.body) ? result.body : Readable2.from(result.body ?? []);
       assert(!stream4.destroyed, "stream should not be destroyed");
       assert(!stream4.readableDidRead, "stream should not be readableDidRead");
@@ -36537,18 +36537,18 @@ var require_cache2 = __commonJS({
       };
       stream4.on("error", function(err) {
         if (!this.readableEnded) {
-          if (typeof handler.onResponseError === "function") {
-            handler.onResponseError(controller, err);
+          if (typeof handler2.onResponseError === "function") {
+            handler2.onResponseError(controller, err);
           } else {
             throw err;
           }
         }
       }).on("close", function() {
         if (!this.errored) {
-          handler.onResponseEnd?.(controller, {});
+          handler2.onResponseEnd?.(controller, {});
         }
       });
-      handler.onRequestStart?.(controller, context);
+      handler2.onRequestStart?.(controller, context);
       if (stream4.destroyed) {
         return;
       }
@@ -36556,33 +36556,33 @@ var require_cache2 = __commonJS({
       if (isStale) {
         headers.warning = '110 - "response is stale"';
       }
-      handler.onResponseStart?.(controller, result.statusCode, headers, result.statusMessage);
+      handler2.onResponseStart?.(controller, result.statusCode, headers, result.statusMessage);
       if (opts.method === "HEAD") {
         stream4.destroy();
       } else {
         stream4.on("data", function(chunk) {
-          handler.onResponseData?.(controller, chunk);
+          handler2.onResponseData?.(controller, chunk);
         });
       }
     }
-    function handleResult(dispatch, globalOpts, cacheKey, handler, opts, reqCacheControl, result) {
+    function handleResult(dispatch, globalOpts, cacheKey, handler2, opts, reqCacheControl, result) {
       if (!result) {
-        return handleUncachedResponse(dispatch, globalOpts, cacheKey, handler, opts, reqCacheControl);
+        return handleUncachedResponse(dispatch, globalOpts, cacheKey, handler2, opts, reqCacheControl);
       }
       const now = Date.now();
       if (now > result.deleteAt) {
-        return dispatch(opts, new CacheHandler(globalOpts, cacheKey, handler));
+        return dispatch(opts, new CacheHandler(globalOpts, cacheKey, handler2));
       }
       const age = Math.round((now - result.cachedAt) / 1e3);
       if (reqCacheControl?.["max-age"] && age >= reqCacheControl["max-age"]) {
-        return dispatch(opts, handler);
+        return dispatch(opts, handler2);
       }
       if (needsRevalidation(result, reqCacheControl)) {
         if (util3.isStream(opts.body) && util3.bodyLength(opts.body) !== 0) {
-          return dispatch(opts, new CacheHandler(globalOpts, cacheKey, handler));
+          return dispatch(opts, new CacheHandler(globalOpts, cacheKey, handler2));
         }
         if (withinStaleWhileRevalidateWindow(result)) {
-          sendCachedValue(handler, opts, result, age, null, true);
+          sendCachedValue(handler2, opts, result, age, null, true);
           queueMicrotask(() => {
             let headers2 = {
               ...opts.headers,
@@ -36647,13 +36647,13 @@ var require_cache2 = __commonJS({
           new CacheRevalidationHandler(
             (success, context) => {
               if (success) {
-                sendCachedValue(handler, opts, result, age, context, true);
+                sendCachedValue(handler2, opts, result, age, context, true);
               } else if (util3.isStream(result.body)) {
                 result.body.on("error", () => {
                 }).destroy();
               }
             },
-            new CacheHandler(globalOpts, cacheKey, handler),
+            new CacheHandler(globalOpts, cacheKey, handler2),
             withinStaleIfErrorThreshold
           )
         );
@@ -36662,7 +36662,7 @@ var require_cache2 = __commonJS({
         opts.body.on("error", () => {
         }).destroy();
       }
-      sendCachedValue(handler, opts, result, age, null, false);
+      sendCachedValue(handler2, opts, result, age, null, false);
     }
     module2.exports = (opts = {}) => {
       const {
@@ -36690,9 +36690,9 @@ var require_cache2 = __commonJS({
       };
       const safeMethodsToNotCache = util3.safeHTTPMethods.filter((method) => methods.includes(method) === false);
       return (dispatch) => {
-        return (opts2, handler) => {
+        return (opts2, handler2) => {
           if (!opts2.origin || safeMethodsToNotCache.includes(opts2.method)) {
-            return dispatch(opts2, handler);
+            return dispatch(opts2, handler2);
           }
           opts2 = {
             ...opts2,
@@ -36700,7 +36700,7 @@ var require_cache2 = __commonJS({
           };
           const reqCacheControl = opts2.headers?.["cache-control"] ? parseCacheControlHeader(opts2.headers["cache-control"]) : void 0;
           if (reqCacheControl?.["no-store"]) {
-            return dispatch(opts2, handler);
+            return dispatch(opts2, handler2);
           }
           const cacheKey = makeCacheKey(opts2);
           const result = store.get(cacheKey);
@@ -36710,7 +36710,7 @@ var require_cache2 = __commonJS({
                 dispatch,
                 globalOpts,
                 cacheKey,
-                handler,
+                handler2,
                 opts2,
                 reqCacheControl,
                 result2
@@ -36721,7 +36721,7 @@ var require_cache2 = __commonJS({
               dispatch,
               globalOpts,
               cacheKey,
-              handler,
+              handler2,
               opts2,
               reqCacheControl,
               result
@@ -36767,8 +36767,8 @@ var require_decompress = __commonJS({
       #skipStatusCodes;
       /** @type {boolean} */
       #skipErrorResponses;
-      constructor(handler, { skipStatusCodes = defaultSkipStatusCodes, skipErrorResponses = true } = {}) {
-        super(handler);
+      constructor(handler2, { skipStatusCodes = defaultSkipStatusCodes, skipErrorResponses = true } = {}) {
+        super(handler2);
         this.#skipStatusCodes = skipStatusCodes;
         this.#skipErrorResponses = skipErrorResponses;
       }
@@ -36935,8 +36935,8 @@ var require_decompress = __commonJS({
         warningEmitted = true;
       }
       return (dispatch) => {
-        return (opts, handler) => {
-          const decompressHandler = new DecompressHandler(handler, options);
+        return (opts, handler2) => {
+          const decompressHandler = new DecompressHandler(handler2, options);
           return dispatch(opts, decompressHandler);
         };
       };
@@ -41631,8 +41631,8 @@ var require_util5 = __commonJS({
       const event = eventFactory(e, eventInitDict);
       target.dispatchEvent(event);
     }
-    function websocketMessageReceived(handler, type, data2) {
-      handler.onMessage(type, data2);
+    function websocketMessageReceived(handler2, type, data2) {
+      handler2.onMessage(type, data2);
     }
     function toArrayBuffer(buffer) {
       if (buffer.byteLength === buffer.buffer.byteLength) {
@@ -41909,7 +41909,7 @@ var require_connection2 = __commonJS({
       crypto2 = require("node:crypto");
     } catch {
     }
-    function establishWebSocketConnection(url2, protocols, client, handler, options) {
+    function establishWebSocketConnection(url2, protocols, client, handler2, options) {
       const requestURL = url2;
       requestURL.protocol = url2.protocol === "ws:" ? "http:" : "https:";
       const request = makeRequest({
@@ -41940,28 +41940,28 @@ var require_connection2 = __commonJS({
         dispatcher: options.dispatcher,
         processResponse(response) {
           if (response.type === "error") {
-            handler.readyState = states.CLOSED;
+            handler2.readyState = states.CLOSED;
           }
           if (response.type === "error" || response.status !== 101) {
-            failWebsocketConnection(handler, 1002, "Received network error or non-101 status code.", response.error);
+            failWebsocketConnection(handler2, 1002, "Received network error or non-101 status code.", response.error);
             return;
           }
           if (protocols.length !== 0 && !response.headersList.get("Sec-WebSocket-Protocol")) {
-            failWebsocketConnection(handler, 1002, "Server did not respond with sent protocols.");
+            failWebsocketConnection(handler2, 1002, "Server did not respond with sent protocols.");
             return;
           }
           if (response.headersList.get("Upgrade")?.toLowerCase() !== "websocket") {
-            failWebsocketConnection(handler, 1002, 'Server did not set Upgrade header to "websocket".');
+            failWebsocketConnection(handler2, 1002, 'Server did not set Upgrade header to "websocket".');
             return;
           }
           if (response.headersList.get("Connection")?.toLowerCase() !== "upgrade") {
-            failWebsocketConnection(handler, 1002, 'Server did not set Connection header to "upgrade".');
+            failWebsocketConnection(handler2, 1002, 'Server did not set Connection header to "upgrade".');
             return;
           }
           const secWSAccept = response.headersList.get("Sec-WebSocket-Accept");
           const digest = crypto2.createHash("sha1").update(keyValue + uid).digest("base64");
           if (secWSAccept !== digest) {
-            failWebsocketConnection(handler, 1002, "Incorrect hash received in Sec-WebSocket-Accept header.");
+            failWebsocketConnection(handler2, 1002, "Incorrect hash received in Sec-WebSocket-Accept header.");
             return;
           }
           const secExtension = response.headersList.get("Sec-WebSocket-Extensions");
@@ -41969,7 +41969,7 @@ var require_connection2 = __commonJS({
           if (secExtension !== null) {
             extensions = parseExtensions(secExtension);
             if (!extensions.has("permessage-deflate")) {
-              failWebsocketConnection(handler, 1002, "Sec-WebSocket-Extensions header does not match.");
+              failWebsocketConnection(handler2, 1002, "Sec-WebSocket-Extensions header does not match.");
               return;
             }
           }
@@ -41977,15 +41977,15 @@ var require_connection2 = __commonJS({
           if (secProtocol !== null) {
             const requestProtocols = getDecodeSplit("sec-websocket-protocol", request.headersList);
             if (!requestProtocols.includes(secProtocol)) {
-              failWebsocketConnection(handler, 1002, "Protocol was not set in the opening handshake.");
+              failWebsocketConnection(handler2, 1002, "Protocol was not set in the opening handshake.");
               return;
             }
           }
-          response.socket.on("data", handler.onSocketData);
-          response.socket.on("close", handler.onSocketClose);
-          response.socket.on("error", handler.onSocketError);
-          handler.wasEverConnected = true;
-          handler.onConnectionEstablished(response, extensions);
+          response.socket.on("data", handler2.onSocketData);
+          response.socket.on("close", handler2.onSocketClose);
+          response.socket.on("error", handler2.onSocketError);
+          handler2.wasEverConnected = true;
+          handler2.onConnectionEstablished(response, extensions);
         }
       });
       return controller;
@@ -42023,15 +42023,15 @@ var require_connection2 = __commonJS({
         object.readyState = states.CLOSING;
       }
     }
-    function failWebsocketConnection(handler, code, reason, cause) {
-      if (isEstablished(handler.readyState)) {
-        closeWebSocketConnection(handler, code, reason, false);
+    function failWebsocketConnection(handler2, code, reason, cause) {
+      if (isEstablished(handler2.readyState)) {
+        closeWebSocketConnection(handler2, code, reason, false);
       }
-      handler.controller.abort();
-      if (!handler.socket) {
-        handler.onSocketClose();
-      } else if (handler.socket.destroyed === false) {
-        handler.socket.destroy();
+      handler2.controller.abort();
+      if (!handler2.socket) {
+        handler2.onSocketClose();
+      } else if (handler2.socket.destroyed === false) {
+        handler2.socket.destroy();
       }
     }
     module2.exports = {
@@ -42128,9 +42128,9 @@ var require_receiver = __commonJS({
       #extensions;
       /** @type {import('./websocket').Handler} */
       #handler;
-      constructor(handler, extensions) {
+      constructor(handler2, extensions) {
         super();
-        this.#handler = handler;
+        this.#handler = handler2;
         this.#extensions = extensions == null ? /* @__PURE__ */ new Map() : extensions;
         if (this.#extensions.has("permessage-deflate")) {
           this.#extensions.set("permessage-deflate", new PerMessageDeflate(extensions));
@@ -43994,9 +43994,9 @@ var require_undici = __commonJS({
       headerNameToString: util3.headerNameToString
     };
     function makeDispatcher(fn) {
-      return (url2, opts, handler) => {
+      return (url2, opts, handler2) => {
         if (typeof opts === "function") {
-          handler = opts;
+          handler2 = opts;
           opts = null;
         }
         if (!url2 || typeof url2 !== "string" && typeof url2 !== "object" && !(url2 instanceof URL)) {
@@ -44029,7 +44029,7 @@ var require_undici = __commonJS({
           origin: url2.origin,
           path: url2.search ? `${url2.pathname}${url2.search}` : url2.pathname,
           method: opts.method || (opts.body ? "PUT" : "GET")
-        }, handler);
+        }, handler2);
       };
     }
     module2.exports.setGlobalDispatcher = setGlobalDispatcher;
@@ -44448,9 +44448,6 @@ var require_mime_type = __commonJS({
     )
   );
 })();
-
-// src/sync-bills-from-json.ts
-var import_client2 = require("@prisma/client");
 
 // src/shared/prisma.ts
 var import_client = require("@prisma/client");
@@ -52586,9 +52583,9 @@ var Parser = class {
 
 // ../node_modules/htmlparser2/dist/esm/index.js
 function parseDocument(data2, options) {
-  const handler = new DomHandler(void 0, options);
-  new Parser(handler, options).end(data2);
-  return handler.root;
+  const handler2 = new DomHandler(void 0, options);
+  new Parser(handler2, options).end(data2);
+  return handler2.root;
 }
 
 // ../node_modules/cheerio/dist/esm/api/attributes.js
@@ -55270,8 +55267,8 @@ var ERR;
 // ../node_modules/parse5/dist/tokenizer/preprocessor.js
 var DEFAULT_BUFFER_WATERLINE = 1 << 16;
 var Preprocessor = class {
-  constructor(handler) {
-    this.handler = handler;
+  constructor(handler2) {
+    this.handler = handler2;
     this.html = "";
     this.pos = -1;
     this.lastGapPos = -2;
@@ -56504,9 +56501,9 @@ function getErrorForNumericCharacterReference(code) {
   return null;
 }
 var Tokenizer2 = class {
-  constructor(options, handler) {
+  constructor(options, handler2) {
     this.options = options;
-    this.handler = handler;
+    this.handler = handler2;
     this.paused = false;
     this.inLoop = false;
     this.inForeignNode = false;
@@ -56519,12 +56516,12 @@ var Tokenizer2 = class {
     this.currentCharacterToken = null;
     this.currentToken = null;
     this.currentAttr = { name: "", value: "" };
-    this.preprocessor = new Preprocessor(handler);
+    this.preprocessor = new Preprocessor(handler2);
     this.currentLocation = this.getCurrentLocation(-1);
     this.entityDecoder = new EntityDecoder3(htmlDecodeTree2, (cp, consumed) => {
       this.preprocessor.pos = this.entityStartPos + consumed - 1;
       this._flushCodePointConsumedAsCharacterReference(cp);
-    }, handler.onParseError ? {
+    }, handler2.onParseError ? {
       missingSemicolonAfterCharacterReference: () => {
         this._err(ERR.missingSemicolonAfterCharacterReference, 1);
       },
@@ -59032,9 +59029,9 @@ var OpenElementStack = class {
   get currentTmplContentOrNode() {
     return this._isInTemplate() ? this.treeAdapter.getTemplateContent(this.current) : this.current;
   }
-  constructor(document2, treeAdapter, handler) {
+  constructor(document2, treeAdapter, handler2) {
     this.treeAdapter = treeAdapter;
-    this.handler = handler;
+    this.handler = handler2;
     this.items = [];
     this.tagIDs = [];
     this.stackTop = -1;
@@ -63461,7 +63458,8 @@ var undici = __toESM(require_undici(), 1);
 var import_whatwg_mimetype = __toESM(require_mime_type(), 1);
 
 // src/shared/http.ts
-async function fetchJson(url2) {
+async function fetchHtml(url2) {
+  console.log("Fetch HTML", url2);
   const res = await axios_default.get(url2, {
     // if we ever have to include a user agent string or something for scraping
     // headers: {
@@ -63469,7 +63467,15 @@ async function fetchJson(url2) {
     //         'the-custom-user-agent-string',
     // },
   });
-  return res.data;
+  return load(res.data);
+}
+
+// src/shared/helpers.ts
+function normalizeDate(raw) {
+  if (!raw) return null;
+  const d = new Date(raw);
+  if (isNaN(d.getTime())) return null;
+  return d.toISOString().slice(0, 10);
 }
 
 // src/shared/mga-base.ts
@@ -63522,282 +63528,283 @@ async function finishScrapeRun(id, opts) {
   });
 }
 
-// src/sync-bills-from-json.ts
-var LEGISLATION_JSON_URL = "https://web.archive.org/web/20250327170322/https://mgaleg.maryland.gov/2025rs/misc/billsmasterlist/legislation.json";
-function mapChamber(billNumber) {
-  const prefix = billNumber.trim().toUpperCase();
-  if (prefix.startsWith("S")) return "SENATE";
-  return "HOUSE";
-}
-function deriveSessionYearAndCode(item) {
-  const yearPart = item.YearAndSession?.slice(0, 4);
-  const sessionYear = Number.parseInt(yearPart || "2025", 10) || 2025;
-  const sessionCode = `${sessionYear}RS`;
-  return { sessionYear, sessionCode };
-}
-function deriveIsLocal(item) {
-  const broadSubjects = item.BroadSubjects ?? [];
-  return broadSubjects.some((s) => s?.Name?.includes("Local Bills"));
-}
-async function buildLegislatorIndex() {
-  const legislators = await prisma.legislator.findMany({
-    where: {
-      isActive: true
-    },
-    select: {
-      id: true,
-      fullName: true,
-      firstName: true,
-      lastName: true,
-      terms: {
-        select: {
-          chamber: true
-        }
-      }
-    }
-  });
-  const index2 = {};
-  for (const leg of legislators) {
-    const key = (leg.lastName || "").trim().toLowerCase();
-    if (!key) continue;
-    if (!index2[key]) index2[key] = [];
-    index2[key].push(leg);
-  }
-  return index2;
-}
-function parseSponsorName(sponsorPrimary) {
-  if (!sponsorPrimary) return null;
-  let s = sponsorPrimary.trim();
-  let chamber;
-  if (s.startsWith("Delegate ")) {
-    chamber = "HOUSE";
-    s = s.slice("Delegate ".length);
-  } else if (s.startsWith("Senator ")) {
-    chamber = "SENATE";
-    s = s.slice("Senator ".length);
-  } else {
-    return null;
-  }
-  const commaInitialMatch = s.match(/^(.+?),\s*([A-Z])\.?$/);
-  if (commaInitialMatch) {
-    const lastName2 = commaInitialMatch[1].trim();
-    const initial2 = commaInitialMatch[2].trim();
-    if (!lastName2) return null;
-    return { chamber, initial: initial2, lastName: lastName2 };
-  }
-  s = s.replace(/,$/, "").trim();
-  const parts = s.split(/\s+/);
-  let initial = null;
-  let lastName;
-  if (parts.length >= 2 && /^[A-Z]\.?$/.test(parts[0])) {
-    initial = parts[0][0];
-    lastName = parts.slice(1).join(" ");
-  } else {
-    lastName = s;
-  }
-  lastName = lastName.trim();
-  if (!lastName) return null;
-  return { chamber, initial, lastName };
-}
-function resolvePrimarySponsorId(sponsorPrimary, index2) {
-  if (!sponsorPrimary) return null;
-  const parsed = parseSponsorName(sponsorPrimary);
-  if (!parsed) return null;
-  const { chamber, initial, lastName } = parsed;
-  const key = lastName.toLowerCase();
-  const lastNameMatches = index2[key] || [];
-  if (lastNameMatches.length === 0) {
-    console.warn(
-      `No Legislator match for "${sponsorPrimary}" (lastName: "${lastName}")`
-    );
-    return null;
-  }
-  const chamberMatches = lastNameMatches.filter(
-    (leg) => leg.terms?.some((t) => t.chamber === chamber)
-  );
-  if (chamberMatches.length === 1) {
-    return chamberMatches[0].id;
-  }
-  if (chamberMatches.length > 1 && initial) {
-    const withInitial = chamberMatches.filter((leg) => {
-      const first2 = (leg.firstName || "").trim();
-      return first2.toUpperCase().startsWith(initial.toUpperCase());
-    });
-    if (withInitial.length === 1) {
-      return withInitial[0].id;
-    }
-    if (withInitial.length > 1) {
-      console.warn(
-        `Ambiguous match for "${sponsorPrimary}". Multiple legislators share last name + initial.`
-      );
-      return null;
+// src/scrape-agenda.ts
+var import_client2 = require("@prisma/client");
+function parseAgendaHeader(header, headerId) {
+  const primaryPatterns = [
+    { type: "committee_report", regex: /Committee Report No\.\s*(\d+)/i },
+    { type: "third_reading_calendar", regex: /Third Reading Calendar No\.\s*(\d+)/i },
+    { type: "special_order_calendar", regex: /Special Order Calendar No\.\s*(\d+)/i }
+  ];
+  const consentRegex = /Consent(?: Calendar)? No\.\s*(\d+)/i;
+  const heading = header.replace(/\s+/g, " ").trim();
+  const distributionMatch = heading.match(/Distribution Date:\s*([A-Za-z]+\s+\d{1,2},\s*\d{4})/i);
+  const readingMatch = heading.match(/(First|Second|Third|Fourth|Fifth)?\s*Reading Date:\s*([A-Za-z]+\s+\d{1,2},\s*\d{4})/i);
+  const distributionDate = normalizeDate(distributionMatch?.[1]);
+  const readingDate = normalizeDate(readingMatch?.[2]);
+  const consentMatch = heading.match(consentRegex);
+  const consentCalendar = consentMatch ? parseInt(consentMatch[1], 10) : false;
+  for (const { type, regex } of primaryPatterns) {
+    const match = heading.match(regex);
+    if (match) {
+      return {
+        calendarType: type,
+        calendarNumber: parseInt(match[1], 10),
+        consentCalendar,
+        distributionDate,
+        readingDate,
+        heading,
+        headerId
+      };
     }
   }
-  if (chamberMatches.length > 1) {
-    console.warn(
-      `Ambiguous match for "${sponsorPrimary}" - multiple legislators in same chamber with last name "${lastName}".`
-    );
-    return null;
-  }
-  if (chamberMatches.length === 0) {
-    if (lastNameMatches.length === 1) {
-      return lastNameMatches[0].id;
-    }
-    console.warn(
-      `Ambiguous match for "${sponsorPrimary}" - cannot resolve chamber. Candidates: ${lastNameMatches.map((m) => m.fullName).join(", ")}`
-    );
-    return null;
+  if (consentCalendar !== false) {
+    return {
+      calendarType: "consent_calendar",
+      calendarNumber: consentCalendar,
+      consentCalendar,
+      distributionDate,
+      readingDate,
+      heading,
+      headerId
+    };
   }
   return null;
 }
-function createStatusChangedSummary(billNumber, oldStatus, newStatus) {
-  if (!oldStatus) {
-    return `${billNumber}: status set to ${newStatus ?? "Unknown"}`;
-  }
-  if (!newStatus) {
-    return `${billNumber}: status cleared (was ${oldStatus})`;
-  }
-  return `${billNumber}: status changed from "${oldStatus}" to "${newStatus}"`;
+async function scrapeAgendaUrl(url2) {
+  const $3 = await fetchHtml(url2);
+  const sections = [];
+  $3("table").each((_, el) => {
+    const $table = $3(el);
+    const headerText = $table.find("thead th").text().replace(/\s+/g, " ").trim();
+    if (!headerText) return;
+    const headerId = $table.find("thead a[id]").attr("id") || null;
+    const parsedHeader = parseAgendaHeader(headerText, headerId);
+    const items = [];
+    $table.find("tbody > tr").each((__, row) => {
+      const $row = $3(row);
+      const innerTable = $row.find("table").first();
+      if (!innerTable.length) return;
+      const innerRows = innerTable.find("tbody > tr");
+      if (!innerRows.length) return;
+      let status = null;
+      let startIdx = 0;
+      const firstRowText = innerRows.eq(0).text().replace(/\s+/g, " ").trim();
+      if (firstRowText && /FAVORABLE|UNFAVORABLE|ADVERSE|LAID OVER|REFERRED/i.test(firstRowText)) {
+        status = firstRowText;
+        startIdx = 1;
+      }
+      let billRowIndex = null;
+      innerRows.each((idx, r) => {
+        if (idx < startIdx) return;
+        const hasLink = $3(r).find("a").length > 0;
+        if (hasLink) {
+          billRowIndex = idx;
+          return false;
+        }
+      });
+      if (billRowIndex === null) return;
+      const billRow = innerRows.eq(billRowIndex);
+      const billLink = billRow.find("a").first();
+      const billNumber = billLink.text().replace(/\s+/g, " ").trim();
+      if (!billNumber) return;
+      const billUrl = billLink.attr("href") || null;
+      const billCells = billRow.find("td");
+      const extraTexts = [];
+      billCells.slice(1).each((i, td) => {
+        const txt = $3(td).text().replace(/\s+/g, " ").trim();
+        if (txt) {
+          extraTexts.push(txt);
+        }
+      });
+      let disposition = null;
+      let sponsor = null;
+      for (const txt of extraTexts) {
+        if (/Favorable|Unfavorable|Adverse|with Amendments|Laid Over|Special Order/i.test(txt)) {
+          disposition = txt;
+          break;
+        }
+      }
+      for (const txt of extraTexts) {
+        if (txt !== disposition && !sponsor) {
+          sponsor = txt;
+        }
+      }
+      const descriptionRow = innerRows.eq(billRowIndex + 1);
+      let description = null;
+      if (descriptionRow && descriptionRow.length) {
+        const descText = descriptionRow.text().replace(/\s+/g, " ").trim();
+        description = descText || null;
+      }
+      items.push({
+        headerId,
+        billNumber,
+        billUrl,
+        disposition,
+        sponsor,
+        // remove
+        description,
+        // remove
+        status
+        // I don't care about this. remove
+      });
+    });
+    sections.push({
+      headerId,
+      header: parsedHeader,
+      items
+    });
+  });
+  return sections;
 }
-async function runBillsFromJsonScrape(event, context) {
-  const run = await startScrapeRun("MGA_BILLS_JSON");
+function mapCalendarType(type) {
+  if (!type) return null;
+  const t = type.toLowerCase();
+  if (t === "committee_report") return "COMMITTEE_REPORT";
+  if (t === "third_reading_calendar") return "THIRD_READING";
+  if (t === "special_order_calendar") return "SPECIAL_ORDER";
+  if (t === "consent_calendar") return "CONSENT";
+  return null;
+}
+async function upsertFloorCalendar(opts) {
+  const { chamber, header, agendaUrl } = opts;
+  if (!header) return null;
+  const calendarTypeEnum = mapCalendarType(header.calendarType);
+  const calendarNumber = header.calendarNumber ?? null;
+  const calendarDateStr = header.readingDate ?? header.distributionDate ?? null;
+  const calendarDate = calendarDateStr ? new Date(calendarDateStr) : null;
+  const calendarName = header.heading ?? null;
+  const existing = await prisma.floorCalendar.findFirst({
+    where: {
+      chamber,
+      calendarType: calendarTypeEnum,
+      calendarNumber,
+      calendarDate
+    }
+  });
+  if (existing) return existing;
+  return prisma.floorCalendar.create({
+    data: {
+      chamber,
+      calendarType: calendarTypeEnum,
+      calendarNumber,
+      date: calendarDate,
+      name: calendarName,
+      sourceUrl: agendaUrl,
+      dataSource: {
+        header
+      }
+    }
+  });
+}
+async function createBillAddedToCalendarEvent(opts) {
+  const { billId, billNumber, chamber, floorCalendarId, header, agendaUrl } = opts;
+  const calendarTypeEnum = mapCalendarType(header?.calendarType ?? null);
+  const calendarNumber = header?.calendarNumber ?? null;
+  const calendarName = header?.heading ?? null;
+  const calendarDateStr = header?.readingDate ?? header?.distributionDate ?? null;
+  const calendarDate = calendarDateStr ? new Date(calendarDateStr) : null;
+  const existingEvent = await prisma.billEvent.findFirst({
+    where: {
+      billId,
+      eventType: import_client2.BillEventType.BILL_ADDED_TO_CALENDAR,
+      floorCalendarId: floorCalendarId ?? void 0,
+      calendarType: calendarTypeEnum,
+      calendarNumber
+    }
+  });
+  if (existingEvent) return;
+  const summary = `${billNumber} added to calendar ${calendarNumber ?? ""}${calendarName ? ` - ${calendarName}` : ""}`.trim();
+  await prisma.billEvent.create({
+    data: {
+      billId,
+      eventType: import_client2.BillEventType.BILL_ADDED_TO_CALENDAR,
+      chamber,
+      floorCalendarId,
+      calendarType: calendarTypeEnum,
+      calendarNumber,
+      eventTime: calendarDate ?? /* @__PURE__ */ new Date(),
+      summary,
+      payload: {
+        calendarName,
+        calendarType: header?.calendarType ?? null,
+        calendarNumber,
+        calendarDate: calendarDateStr,
+        distributionDate: header?.distributionDate ?? null,
+        readingDate: header?.readingDate ?? null,
+        heading: header?.heading ?? null,
+        agendaUrl
+      }
+    }
+  });
+}
+var handler = async (event, context) => {
+  const urlFromEvent = event?.url;
+  const url2 = "http://localhost:8000/20250327131337-senate-agenda.html";
+  const chamber = "SENATE";
+  const run = await startScrapeRun(`MGA_${chamber}_AGENDA`);
   try {
-    console.log("Fetching legislation.json...");
-    const raw = await fetchJson(LEGISLATION_JSON_URL);
-    console.log("Building legislator index...");
-    const legislatorIndex = await buildLegislatorIndex();
-    let billsCount = 0;
-    for (const item of raw) {
-      if (!item.BillNumber) {
-        console.warn("Skipping bill with no BillNumber", item);
-        continue;
-      }
-      const billNumber = String(item.BillNumber).trim();
-      const { sessionYear, sessionCode } = deriveSessionYearAndCode(item);
-      const externalId = `${sessionCode}-${billNumber}`;
-      const chamber = mapChamber(billNumber);
-      const shortTitle = (item.Title || billNumber).trim();
-      const longTitle = null;
-      const synopsis = item.Synopsis ? String(item.Synopsis).trim() : null;
-      const billTypeMatch = billNumber.match(/^[A-Z]+/);
-      const billType = billTypeMatch ? billTypeMatch[0] : null;
-      const numericMatch = billNumber.match(/(\d+)/);
-      const billNumberNumeric = numericMatch ? Number(numericMatch[1]) : null;
-      const statusDesc = item.Status || null;
-      const statusCode = null;
-      const isEmergency = !!item.EmergencyBill;
-      const isLocal = deriveIsLocal(item);
-      const crossFileExternalId = item.CrossfileBillNumber ? String(item.CrossfileBillNumber).trim() : null;
-      const primarySponsorId = resolvePrimarySponsorId(item.SponsorPrimary, legislatorIndex);
-      const sponsorDisplay = item.SponsorPrimary || null;
-      const existingBill = await prisma.bill.findUnique({
-        where: { externalId },
-        select: {
-          id: true,
-          statusDesc: true
-        }
+    const scrapeResult = await scrapeAgendaUrl(url2);
+    console.log("Result", { scrapeResult });
+    for (const section of scrapeResult) {
+      const header = section.header;
+      if (!header) continue;
+      const dateStr = header.readingDate ?? header.distributionDate ?? null;
+      const dateObj = dateStr ? new Date(dateStr) : /* @__PURE__ */ new Date();
+      const sessionYear = dateObj.getFullYear();
+      const sessionCode = `${sessionYear}RS`;
+      const floorCalendar = await upsertFloorCalendar({
+        chamber,
+        header,
+        agendaUrl: url2
       });
-      const bill = await prisma.bill.upsert({
-        where: { externalId },
-        update: {
-          sessionYear,
-          sessionCode,
-          chamber,
-          billNumber,
-          billNumberNumeric,
-          billType,
-          shortTitle,
-          longTitle,
-          synopsis,
-          statusCode,
-          statusDesc,
-          isEmergency,
-          isLocal,
-          crossFileExternalId,
-          primarySponsorId,
-          sponsorDisplay,
-          dataSource: item
-        },
-        create: {
-          externalId,
-          sessionYear,
-          sessionCode,
-          chamber,
-          billNumber,
-          billNumberNumeric,
-          billType,
-          shortTitle,
-          longTitle,
-          synopsis,
-          statusCode,
-          statusDesc,
-          isEmergency,
-          isLocal,
-          crossFileExternalId,
-          primarySponsorId,
-          sponsorDisplay,
-          dataSource: item
-        }
-      });
-      if (!existingBill) {
-        await prisma.billEvent.create({
-          data: {
-            billId: bill.id,
-            eventType: import_client2.BillEventType.BILL_INTRODUCED,
-            chamber,
-            summary: `${billNumber}: Bill created`,
-            payload: {
-              sessionYear,
-              sessionCode,
-              statusDesc
-            }
-          }
+      for (const item of section.items) {
+        const billNumber = item.billNumber;
+        const externalId = `${sessionCode}-${billNumber}`;
+        const bill = await prisma.bill.findUnique({
+          where: { externalId },
+          select: { id: true, billNumber: true }
         });
-      } else if (existingBill.statusDesc !== statusDesc) {
-        await prisma.billEvent.create({
-          data: {
-            billId: bill.id,
-            eventType: import_client2.BillEventType.BILL_STATUS_CHANGED,
-            chamber,
-            summary: createStatusChangedSummary(
-              billNumber,
-              existingBill?.statusDesc ?? null,
-              statusDesc
-            ),
-            payload: {
-              oldStatus: existingBill?.statusDesc ?? null,
-              newStatus: statusDesc,
-              sessionYear,
-              sessionCode
-            }
-            // processedForAlerts defaults to false
-          }
+        if (!bill) {
+          console.warn(
+            `Agenda scraper: could not find bill for externalId=${externalId} (billNumber=${billNumber})`
+          );
+          continue;
+        }
+        await createBillAddedToCalendarEvent({
+          billId: bill.id,
+          billNumber: bill.billNumber,
+          chamber,
+          floorCalendarId: floorCalendar ? floorCalendar.id : null,
+          header,
+          agendaUrl: url2
         });
       }
-      billsCount++;
     }
     await finishScrapeRun(run.id, {
       success: true,
-      billsCount
+      calendarsCount: scrapeResult.length
     });
     return {
       statusCode: 200,
-      body: JSON.stringify({ ok: true, bills: billsCount })
+      body: JSON.stringify({
+        ok: true,
+        agendas: scrapeResult.length
+      })
     };
-  } catch (err) {
-    console.error("MGA bills JSON scraper error", err);
+  } catch (error) {
+    console.error(`${chamber} agenda scraper error`, error);
     await finishScrapeRun(run.id, {
       success: false,
-      error: err
+      error
     });
     return {
       statusCode: 500,
-      body: JSON.stringify({ ok: false, error: String(err) })
+      body: JSON.stringify({ ok: false, error: String(error) })
     };
   } finally {
-    await prisma.$disconnect();
   }
-}
+};
 
 // src/local-run.ts
 async function main() {
@@ -63823,7 +63830,7 @@ async function main() {
     logStreamName: "local"
   };
   try {
-    const res = await runBillsFromJsonScrape(event, context);
+    const res = await handler(event, context);
     console.log("Lambda-like response:", res);
   } catch (err) {
     console.error("Error running handler locally:", err);

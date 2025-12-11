@@ -2,10 +2,12 @@
 // v2 (v1 got messy)
 
 import * as cheerio from 'cheerio'
+import { prisma } from './shared/prisma'
 import { MGA_BASE } from "./shared/mga-base"
 import { fetchHtml } from './shared/http'
 import { normalizeDate } from './shared/helpers'
 import { finishScrapeRun, startScrapeRun } from './shared/logging'
+import { BillEventType, CalendarType, Chamber } from '@prisma/client'
 
 // temporary -- this is the lambda context
 interface Context {}
@@ -31,7 +33,8 @@ interface ParsedAgendaItem {
 }
 
 interface ParsedSection {
-
+    header: ParsedHeader | null
+    items: ParsedAgendaItem[]
 }
 
 // Parse the header for things like Second Reading, Third Reading, Consent Calendar, Special Order Calendar, etc
@@ -94,7 +97,7 @@ function parseAgendaHeader( header: string, headerId: string | null ): ParsedHea
 async function scrapeAgendaUrl( url: string ) {
     // @TODO handle any errors! (log them!)
     const $ = await fetchHtml( url )
-    const html = $.html() // not sure if we need this, but just in case...
+    // const html = $.html() // not sure if we need this, but just in case...
 
     const sections: ParsedSection[] = []
 
@@ -218,16 +221,130 @@ async function scrapeAgendaUrl( url: string ) {
     return sections
 }
 
+// Map the calendar ID to the DB's calendar type
+function mapCalendarType(type: string | undefined | null): CalendarType | null {
+    if (!type) return null
+    const t = type.toLowerCase()
+    if (t === 'committee_report') return 'COMMITTEE_REPORT'
+    if (t === 'third_reading_calendar') return 'THIRD_READING'
+    if (t === 'special_order_calendar') return 'SPECIAL_ORDER'
+    if (t === 'consent_calendar') return 'CONSENT'
+    return null
+}
+
+// Add the floor calendar to the database
+async function upsertFloorCalendar(opts: {
+    chamber: Chamber
+    header: ParsedHeader | null
+    agendaUrl: string
+}) {
+    const { chamber, header, agendaUrl } = opts
+    if (!header) return null
+
+    const calendarTypeEnum = mapCalendarType(header.calendarType)
+    const calendarNumber = header.calendarNumber ?? null
+    const calendarDateStr = header.readingDate ?? header.distributionDate ?? null
+    const calendarDate = calendarDateStr ? new Date(calendarDateStr) : null
+    const calendarName = header.heading ?? null
+
+    // If your schema has a unique index on (chamber, calendarType, calendarNumber, date),
+    // you can use upsert with a compound unique. Otherwise, findFirst + create.
+    const existing = await prisma.floorCalendar.findFirst({
+        where: {
+            chamber,
+            calendarType: calendarTypeEnum,
+            calendarNumber,
+            calendarDate,
+        },
+    })
+
+    if (existing) return existing
+
+    return prisma.floorCalendar.create({
+        data: {
+            chamber,
+            calendarType: calendarTypeEnum,
+            calendarNumber,
+            date: calendarDate,
+            name: calendarName,
+            sourceUrl: agendaUrl,
+            dataSource: {
+                header,
+            },
+        },
+    })
+}
+
+async function createBillAddedToCalendarEvent(opts: {
+    billId: number
+    billNumber: string
+    chamber: Chamber
+    floorCalendarId: number | null
+    header: ParsedHeader | null
+    agendaUrl: string
+}) {
+    const { billId, billNumber, chamber, floorCalendarId, header, agendaUrl } = opts
+
+    const calendarTypeEnum = mapCalendarType(header?.calendarType ?? null)
+    const calendarNumber = header?.calendarNumber ?? null
+    const calendarName = header?.heading ?? null
+    const calendarDateStr = header?.readingDate ?? header?.distributionDate ?? null
+    const calendarDate = calendarDateStr ? new Date(calendarDateStr) : null
+
+    // Avoid duplicate events for same bill + calendar
+    const existingEvent = await prisma.billEvent.findFirst({
+        where: {
+            billId,
+            eventType: BillEventType.BILL_ADDED_TO_CALENDAR,
+            floorCalendarId: floorCalendarId ?? undefined,
+            calendarType: calendarTypeEnum,
+            calendarNumber,
+        },
+    })
+
+    if (existingEvent) return
+
+    const summary = `${billNumber} added to calendar ${calendarNumber ?? ''}${
+        calendarName ? ` - ${calendarName}` : ''
+    }`.trim()
+
+    await prisma.billEvent.create({
+        data: {
+            billId,
+            eventType: BillEventType.BILL_ADDED_TO_CALENDAR,
+            chamber,
+            floorCalendarId,
+            calendarType: calendarTypeEnum,
+            calendarNumber,
+            eventTime: calendarDate ?? new Date(),
+            summary,
+            payload: {
+                calendarName,
+                calendarType: header?.calendarType ?? null,
+                calendarNumber,
+                calendarDate: calendarDateStr,
+                distributionDate: header?.distributionDate ?? null,
+                readingDate: header?.readingDate ?? null,
+                heading: header?.heading ?? null,
+                agendaUrl,
+            },
+        },
+    })
+}
+
+// --- the handler! --
 export const handler = async ( event: any, context: Context ) => {
     // Allow overriding the URL via event, otherwise use a default
     const urlFromEvent = event?.url as string | undefined
 
     // @TODO override this temporarily, but when called, need to grab the latest agenda URL (house + senate!)
-    const url =
-        urlFromEvent ??
-        `${MGA_BASE}/FloorActions/Agenda/senate-03272025-1`
+    // const url =
+    //     urlFromEvent ??
+    //     `${MGA_BASE}/FloorActions/Agenda/senate-03272025-1`
 
-    const chamber = 'SENATE' // for now
+    const url = 'http://localhost:8000/20250327131337-senate-agenda.html' // ugh I lost the archive.
+
+    const chamber: Chamber = 'SENATE' // for now
 
     // log the scrape start
     const run = await startScrapeRun(`MGA_${chamber}_AGENDA`)
@@ -236,8 +353,52 @@ export const handler = async ( event: any, context: Context ) => {
         // Get the agenda items
         const scrapeResult = await scrapeAgendaUrl( url )
 
-        // add the items to the database, fire off any alerts or other things to happen
-        
+        console.log('Result', { scrapeResult })
+
+        // For each section + bill, find the Bill and create BILL_ADDED_TO_CALENDAR events
+        for (const section of scrapeResult) {
+            const header = section.header
+            if ( ! header ) continue
+
+            // Get session year/code from reading/distribution date
+            const dateStr = header.readingDate ?? header.distributionDate ?? null
+            const dateObj = dateStr ? new Date(dateStr) : new Date()
+            const sessionYear = dateObj.getFullYear()
+            const sessionCode = `${sessionYear}RS`
+
+            const floorCalendar = await upsertFloorCalendar({
+                chamber,
+                header,
+                agendaUrl: url,
+            })
+
+            for (const item of section.items) {
+                const billNumber = item.billNumber
+
+                const externalId = `${sessionCode}-${billNumber}`
+
+                const bill = await prisma.bill.findUnique({
+                    where: { externalId },
+                    select: { id: true, billNumber: true },
+                })
+
+                if (!bill) {
+                    console.warn(
+                        `Agenda scraper: could not find bill for externalId=${externalId} (billNumber=${billNumber})`
+                    )
+                    continue
+                }
+
+                await createBillAddedToCalendarEvent({
+                    billId: bill.id,
+                    billNumber: bill.billNumber,
+                    chamber,
+                    floorCalendarId: floorCalendar ? floorCalendar.id : null,
+                    header,
+                    agendaUrl: url,
+                })
+            }
+        }
 
         // Finished!
         await finishScrapeRun(run.id, {
