@@ -1,7 +1,7 @@
 // Sync bills from the MGA's JSON feed
 
 import 'dotenv/config'
-import { BillEventType, Chamber } from '@prisma/client'
+import { ActionSource, BillEventType, Chamber } from '@prisma/client'
 import { prisma } from './shared/prisma'
 import { fetchJson } from './shared/http'
 import { startScrapeRun, finishScrapeRun } from './shared/logging'
@@ -84,6 +84,10 @@ function mapChamber(billNumber: string): Chamber {
     // MGA uses HB / SB; fall back to HOUSE if we ever see something else.
     if (prefix.startsWith('S')) return 'SENATE'
     return 'HOUSE'
+}
+
+function oppositeChamber(ch: Chamber): Chamber {
+    return ch === 'SENATE' ? 'HOUSE' : 'SENATE'
 }
 
 function deriveSessionYearAndCode(item: RawBill): { sessionYear: number; sessionCode: string } {
@@ -325,6 +329,260 @@ function createStatusChangedSummary(
     return `${billNumber}: status changed from "${oldStatus}" to "${newStatus}"`
 }
 
+// normalize committee names for matching ("... Committee" suffix optional)
+function normalizeCommitteeName(name: string): string {
+    return name.replace(/\bcommittee\b/i, '').replace(/\s+/g, ' ').trim()
+}
+
+// resolve committeeId for an action (supports either stored with/without "Committee")
+async function resolveCommitteeIdByName(name: string | null | undefined, chamber: Chamber): Promise<number | null> {
+    if ( ! name ) return null
+    const raw = name.trim()
+    if ( ! raw ) return null
+
+    const normalized = normalizeCommitteeName(raw)
+    const withCommittee = `${normalized} Committee`
+
+    const found = await prisma.committee.findFirst({
+        where: {
+            chamber,
+            OR: [
+                { name: raw },
+                { name: normalized },
+                { name: withCommittee },
+                { name: { contains: normalized, mode: 'insensitive' } },
+            ],
+        },
+        select: { id: true },
+    })
+
+    return found?.id ?? null
+}
+
+// parse vote counts from action strings when possible
+function parseVoteCounts(text: string): { yes: number | null; no: number | null } {
+    const t = text.replace(/\s+/g, ' ').trim()
+    // Common patterns we see: "Yeas 45 Nays 0", "45-0", "45 yeas, 0 nays"
+    console.log('Parse Vote Counts', { text })
+    const yeas = t.match(/Yeas?\s*(\d+)/i)
+    const nays = t.match(/Nays?\s*(\d+)/i)
+    if (yeas || nays) {
+        return { yes: yeas ? Number(yeas[1]) : null, no: nays ? Number(nays[1]) : null }
+    }
+    const dash = t.match(/\b(\d+)\s*-\s*(\d+)\b/)
+    if (dash) {
+        return { yes: Number(dash[1]), no: Number(dash[2]) }
+    }
+    return { yes: null, no: null }
+}
+
+// decide if an action should be treated as a vote action
+function classifyVote(actionText: string, kind: 'REPORT' | 'SECOND' | 'THIRD'): { isVote: boolean; voteResult: string | null } {
+    const t = actionText.toLowerCase()
+    // Committee report actions often include Favorable/Unfavorable, etc.
+    if (kind === 'REPORT') {
+        const m = actionText.match(/Favorable(?:\s+with\s+Amendments.*)?|Unfavorable|Adverse/i)
+        return { isVote: true, voteResult: m ? m[0] : actionText }
+    }
+    // Floor actions: look for pass/fail signals
+    if (/\bpassed\b|\bpassage\b|\badopted\b/i.test(actionText)) return { isVote: true, voteResult: 'Passed' }
+    if (/\bfailed\b|\brejected\b/i.test(actionText)) return { isVote: true, voteResult: 'Failed' }
+    return { isVote: false, voteResult: null }
+}
+
+// lightweight "upsert" for BillAction (schema has no unique; we findFirst and create)
+async function upsertBillAction(opts: {
+    billId: number
+    chamber: Chamber
+    actionDate: Date
+    description: string
+    committeeId: number | null
+    sequence: number
+    kind: 'REPORT' | 'SECOND' | 'THIRD'
+    raw: any
+}) {
+    const { billId, chamber, actionDate, description, committeeId, sequence, kind, raw } = opts
+
+    const existing = await prisma.billAction.findFirst({
+        where: {
+            billId,
+            chamber,
+            actionDate,
+            sequence,
+            description,
+        },
+        select: {
+            id: true,
+            isVote: true,
+            voteResult: true,
+            yesVotes: true,
+            noVotes: true,
+        },
+    })
+
+    const { isVote, voteResult } = classifyVote(description, kind)
+    console.log('Bill Action', { opts })
+    const counts = isVote ? parseVoteCounts(description) : { yes: null, no: null }
+
+    if (!existing) {
+        const created = await prisma.billAction.create({
+            data: {
+                billId,
+                chamber,
+                actionDate,
+                description,
+                committeeId: committeeId ?? undefined,
+                sequence,
+                isVote,
+                voteResult,
+                yesVotes: counts.yes,
+                noVotes: counts.no,
+                source: ActionSource.MGA_JSON,
+                dataSource: raw,
+            },
+            select: { id: true, isVote: true },
+        })
+
+        return { actionId: created.id, wasNew: true, isVote: created.isVote }
+    }
+
+    // Update if vote fields changed (counts/result show up later sometimes)
+    const voteChanged =
+        existing.isVote !== isVote ||
+        existing.voteResult !== voteResult ||
+        existing.yesVotes !== counts.yes ||
+        existing.noVotes !== counts.no
+
+    if (voteChanged) {
+        await prisma.billAction.update({
+            where: { id: existing.id },
+            data: {
+                committeeId: committeeId ?? undefined,
+                isVote,
+                voteResult,
+                yesVotes: counts.yes,
+                noVotes: counts.no,
+                dataSource: raw,
+            },
+        })
+    }
+
+    return { actionId: existing.id, wasNew: false, isVote }
+}
+
+// emit COMMITTEE_VOTE_RECORDED when we record a committee vote action
+async function maybeCreateCommitteeVoteEvent(opts: {
+    billId: number
+    chamber: Chamber
+    committeeId: number | null
+    actionDate: Date
+    description: string
+    actionId: number
+}) {
+    const { billId, chamber, committeeId, actionDate, description, actionId } = opts
+    if (!committeeId) return
+
+    // Avoid duplicates: if an event already exists for this BillAction, skip
+    const exists = await prisma.billEvent.findFirst({
+        where: {
+            billId,
+            eventType: BillEventType.COMMITTEE_VOTE_RECORDED,
+            committeeId,
+            eventTime: actionDate,
+            summary: { contains: description },
+        },
+        select: { id: true },
+    })
+    if (exists) return
+
+    await prisma.billEvent.create({
+        data: {
+            billId,
+            eventType: BillEventType.COMMITTEE_VOTE_RECORDED,
+            chamber,
+            committeeId,
+            eventTime: actionDate,
+            summary: `${description}`, // keep it simple, can be formatted nicer
+            payload: { actionId }, // link to BillAction for UI
+        },
+    })
+}
+
+// build all vote/action candidates for both chambers from one RawBill
+function buildActionCandidates(item: RawBill, origin: Chamber): Array<{
+    chamber: Chamber
+    dateStr: string | null
+    actionText: string | null
+    committeeName: string | null
+    sequence: number
+    kind: 'REPORT' | 'SECOND' | 'THIRD'
+    side: 'ORIGIN' | 'OPPOSITE'
+}> {
+    const opp = oppositeChamber(origin)
+
+    const safe = (s: any) => (s && String(s).trim().length ? String(s).trim() : null)
+
+    return [
+        // House of origin
+        {
+            chamber: origin,
+            dateStr: item.ReportDateHouseOfOrigin,
+            actionText: safe(item.ReportActionHouseOfOrigin),
+            committeeName: safe(item.CommitteePrimaryOrigin),
+            sequence: 10,
+            kind: 'REPORT',
+            side: 'ORIGIN',
+        },
+        {
+            chamber: origin,
+            dateStr: item.SecondReadingDateHouseOfOrigin,
+            actionText: safe(item.SecondReadingActionHouseOfOrigin),
+            committeeName: null,
+            sequence: 20,
+            kind: 'SECOND',
+            side: 'ORIGIN',
+        },
+        {
+            chamber: origin,
+            dateStr: item.ThirdReadingDateHouseOfOrigin,
+            actionText: safe(item.ThirdReadingActionHouseOfOrigin),
+            committeeName: null,
+            sequence: 30,
+            kind: 'THIRD',
+            side: 'ORIGIN',
+        },
+
+        // Opposite chamber (only becomes meaningful once the bill crosses)
+        {
+            chamber: opp,
+            dateStr: item.ReportDateOppositeHouse,
+            actionText: safe(item.ReportActionOppositeHouse),
+            committeeName: safe(item.CommitteePrimaryOpposite),
+            sequence: 110,
+            kind: 'REPORT',
+            side: 'OPPOSITE',
+        },
+        {
+            chamber: opp,
+            dateStr: item.SecondReadingDateOppositeHouse,
+            actionText: safe(item.SecondReadingActionOppositeHouse),
+            committeeName: null,
+            sequence: 120,
+            kind: 'SECOND',
+            side: 'OPPOSITE',
+        },
+        {
+            chamber: opp,
+            dateStr: item.ThirdReadingDateOppositeHouse,
+            actionText: safe(item.ThirdReadingActionOppositeHouse),
+            committeeName: null,
+            sequence: 130,
+            kind: 'THIRD',
+            side: 'OPPOSITE',
+        },
+    ]
+}
+
 // --- Scrape! ---
 export async function runBillsFromJsonScrape( event: any, context: Context ) {
     const run = await startScrapeRun('MGA_BILLS_JSON')
@@ -352,7 +610,7 @@ export async function runBillsFromJsonScrape( event: any, context: Context ) {
             // Make externalId unique across sessions
             const externalId = `${sessionCode}-${billNumber}`
 
-            const chamber = mapChamber(billNumber)
+            const originChamber = mapChamber(billNumber)
 
             const shortTitle = (item.Title || billNumber).trim()
             const longTitle = null // MGA JSON does not expose a separate long title. Might eliminate this field...
@@ -395,7 +653,7 @@ export async function runBillsFromJsonScrape( event: any, context: Context ) {
                 update: {
                     sessionYear,
                     sessionCode,
-                    chamber,
+                    chamber: originChamber,
                     billNumber,
                     billNumberNumeric,
                     billType,
@@ -415,7 +673,7 @@ export async function runBillsFromJsonScrape( event: any, context: Context ) {
                     externalId,
                     sessionYear,
                     sessionCode,
-                    chamber,
+                    chamber: originChamber,
                     billNumber,
                     billNumberNumeric,
                     billType,
@@ -442,7 +700,7 @@ export async function runBillsFromJsonScrape( event: any, context: Context ) {
                     data: {
                         billId: bill.id,
                         eventType: BillEventType.BILL_INTRODUCED,
-                        chamber,
+                        chamber: originChamber,
                         summary: `${billNumber}: Bill created`,
                         payload: {
                             sessionYear,
@@ -456,7 +714,7 @@ export async function runBillsFromJsonScrape( event: any, context: Context ) {
                     data: {
                         billId: bill.id,
                         eventType: BillEventType.BILL_STATUS_CHANGED,
-                        chamber,
+                        chamber: originChamber,
                         summary: createStatusChangedSummary(
                             billNumber,
                             existingBill?.statusDesc ?? null,
@@ -471,6 +729,45 @@ export async function runBillsFromJsonScrape( event: any, context: Context ) {
                         // processedForAlerts defaults to false
                     },
                 })
+            }
+
+            // Record vote/actions for origin + opposite chamber
+            const candidates = buildActionCandidates( item, originChamber )
+
+            for (const c of candidates) { 
+                if (!c.dateStr || !c.actionText) continue 
+
+                // Parse YYYY-MM-DD safely
+                const actionDate = new Date(c.dateStr) 
+
+                // Resolve committee for report actions (committee votes)
+                const committeeId = c.kind === 'REPORT' 
+                    ? await resolveCommitteeIdByName(c.committeeName, c.chamber) 
+                    : null 
+
+                const up = await upsertBillAction({ 
+                    billId: bill.id,
+                    chamber: c.chamber,
+                    actionDate,
+                    description: c.actionText,
+                    committeeId,
+                    sequence: c.sequence,
+                    kind: c.kind,
+                    raw: { source: 'legislation.json', side: c.side, ...c },
+                })
+
+                // If this action represents a committee vote, emit COMMITTEE_VOTE_RECORDED
+                // (Only for report-kind actions; floor vote events can be added later if desired)
+                if (c.kind === 'REPORT' && up.isVote) { 
+                    await maybeCreateCommitteeVoteEvent({ 
+                        billId: bill.id,
+                        chamber: c.chamber,
+                        committeeId,
+                        actionDate,
+                        description: c.actionText,
+                        actionId: up.actionId,
+                    })
+                }
             }
 
             // short circuit after 100 for now @TODO remove

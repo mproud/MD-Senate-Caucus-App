@@ -59,6 +59,7 @@ type ProceedingsGroup =
     | "Special Order"
     | "Laid Over"
 
+// This is the order we want our report to follow
 const PROCEEDING_ORDER: ProceedingsGroup[] = [
     "Committee Reports/Second Reading",
     "Third Reading",

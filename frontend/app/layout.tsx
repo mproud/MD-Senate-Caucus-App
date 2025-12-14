@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
     title: {
-        template: '%s | MD Senate GOP Reporting',
-        default: 'MD Senate GOP Reporting'
+        template: '%s | MD Senate Caucus Reporting',
+        default: 'MD Senate Caucus Reporting'
     },
     description: "",
 };

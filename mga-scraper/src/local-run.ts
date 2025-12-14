@@ -6,8 +6,8 @@ import 'dotenv/config'
 // import { handler } from './floor-calendars'
 
 /////// These functions work
-import { handler } from './scrape-agenda'
-// import { runBillsFromJsonScrape as handler } from './sync-bills-from-json'
+// import { handler } from './scrape-agenda'
+import { runBillsFromJsonScrape as handler } from './sync-bills-from-json'
 // import { handler } from './scrape-legislators-committees'
 
 async function main() {

@@ -1,8 +1,8 @@
 "use client"
 
 import Link from "next/link"
-import { Calendar, Home, Bell, User } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { Calendar, Home, Bell } from "lucide-react"
+import { UserDropdown } from "./user-dropdown"
 
 export function Navbar() {
     return (
@@ -40,12 +40,7 @@ export function Navbar() {
                     </nav>
                 </div>
                 <div className="flex items-center gap-4">
-                    <Button variant="outline" size="sm" asChild>
-                        <Link href="/sign-in" className="flex items-center gap-2">
-                            <User className="h-4 w-4" />
-                            <span className="hidden sm:inline">Demo Mode</span>
-                        </Link>
-                    </Button>
+                    <UserDropdown />
                 </div>
             </div>
         </header>

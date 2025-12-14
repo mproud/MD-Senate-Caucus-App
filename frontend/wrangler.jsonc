@@ -18,6 +18,23 @@
 	"observability": {
 		"enabled": true
 	},
+
+	// Disable preview URLs like <version>-<account-slug>.<subdomain>.workers.dev
+	"preview_urls": false,
+
+	// Disable the default <name>.<subdomain>.workers.dev route
+	// (add a Route or Custom Domain instead)
+	"workers_dev": false,
+
+	// Live domains
+	"routes": [
+		{
+			"pattern": "caucusreport.com",
+			"custom_domain": true,
+			"zone_name": "caucusreport.com"
+		}
+	],
+
 	/**
 	 * Smart Placement
 	 * Docs: https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
@@ -34,14 +51,16 @@
 	 * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
 	 */
 	"vars": {
-		"NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_d2hvbGUtY2F0ZmlzaC01OC5jbGVyay5hY2NvdW50cy5kZXYk",
+		// "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_d2hvbGUtY2F0ZmlzaC01OC5jbGVyay5hY2NvdW50cy5kZXYk",
+		"NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_live_Y2xlcmsuY2F1Y3VzcmVwb3J0LmNvbSQ",
+		// clerk publishable key on server - pk_live_Y2xlcmsuY2F1Y3VzcmVwb3J0LmNvbSQ
 
 		"NEXT_PUBLIC_CLERK_SIGN_IN_URL": "/login",
 		"NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL": "/",
 		"NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL": "/",
 
-		"NEXT_PUBLIC_BACKEND_URL": "https://reporting.md-senate-republicans-408.workers.dev/",
-		"NEXT_PUBLIC_APP_URL": "https://reporting.md-senate-republicans-408.workers.dev/",
+		"NEXT_PUBLIC_BACKEND_URL": "https://caucusreport.com/",
+		"NEXT_PUBLIC_APP_URL": "https://caucusreport.com/"
 	}
 	/**
 	 * Note: Use secrets to store sensitive data.

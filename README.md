@@ -1,6 +1,17 @@
 # Known issues/gotchas
 
-- Legislators that have to last names... Palakovich Carr, White Holland, etc. They need to manually be updated in the database for now
+// Where I left off - bill votes aren't being recored. HB18 was the example - the actions are going into BillAction, but no recorded numbers.
 
+# Database Tables Explained
 
-Agenda scraper - stopped at this mark - // @@@@ HERE STOPPED HERE
+## Bills
+
+You guessed it, the table with bills.
+
+## BillEvent
+
+Adding a row to this is what triggers the actual event to fire to send a notification
+
+## BillAction
+
+This is where actions for the bill (committee report, committee hearing scheduled, amendments, votes, etc) are scheduled
