@@ -321,7 +321,7 @@ export async function CalendarReport({ calendarData }: { calendarData: CalendarD
                                                     </TableCell>
 
                                                     <TableCell className={`${cellBase} hidden xl:table-cell ${COLS.notes}`}>
-                                                        <div className="line-clamp-3">
+                                                        <div className="line-clamp-5">
                                                             {item.bill.crossFileExternalId && (
                                                                 <>
                                                                     <span className="font-sm">
@@ -340,9 +340,7 @@ export async function CalendarReport({ calendarData }: { calendarData: CalendarD
                                                                 </>
                                                             )}
 
-                                                            Vote<br/>
-                                                            Other notes<br/>
-                                                            @TODO highlight row if bill is flagged
+                                                            Other notes
                                                         </div>
                                                     </TableCell>
                                                 </TableRow>

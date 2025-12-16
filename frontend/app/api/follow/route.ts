@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma"
 import { auth } from "@clerk/nextjs/server"
 
 // ---------- helpers ----------
-async function getUserId() {
+async function getClerkUserId() {
     const { userId } = await auth()
     return userId ?? null
 }
@@ -76,7 +76,7 @@ const CreateAlertBodySchema = z.object({
 /**
  * Used for DELETE and GET(status) so caller can identify an alert either by:
  *    - id, OR
- *    - the "natural key" (userId + alertType + the optional filter fields + deliveryChannel + target)
+ *    - the "natural key" (clerkUserId + alertType + the optional filter fields + deliveryChannel + target)
  */
 const IdentifyAlertSchema = z.object({
     id: z.number().int().positive().optional(),
@@ -95,9 +95,9 @@ const IdentifyAlertSchema = z.object({
 })
 
 // Build a Prisma where clause that matches “the same alert” for a user
-function buildNaturalWhere(userId: string, q: z.infer<typeof IdentifyAlertSchema>) {
+function buildNaturalWhere(clerkUserId: string, q: z.infer<typeof IdentifyAlertSchema>) {
     const where: Prisma.AlertWhereInput = {
-        userId,
+        clerkUserId,
         alertType: q.alertType,
         target: q.target,
         deliveryChannel: q.deliveryChannel,
@@ -121,19 +121,18 @@ function buildNaturalWhere(userId: string, q: z.infer<typeof IdentifyAlertSchema
 
 // ---------- POST: create (idempotent) ----------
 export async function POST(req: NextRequest) {
-    const userId = await getUserId()
-    if ( ! userId ) return json({ error: "Unauthorized" }, 401)
+    const clerkUserId = await getClerkUserId()
+    if ( ! clerkUserId ) return json({ error: "Unauthorized" }, 401)
 
     let body: z.infer<typeof CreateAlertBodySchema>
     try {
         body = CreateAlertBodySchema.parse(await req.json())
-        console.log( 'Body', { body })
     } catch (e) {
         return json({ error: "Invalid request", details: e instanceof Error ? e.message : e }, 400)
     }
 
-    // "Idempotent create": if an identical alert already exists, return it.
-    const naturalWhere = buildNaturalWhere(userId, {
+    // if an identical alert already exists, return it.
+    const naturalWhere = buildNaturalWhere(clerkUserId, {
         alertType: body.alertType,
         target: body.target,
         deliveryChannel: body.deliveryChannel,
@@ -163,7 +162,7 @@ export async function POST(req: NextRequest) {
 
     const created = await prisma.alert.create({
         data: {
-            userId,
+            clerkUserId,
             active: body.active,
             alertType: body.alertType,
             billId: body.billId,
@@ -190,8 +189,8 @@ export async function POST(req: NextRequest) {
 //    - GET /api/alert?status=1&alertType=...&billId=...&target=... (natural match)
 //    - GET /api/alert    -> list current user’s alerts (optionally filter by active=1)
 export async function GET(req: NextRequest) {
-    const userId = await getUserId()
-    if ( ! userId ) return json({ error: "Unauthorized" }, 401)
+    const clerkUserId = await getClerkUserId()
+    if ( ! clerkUserId ) return json({ error: "Unauthorized" }, 401)
 
     const url = new URL(req.url)
     const statusMode = url.searchParams.get("status") // any truthy value => status response
@@ -206,7 +205,7 @@ export async function GET(req: NextRequest) {
         if (!Number.isInteger(id) || id <= 0) return json({ error: "Invalid id" }, 400)
 
         const alert = await prisma.alert.findFirst({
-            where: { id, userId },
+            where: { id, clerkUserId },
         })
 
         if (statusMode) {
@@ -221,7 +220,7 @@ export async function GET(req: NextRequest) {
     if ( viewParam === "dashboard" ) {
         const alerts = await prisma.alert.findMany({
             where: {
-                userId,
+                clerkUserId,
                 active: true
             },
             include: {
@@ -256,14 +255,14 @@ export async function GET(req: NextRequest) {
             return json({ error: "status=1 requires at least alertType and target" }, 400)
         }
 
-        const where = buildNaturalWhere(userId, parsed.data)
+        const where = buildNaturalWhere(clerkUserId, parsed.data)
         const alert = await prisma.alert.findFirst({ where })
 
         return json({ exists: !!alert, active: alert?.active ?? false, alert })
     }
 
     // Otherwise list alerts for user (optionally filter active)
-    const where: Prisma.AlertWhereInput = { userId }
+    const where: Prisma.AlertWhereInput = { clerkUserId }
     if (activeParam === "1" || activeParam === "true") where.active = true
     if (activeParam === "0" || activeParam === "false") where.active = false
 
@@ -277,8 +276,8 @@ export async function GET(req: NextRequest) {
 
 // ---------- DELETE: remove (by id or natural key) ----------
 export async function DELETE(req: NextRequest) {
-    const userId = await getUserId()
-    if ( ! userId ) return json({ error: "Unauthorized" }, 401)
+    const clerkUserId = await getClerkUserId()
+    if ( ! clerkUserId ) return json({ error: "Unauthorized" }, 401)
 
     const url = new URL(req.url)
     const idParam = url.searchParams.get("id")
@@ -288,7 +287,7 @@ export async function DELETE(req: NextRequest) {
         const id = Number(idParam)
         if (!Number.isInteger(id) || id <= 0) return json({ error: "Invalid id" }, 400)
 
-        const existing = await prisma.alert.findFirst({ where: { id, userId } })
+        const existing = await prisma.alert.findFirst({ where: { id, clerkUserId } })
         if (!existing) return json({ error: "Not found" }, 404)
 
         await prisma.alert.delete({ where: { id } })
@@ -307,7 +306,7 @@ export async function DELETE(req: NextRequest) {
     }
 
     if (body.id) {
-        const existing = await prisma.alert.findFirst({ where: { id: body.id, userId } })
+        const existing = await prisma.alert.findFirst({ where: { id: body.id, clerkUserId } })
         if (!existing) return json({ error: "Not found" }, 404)
 
         await prisma.alert.delete({ where: { id: body.id } })
@@ -318,7 +317,7 @@ export async function DELETE(req: NextRequest) {
         return json({ error: "To delete by filters, alertType and target are required" }, 400)
     }
 
-    const where = buildNaturalWhere(userId, body)
+    const where = buildNaturalWhere(clerkUserId, body)
     const existing = await prisma.alert.findFirst({ where })
     if (!existing) return json({ error: "Not found" }, 404)
 

@@ -66,7 +66,9 @@
 
 		"NEXT_PUBLIC_BACKEND_URL": "https://caucusreport.com/",
 		"NEXT_PUBLIC_APP_URL": "https://caucusreport.com",
-		"NEXT_PUBLIC_SITE_URL": "https://caucusreport.com"
+		"NEXT_PUBLIC_SITE_URL": "https://caucusreport.com",
+
+		"RESEND_FROM": "reports@updates.caucusreport.com"
 	}
 	/**
 	 * Note: Use secrets to store sensitive data.

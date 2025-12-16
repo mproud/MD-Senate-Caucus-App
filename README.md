@@ -10,6 +10,10 @@
 
 # Database Tables Explained
 
+## Alert
+
+This is where a user subscribes to a bill's events
+
 ## Bills
 
 You guessed it, the table with bills.

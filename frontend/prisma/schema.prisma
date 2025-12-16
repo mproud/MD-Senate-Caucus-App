@@ -3,7 +3,7 @@
 
 generator client {
   provider = "prisma-client-js"
-///  output   = "../lib/generated/prisma"
+  ///  output   = "../lib/generated/prisma"
   /// output   = "../../node_modules/@prisma/client"
 }
 
@@ -57,6 +57,31 @@ enum AlertDeliveryChannel {
   PUSH
 }
 
+enum BillEventAlertsStatus {
+  PENDING
+  PROCESSING
+  DONE
+  FAILED
+}
+
+enum AlertSendMode {
+  INSTANT
+  DIGEST
+}
+
+enum AlertDigestCadence {
+  HOURLY
+  DAILY
+  WEEKLY
+}
+
+enum AlertDeliveryStatus {
+  QUEUED
+  SENT
+  FAILED
+  SKIPPED
+}
+
 /// Normalized event types that can trigger alerts
 enum BillEventType {
   BILL_INTRODUCED
@@ -77,11 +102,25 @@ enum BillEventType {
 // Core Tables
 //
 
+/// Users! Clerk should populate these
+model User {
+  id        Int     @id @default(autoincrement())
+  clerkId   String  @unique
+  email     String  @unique
+  name      String?
+  firstName String?
+  lastName  String?
+  
+  welcomeEmailSentAt DateTime?
+
+  alerts    Alert[]
+}
+
 model Legislator {
   id Int @id @default(autoincrement())
 
   /// Do we need this?
-  externalId  String?  @unique
+  externalId String? @unique
 
   firstName  String?
   middleName String?
@@ -288,7 +327,7 @@ model Bill {
   sponsorDisplay String?
 
   /// Flag a bill for all users
-  isFlagged        Boolean @default(false)
+  isFlagged Boolean @default(false)
 
   /// Versions (First Reader, Third Reader, Enrolled, etc.)
   versions         BillVersion[]
@@ -363,7 +402,7 @@ model BillAction {
   notVoting  Int?
 
   /// Optional notes if the vote was entered manually
-  notes      String?
+  notes String?
 
   // Where the action came from - the JSON feed, a manual entry, or the web scraper
   source ActionSource @default(MGA_JSON)
@@ -389,7 +428,7 @@ model BillNote {
   content    String
 
   createdAt DateTime @default(now())
-  updatedAt DateTime  @updatedAt
+  updatedAt DateTime @updatedAt
 }
 
 /// The committee a bill is currently assigned to (fast lookup)
@@ -453,7 +492,7 @@ model FloorCalendar {
   sessionYear       Int
   sessionCode       String
   chamber           Chamber
-  proceedingsNumber Int?         // Unsure about this
+  proceedingsNumber Int? // Unsure about this
   calendarType      CalendarType
   calendarNumber    Int?
 
@@ -467,7 +506,7 @@ model FloorCalendar {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  committee   Committee?   @relation(fields: [committeeId], references: [id])
+  committee   Committee? @relation(fields: [committeeId], references: [id])
   committeeId Int?
 
   items  CalendarItem[]
@@ -536,10 +575,23 @@ model BillEvent {
   /// Extra context: before/after snapshots, raw action, etc.
   payload Json?
 
-  /// Used by a worker to ensure we only process each event for alerts once.
-  processedForAlerts Boolean  @default(false)
-  createdAt          DateTime @default(now())
+  // Alerts processing (replace processedForAlerts with something retry-friendly)
+  alertsStatus        BillEventAlertsStatus @default(PENDING)
+  alertsAttempts      Int                   @default(0)
+  alertsNextAttemptAt DateTime?             @db.Timestamptz(6)
+  alertsLastError     String?               @db.Text
+  alertsProcessedAt   DateTime?             @db.Timestamptz(6)
 
+  /// OPTIONAL: keep this temporarily for backwards compatibility, then remove later
+  /// Used by a worker to ensure we only process each event for alerts once.
+  processedForAlerts Boolean @default(false)
+
+  createdAt       DateTime        @default(now())
+  alertDeliveries AlertDelivery[]
+
+  @@index([alertsStatus, alertsNextAttemptAt])
+  /// Help with processing oldest first
+  @@index([alertsStatus, eventTime])
   @@index([billId, eventTime])
   @@index([eventType, eventTime])
   @@index([processedForAlerts, eventTime])
@@ -551,9 +603,10 @@ model Alert {
   id Int @id @default(autoincrement())
 
   /// Auth user id from your auth system (Clerk, etc.)
-  userId    String?
-  active    Boolean   @default(true)
-  alertType AlertType
+  clerkUserId    String?
+  user           User?     @relation(fields: [clerkUserId], references: [clerkId])
+  active         Boolean   @default(true)
+  alertType      AlertType
 
   /// Optional filters: which entity/calendar this alert watches
   bill         Bill?         @relation(fields: [billId], references: [id])
@@ -576,20 +629,44 @@ model Alert {
   /// Target address/phone/webhook, depending on deliveryChannel
   target String
 
+  sendMode      AlertSendMode       @default(INSTANT)
+  digestCadence AlertDigestCadence? // required when sendMode = DIGEST
+  digestMinutes Int? // optional override (ex 120 = every 2 hours)
+
   /// Optional status threshold logic or extra filters (free-form)
   statusThreshold String?
   includeHistory  Boolean   @default(false)
   lastTriggeredAt DateTime?
 
-  metadata  Json?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  metadata        Json?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  alertDeliveries AlertDelivery[]
 
-  @@index([userId, active])
+  @@index([clerkUserId, active])
   @@index([billId, active])
   @@index([committeeId, active])
   @@index([delegationId, active])
   @@index([chamber, calendarType, active])
+  @@index([sendMode, digestCadence, active])
+}
+
+/// Track the alerts as they've been sent to users
+model AlertDelivery {
+  id          Int       @id @default(autoincrement())
+  alert       Alert     @relation(fields: [alertId], references: [id])
+  alertId     Int
+  billEvent   BillEvent @relation(fields: [billEventId], references: [id])
+  billEventId Int
+
+  status    AlertDeliveryStatus @default(QUEUED)
+  error     String?
+  sentAt    DateTime?
+  createdAt DateTime            @default(now())
+
+  @@unique([alertId, billEventId]) // avoid duplicates
+  @@index([status, createdAt])
+  @@index([billEventId])
 }
 
 //
@@ -635,23 +712,23 @@ model ScrapeRun {
   id Int @id @default(autoincrement())
 
   /// What this run was doing ("MGA_LEGISLATOR_COMMITTEES", "MGA_FLOOR_CALENDARS", etc.)
-  kind            String
+  kind String
 
   // LIVE or ARCHIVE
-  source          String @default("LIVE")
+  source String @default("LIVE")
 
   // Show the actual base used and the snapshot id
   baseUrl         String?
   archiveSnapshot String?
 
-  startedAt  DateTime @default(now())
+  startedAt  DateTime  @default(now())
   finishedAt DateTime?
-  success    Boolean  @default(false)
+  success    Boolean   @default(false)
 
   legislatorsCount Int?
   committeesCount  Int?
   membershipsCount Int?
-  calendarsCount Int?
+  calendarsCount   Int?
 
   error    String?
   metadata Json?
@@ -663,8 +740,5 @@ model ScrapeRun {
   @@index([kind, source, startedAt])
   @@map("scrape_runs")
 }
-
-
-
 
 /// TODO

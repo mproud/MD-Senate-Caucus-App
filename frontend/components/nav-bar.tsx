@@ -3,8 +3,7 @@
 import Link from "next/link"
 import { Calendar, Home, Bell, Search } from "lucide-react"
 import { UserDropdown } from "./user-dropdown"
-import { Button } from "@/components/ui/button"
-// import { useEffect, useState } from "react"
+import { ScrapeRunStatus } from "./header/scrape-run-status"
 
 export function Navbar() {
     // const [lastFetched, setLastFetched] = useState<Date | null>(null)
@@ -93,11 +92,8 @@ export function Navbar() {
                         <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
                         <span className="hidden sm:inline ml-2">Refresh</span>
                     </Button> */}
-                    <div>
-                        <span className="text-xs">
-                            Data last fetched: December 15, 2025 7:42am
-                        </span>
-                        {/* <Button size="sm" variant="secondary">Fetch New Data</Button> */}
+                    <div className="flex space-x-2 text-xs pr-5">
+                        <ScrapeRunStatus />
                     </div>
                     <UserDropdown />
                 </div>

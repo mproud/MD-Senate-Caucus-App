@@ -10,6 +10,7 @@
   "scripts": {
     "prisma:update-db": "prisma migrate dev --schema=frontend/prisma/schema.prisma --config=frontend/prisma.config.ts",
     "prisma:generate": "prisma generate --schema=frontend/prisma/schema.prisma",
+    "prisma:format": "prisma format --schema=frontend/prisma/schema.prisma",
     "build:scraper": "npm run build --workspace mga-scraper",
     "build:frontend": "npm run build --workspace frontend",
     "scraper": "node frontend/dist/index.js"

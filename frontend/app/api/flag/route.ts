@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 
+// Flag this bill for all users
+// export async function mock___GET( request: NextRequest ) {
+//     // Get the flag status of a bill
+//     // Get all flagged bills
+//     return NextResponse.json( { isFlag: false, success: true }, { status: 200 })
+// }
+
 function json(data: unknown, status = 200) {
     return NextResponse.json(data, { status })
 }
@@ -11,12 +18,6 @@ function toInt(value: string | null): number | null {
     return Number.isInteger(n) && n > 0 ? n : null
 }
 
-// Flag this bill for all users
-// export async function mock___GET( request: NextRequest ) {
-//     // Get the flag status of a bill
-//     // Get all flagged bills
-//     return NextResponse.json( { isFlag: false, success: true }, { status: 200 })
-// }
 
 /**
  * GET /api/flag
