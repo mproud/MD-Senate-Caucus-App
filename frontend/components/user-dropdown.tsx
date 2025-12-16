@@ -13,6 +13,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { Suspense } from "react"
 
 // If you already have shadcn Skeleton at "@/components/ui/skeleton", import that instead.
 function Skeleton({ className = "" }: { className?: string }) {
@@ -31,7 +32,7 @@ export const UserDropdown = () => {
     if (!isLoaded) {
         return (
             <DropdownMenu>
-                <DropdownMenuTrigger asChild>
+                <DropdownMenuTrigger asChild suppressHydrationWarning>
                     {/* Keep exact same button size so navbar doesn't shift */}
                     <Button
                         variant="ghost"
@@ -39,7 +40,7 @@ export const UserDropdown = () => {
                         aria-label="Loading user menu"
                     >
                         <Avatar className="h-10 w-10">
-                            <AvatarFallback>
+                            <AvatarFallback suppressHydrationWarning>
                                 <Skeleton className="h-6 w-6 rounded-full" />
                             </AvatarFallback>
                         </Avatar>
@@ -90,11 +91,11 @@ export const UserDropdown = () => {
 
     return (
         <DropdownMenu>
-            <DropdownMenuTrigger asChild>
+            <DropdownMenuTrigger asChild suppressHydrationWarning>
                 <Button variant="ghost" className="relative h-10 w-10 rounded-full" aria-label="User menu">
                     <Avatar className="h-10 w-10">
                         <AvatarImage src={user.imageUrl} alt={fullName} />
-                        <AvatarFallback>{initials}</AvatarFallback>
+                        <AvatarFallback suppressHydrationWarning>{initials}</AvatarFallback>
                     </Avatar>
                 </Button>
             </DropdownMenuTrigger>

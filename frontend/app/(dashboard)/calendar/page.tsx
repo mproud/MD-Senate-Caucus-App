@@ -26,6 +26,13 @@ export default async function ReportPage() {
                 <ReportButtons />
             </div>
 
+            <div className="mb-2">
+                Options: 
+                [ Search by Date ]
+                [ Show all Bills / Hide unanimous bills ]
+                [ Show flagged bills only ]
+            </div>
+
             <div className="mb-6">
                 <CalendarReport calendarData={calendarData} />
             </div>
