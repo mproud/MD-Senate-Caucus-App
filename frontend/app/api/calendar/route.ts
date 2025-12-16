@@ -1,57 +1,183 @@
-// app/api/calendar/route.ts (or wherever this GET lives)
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { CalendarType, Chamber, Prisma } from "@prisma/client"
+import { Prisma } from "@prisma/client"
 
-// Map human section labels to CalendarType enum values in Prisma
-function sectionLabelToCalendarType(section: string): CalendarType | undefined {
-    const normalized = section.trim().toLowerCase()
-
-    switch (normalized) {
-        case "second reading":
-            return CalendarType.SECOND_READING
-        case "third reading":
-            return CalendarType.THIRD_READING
-        case "consent":
-            return CalendarType.CONSENT
-        case "laid over":
-            return CalendarType.LAID_OVER
-        case "committee":
-            return CalendarType.COMMITTEE
-        case "committee report":
-            return CalendarType.COMMITTEE_REPORT
-        case "special order":
-            return CalendarType.SPECIAL_ORDER
-        default:
-            return undefined
-    }
+function isValidIsoDateOnly(value: string) {
+    return /^\d{4}-\d{2}-\d{2}$/.test(value)
 }
 
-// Map CalendarType enum back to your section label strings
-function calendarTypeToSectionLabel(calendarType: CalendarType): string {
-    switch (calendarType) {
-        case CalendarType.SECOND_READING:
-            return "Second Reading"
-        case CalendarType.THIRD_READING:
-            return "Third Reading"
-        case CalendarType.CONSENT:
-            return "Consent"
-        case CalendarType.LAID_OVER:
-            return "Laid Over"
-        case CalendarType.COMMITTEE:
-            return "Committee"
-        case CalendarType.COMMITTEE_REPORT:
-            return "Committee Report"
-        case CalendarType.SPECIAL_ORDER:
-            return "Special Order"
-        default:
-            return "Other"
-    }
+function parseBool(v: string | null, defaultValue = false) {
+    if (v === null) return defaultValue
+    return v === "true" || v === "1" || v === "yes"
 }
 
-export async function GET( request: NextRequest ) {
-    // @TODO get and apply search parameters!
+// Treat incoming YYYY-MM-DD as UTC day boundary.
+// @TODO: adjust for America/New_York if your DB stores "local day" semantics.
+function dayRangeUtc(dateOnly: string) {
+    const start = new Date(`${dateOnly}T00:00:00.000Z`)
+    const end = new Date(`${dateOnly}T23:59:59.999Z`)
+    return { start, end }
+}
+
+function rangeUtc(startDateOnly: string, endDateOnly: string) {
+    const start = new Date(`${startDateOnly}T00:00:00.000Z`)
+    const end = new Date(`${endDateOnly}T23:59:59.999Z`)
+    return { start, end }
+}
+
+// @TODO: may need to handle absent/excused/not voting, etc
+function isUnanimousVoteAction(action: {
+    yesVotes: number | null
+    noVotes: number | null
+    excused: number | null
+    notVoting: number | null
+    voteResult: string | null
+} | null | undefined) {
+    if (!action) return false
+
+    if (
+        action.yesVotes === null &&
+        action.noVotes === null &&
+        action.excused === null &&
+        action.notVoting === null
+    ) {
+        const vr = (action.voteResult ?? "").toLowerCase()
+        return vr.includes("unanim")
+    }
+
+    const yes = action.yesVotes ?? 0
+    const no = action.noVotes ?? 0
+    const excused = action.excused ?? 0
+    const notVoting = action.notVoting ?? 0
+
+    return yes > 0 && no === 0 && excused === 0 && notVoting === 0
+}
+
+export async function GET(request: NextRequest) {
     try {
+        const { searchParams } = request.nextUrl
+
+        const startDateParam = searchParams.get("startDate")
+        const endDateParam = searchParams.get("endDate")
+
+        // (optional) single-day param
+        const dateParam = searchParams.get("date")
+
+        const hideUnanimous = parseBool(searchParams.get("hideUnanimous"), false)
+        const flaggedOnly = parseBool(searchParams.get("flaggedOnly"), false)
+
+        // Decide effective date range
+        const today = new Date().toISOString().slice(0, 10) // YYYY-MM-DD (UTC)
+
+        let startDateOnly: string
+        let endDateOnly: string
+
+        if (
+            startDateParam &&
+            endDateParam &&
+            isValidIsoDateOnly(startDateParam) &&
+            isValidIsoDateOnly(endDateParam)
+        ) {
+            startDateOnly = startDateParam
+            endDateOnly = endDateParam
+        } else {
+            const single =
+                dateParam && isValidIsoDateOnly(dateParam) ? dateParam : today
+            startDateOnly = single
+            endDateOnly = single
+        }
+
+        // If someone passes them reversed, normalize
+        if (startDateOnly > endDateOnly) {
+            ;[startDateOnly, endDateOnly] = [endDateOnly, startDateOnly]
+        }
+
+        const { start, end } = rangeUtc(startDateOnly, endDateOnly)
+
+        const where: Prisma.FloorCalendarWhereInput = {
+            calendarDate: { gte: start, lte: end },
+        }
+
+        const calendars = await prisma.floorCalendar.findMany({
+            where,
+            orderBy: { calendarDate: "desc" },
+            include: {
+                committee: true,
+                items: {
+                    include: {
+                        committee: true,
+                        bill: {
+                            select: {
+                                id: true,
+                                billNumber: true,
+                                shortTitle: true,
+                                longTitle: true,
+                                synopsis: true,
+                                sponsorDisplay: true,
+                                crossFileExternalId: true,
+
+                                isFlagged: true,
+
+                                actions: {
+                                    where: { isVote: true },
+                                    orderBy: [{ actionDate: "desc" }, { sequence: "desc" }],
+                                    take: 1,
+                                    select: {
+                                        voteResult: true,
+                                        yesVotes: true,
+                                        noVotes: true,
+                                        excused: true,
+                                        notVoting: true,
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        })
+
+        const filteredCalendars = calendars
+            .map((cal) => {
+                const items = cal.items.filter((item) => {
+                    const bill = item.bill
+                    if (!bill) return true
+
+                    if (flaggedOnly && !bill.isFlagged) return false
+
+                    if (hideUnanimous) {
+                        const latestVote = bill.actions?.[0]
+                        if (isUnanimousVoteAction(latestVote)) return false
+                    }
+
+                    return true
+                })
+
+                return { ...cal, items }
+            })
+            .filter((cal) => cal.items.length > 0)
+
+        return NextResponse.json(
+            {
+                calendars: filteredCalendars,
+                startDate: startDateOnly,
+                endDate: endDateOnly,
+                hideUnanimous,
+                flaggedOnly,
+            },
+            { status: 200 }
+        )
+    } catch (error) {
+        console.error("Calendar API error:", error)
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    }
+}
+
+
+
+
+        // Existing
+        /*
         const calendars = await prisma.floorCalendar.findMany({
             orderBy: {
                 calendarDate: 'desc',
@@ -74,15 +200,7 @@ export async function GET( request: NextRequest ) {
         }
 
         return NextResponse.json( response, { status: 200 })
-    } catch (error) {
-        console.error("Calendar API error:", error)
-        
-        return NextResponse.json(
-            { error: "Internal server error" },
-            { status: 500 },
-        )
-    }
-}
+        */
 
 async function legacy___GET(request: NextRequest) {
     try {

@@ -2,36 +2,57 @@ import { CalendarReport } from "@/components/calendar-report"
 import { fetchApi } from "@/lib/api"
 import type { CalendarDay } from "@/lib/types"
 import { ReportButtons } from "@/components/report-buttons"
+import { ReportFilters } from "@/components/calendar-report/report-filters"
+import { format } from "date-fns"
 
-export default async function ReportPage() {
-    const calendarData = await fetchApi<CalendarDay>(`/api/calendar`, {
+type SearchParams = Record<string, string | string[] | undefined>
+
+export default async function ReportPage({
+    searchParams,
+}: {
+    searchParams: Promise<SearchParams>
+}) {
+    const sp = await searchParams
+
+    const today = format(new Date(), "yyyy-MM-dd")
+
+    const startDate =
+        typeof sp.startDate === "string" && sp.startDate ? sp.startDate : today
+    const endDate =
+        typeof sp.endDate === "string" && sp.endDate ? sp.endDate : startDate // default 1-day range
+
+    const hideUnanimous =
+        typeof sp.hideUnanimous === "string" ? sp.hideUnanimous === "true" : false
+
+    const flaggedOnly =
+        typeof sp.flaggedOnly === "string" ? sp.flaggedOnly === "true" : false
+
+    const qs = new URLSearchParams({
+        startDate,
+        endDate,
+        hideUnanimous: String(hideUnanimous),
+        flaggedOnly: String(flaggedOnly),
+    })
+
+    const calendarData = await fetchApi<CalendarDay>(`/api/calendar?${qs}`, {
         cache: "no-store",
     })
 
-    // return <pre>{JSON.stringify(calendarData, null, 2)}</pre>
-
-    // Show the filter by date, checkbox to show all bills or split votes only, show alert bills
-    
     return (
         <div className="space-y-6 px-4">
-            <div className="mb-6">
-                <h1 className="text-3xl font-bold tracking-tight">Calendar Report</h1>
-            </div>
-
             <div className="flex items-center justify-between gap-3 border-b pb-4">
                 <div className="min-w-0">
                     <h1 className="truncate text-2xl font-semibold">Calendar Report</h1>
                 </div>
-
                 <ReportButtons />
             </div>
 
-            <div className="mb-2">
-                Options: 
-                [ Search by Date ]
-                [ Show all Bills / Hide unanimous bills ]
-                [ Show flagged bills only ]
-            </div>
+            <ReportFilters
+                startDate={startDate}
+                endDate={endDate}
+                hideUnanimous={hideUnanimous}
+                flaggedOnly={flaggedOnly}
+            />
 
             <div className="mb-6">
                 <CalendarReport calendarData={calendarData} />

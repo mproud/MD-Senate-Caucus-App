@@ -1,4 +1,3 @@
-import { fetchApi } from "@/lib/api"
 import type { CalendarDay } from "@/lib/types"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
@@ -28,7 +27,8 @@ type FloorCalendarItem = {
 type FloorCalendar = {
     id: number
     calendarType: CalendarType
-    calendarNumber: number | null // used as “Report No.” for committee reports, and “Calendar Number” otherwise
+    calendarNumber: number | null // used as "Report No." for committee reports, and "Calendar Number" otherwise
+    calendarDate: string | Date
     dataSource?: {
         header?: {
             consentCalendar?: number | boolean | null // sometimes present
@@ -68,6 +68,34 @@ type OrganizedSection = {
 const shortenSponsor = ( name: string ) => {
     return name.replace('Senator ', 'Sen. ').replace('Delegate ', 'Del. ').replace(' Committee', '').trim()
 }
+
+const toDate = (d: string | Date) => (d instanceof Date ? d : new Date(d))
+
+function sectionDateLabel(rawCalendars: FloorCalendar[], calendarType: CalendarType) {
+    const dates = rawCalendars
+        .filter((c) => c.calendarType === calendarType)
+        .map((c) => toDate(c.calendarDate))
+        .filter((d) => !Number.isNaN(d.getTime()))
+        .sort((a, b) => a.getTime() - b.getTime())
+
+    if (dates.length === 0) return ""
+
+    const fmt = new Intl.DateTimeFormat("en-US", {
+        weekday: "long",
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+    })
+
+    const first = dates[0]
+    const last = dates[dates.length - 1]
+
+    // same day?
+    if (first.toDateString() === last.toDateString()) return fmt.format(first)
+
+    return `${fmt.format(first)} – ${fmt.format(last)}`
+}
+
 
 function organizeFloorCalendars(raw: FloorCalendar[] | undefined | null): { sections: OrganizedSection[] } {
     const safeRaw: FloorCalendar[] = Array.isArray(raw) ? raw : []
@@ -199,7 +227,8 @@ export async function CalendarReport({ calendarData }: { calendarData: CalendarD
     // Show the filter by date, checkbox to show all bills or split votes only, show alert bills
 
     // @TODO fix this eventually. Need central/correct type decs
-    const calendars = organizeFloorCalendars((calendarData as any).calendars)
+    const rawCalendars = ((calendarData as any).calendars ?? []) as FloorCalendar[]
+    const calendars = organizeFloorCalendars(rawCalendars)
     
     return (
         <>
@@ -208,7 +237,20 @@ export async function CalendarReport({ calendarData }: { calendarData: CalendarD
                     <h2 className="text-2xl font-bold tracking-tight text-center">
                         {section.title}
                     </h2>
-                    <p className="text-xl font-medium tracking-tight text-center mb-4">Date</p>
+                    <p className="text-xl font-medium tracking-tight text-center mb-4">
+                        {(() => {
+                            // map section title -> calendarType used in your organizer defs
+                            const typeByTitle: Record<string, CalendarType> = {
+                            "Second Reading Calendar": "COMMITTEE_REPORT",
+                            "Third Reading Calendar": "THIRD_READING",
+                            "Special Order Calendar": "SPECIAL_ORDER",
+                            "Laid Over Bills Calendar": "LAID_OVER",
+                            }
+
+                            const t = typeByTitle[section.title]
+                            return t ? sectionDateLabel(rawCalendars, t) : ""
+                        })()}
+                    </p>
 
                     {(section.groups.length == 0) && (
                         <div className="mb-6">No Bills on this calendar</div>
@@ -296,8 +338,13 @@ export async function CalendarReport({ calendarData }: { calendarData: CalendarD
 
                                                     <TableCell className={`${cellBase} hidden lg:table-cell ${COLS.vote}`}>
                                                         <div className="text-sm">
-                                                            Committee vote
-                                                            {item.voteResult ? (
+                                                            11-0
+                                                            <div className="mt-1 flex items-center gap-2">
+                                                                <Badge variant="destructive">
+                                                                    8-2-0-1
+                                                                </Badge>
+                                                            </div>
+                                                            {/* {item.voteResult ? (
                                                                 <div className="mt-1 flex items-center gap-2">
                                                                     <Badge
                                                                         variant={item.voteResult.result === "Passed" ? "default" : "destructive"}
@@ -310,7 +357,7 @@ export async function CalendarReport({ calendarData }: { calendarData: CalendarD
                                                                 </div>
                                                             ) : (
                                                                 <div className="mt-1 text-muted-foreground">--</div>
-                                                            )}
+                                                            )} */}
                                                         </div>
                                                     </TableCell>
 
@@ -334,7 +381,7 @@ export async function CalendarReport({ calendarData }: { calendarData: CalendarD
                                                             {item.bill.crossFileExternalId && (
                                                                 <>
                                                                     <span className="font-sm">
-                                                                        House Vote: (000-000-00-00)
+                                                                        House Vote: (90-42-1-1)
                                                                     </span>
                                                                     <br />
                                                                 </>
