@@ -1,148 +1,34 @@
-import { Suspense } from "react"
-import { CalendarTable } from "@/components/calendar-table"
-import { FiltersBar } from "@/components/filters-bar"
-import { Card, CardContent } from "@/components/ui/card"
-import { Skeleton } from "@/components/ui/skeleton"
+import { CalendarReport } from "@/components/calendar-report"
 import { fetchApi } from "@/lib/api"
 import type { CalendarDay } from "@/lib/types"
+import { ReportButtons } from "@/components/report-buttons"
 
-interface CalendarPageProps {
-    searchParams: Promise<{
-        chambers?: string
-        sections?: string
-        startDate?: string
-        endDate?: string
-        voteResults?: string
-        sponsors?: string
-        committees?: string
-        subjects?: string
-        searchText?: string
-    }>
-}
+export default async function ReportPage() {
+    const calendarData = await fetchApi<CalendarDay>(`/api/calendar`, {
+        cache: "no-store",
+    })
 
-async function CalendarContent({
-    chambers,
-    sections,
-    startDate,
-    endDate,
-    voteResults,
-    sponsors,
-    committees,
-    subjects,
-    searchText,
-}: {
-    chambers: string[]
-    sections: string[]
-    startDate?: string
-    endDate?: string
-    voteResults: string[]
-    sponsors: string[]
-    committees: string[]
-    subjects: string[]
-    searchText?: string
-}) {
-    try {
-        const params = new URLSearchParams()
-        if (chambers.length > 0) params.set("chambers", chambers.join(","))
-        if (sections.length > 0) params.set("sections", sections.join(","))
-        if (startDate) params.set("startDate", startDate)
-        if (endDate) params.set("endDate", endDate)
-        if (voteResults.length > 0) params.set("voteResults", voteResults.join(","))
-        if (sponsors.length > 0) params.set("sponsors", sponsors.join(","))
-        if (committees.length > 0) params.set("committees", committees.join(","))
-        if (subjects.length > 0) params.set("subjects", subjects.join(","))
-        if (searchText) params.set("searchText", searchText)
+    // return <pre>{JSON.stringify(calendarData, null, 2)}</pre>
 
-        const calendarData = await fetchApi<CalendarDay>(`/api/calendar?${params.toString()}`, {
-            cache: "no-store",
-        })
-
-        // return (
-        //     <>
-        //         <p>Search Params</p>
-        //         <pre>{JSON.stringify( params, null, 2)}</pre>
-        //         <br/>
-        //         <p>Calendar Data</p>
-        //         <pre>{JSON.stringify( calendarData, null, 2 )}</pre>
-        //     </>
-        // )
-
-        return <CalendarTable data={calendarData} />
-    } catch (error) {
-        return (
-            <Card>
-                <CardContent className="py-8">
-                    <div className="text-center text-muted-foreground">
-                        <p className="text-lg font-medium">Unable to load calendar data</p>
-                        <p className="mt-2 text-sm">{error instanceof Error ? error.message : "Please try again later"}</p>
-                    </div>
-                </CardContent>
-            </Card>
-        )
-    }
-}
-
-function CalendarSkeleton() {
+    // Show the filter by date, checkbox to show all bills or split votes only, show alert bills
+    
     return (
-        <Card>
-            <CardContent className="py-8">
-                <div className="space-y-4">
-                    <Skeleton className="h-8 w-64" />
-                    <Skeleton className="h-64 w-full" />
-                </div>
-            </CardContent>
-        </Card>
-    )
-}
-
-export default async function CalendarPage({ searchParams }: CalendarPageProps) {
-    const params = await searchParams
-    const chambers = params.chambers ? params.chambers.split(",") : ["Senate", "House"]
-    const sections = params.sections ? params.sections.split(",") : []
-    const startDate = params.startDate
-    const endDate = params.endDate
-    const voteResults = params.voteResults ? params.voteResults.split(",") : []
-    const sponsors = params.sponsors ? params.sponsors.split(",") : []
-    const committees = params.committees ? params.committees.split(",") : []
-    const subjects = params.subjects ? params.subjects.split(",") : []
-    const searchText = params.searchText
-
-    return (
-        <>
+        <div className="space-y-6 px-4">
             <div className="mb-6">
-                <h1 className="text-3xl font-bold tracking-tight">Legislative Calendar</h1>
-                <p className="mt-2 text-muted-foreground">View daily Second and Third Reading calendars</p>
+                <h1 className="text-3xl font-bold tracking-tight">Calendar Report</h1>
             </div>
 
-            {/* <FiltersBar
-                initialChambers={chambers}
-                initialSections={sections}
-                initialStartDate={startDate}
-                initialEndDate={endDate}
-                initialVoteResults={voteResults}
-                initialSponsors={sponsors}
-                initialCommittees={committees}
-                initialSubjects={subjects}
-                initialSearchText={searchText}
-            /> */}
-            
-            {/* Updated agenda filter bar */}
+            <div className="flex items-center justify-between gap-3 border-b pb-4">
+                <div className="min-w-0">
+                    <h1 className="truncate text-2xl font-semibold">Calendar Report</h1>
+                </div>
 
-            <div className="mt-6">
-                <Suspense fallback={<CalendarSkeleton />}>
-                    <CalendarContent
-                        chambers={chambers}
-                        sections={sections}
-                        startDate={startDate}
-                        endDate={endDate}
-                        voteResults={voteResults}
-                        sponsors={sponsors}
-                        committees={committees}
-                        subjects={subjects}
-                        searchText={searchText}
-                    />
-                </Suspense>
+                <ReportButtons />
             </div>
-        </>
+
+            <div className="mb-6">
+                <CalendarReport calendarData={calendarData} />
+            </div>
+        </div>
     )
 }

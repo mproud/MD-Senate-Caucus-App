@@ -119,9 +119,10 @@ export function BillHeader({ bill }: BillHeaderProps) {
         setIsLoadingFlag(true)
         try {
             const response = await fetch("/api/flag", {
-                method: "POST",
+                method: isFlag ? "DELETE" : "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
+                    billId: bill.id,
                     billNumber: bill.billNumber,
                     action: isFlag ? "unset" : "set",
                 }),

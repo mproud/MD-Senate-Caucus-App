@@ -61,6 +61,7 @@ export async function GET( request: NextRequest ) {
                 items: {
                     include: {
                         bill: true,
+                        committee: true,
                     }
                 },
             },

@@ -362,7 +362,7 @@ async function resolveCommitteeIdByName(name: string | null | undefined, chamber
 // parse vote counts from action strings when possible
 function parseVoteCounts(text: string): { yes: number | null; no: number | null } {
     const t = text.replace(/\s+/g, ' ').trim()
-    // Common patterns we see: "Yeas 45 Nays 0", "45-0", "45 yeas, 0 nays"
+    // Common patterns seen: "Yeas 45 Nays 0", "45-0", "45 yeas, 0 nays"
     console.log('Parse Vote Counts', { text })
     const yeas = t.match(/Yeas?\s*(\d+)/i)
     const nays = t.match(/Nays?\s*(\d+)/i)

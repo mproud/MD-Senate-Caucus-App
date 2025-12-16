@@ -69,7 +69,9 @@ const shortenSponsor = ( name: string ) => {
     return name.replace('Senator ', 'Sen. ').replace('Delegate ', 'Del. ').replace(' Committee', '').trim()
 }
 
-export function organizeFloorCalendars(raw: FloorCalendar[]): { sections: OrganizedSection[] } {
+function organizeFloorCalendars(raw: FloorCalendar[] | undefined | null): { sections: OrganizedSection[] } {
+    const safeRaw: FloorCalendar[] = Array.isArray(raw) ? raw : []
+
     const sectionDefs: Array<{ title: string; match: (t: CalendarType) => boolean }> = [
         { title: "Second Reading Calendar", match: (t) => t === "COMMITTEE_REPORT" },
         { title: "Third Reading Calendar", match: (t) => t === "THIRD_READING" },
@@ -159,24 +161,21 @@ export function organizeFloorCalendars(raw: FloorCalendar[]): { sections: Organi
         const groups = [...map.values()].sort((a, b) => {
             const ar = a.reportNumber ?? Number.MAX_SAFE_INTEGER
             const br = b.reportNumber ?? Number.MAX_SAFE_INTEGER
-
             if (ar !== br) return ar - br
 
             const ac = a.consentCalendarNumber ?? Number.MAX_SAFE_INTEGER
             const bc = b.consentCalendarNumber ?? Number.MAX_SAFE_INTEGER
             if (ac !== bc) return ac - bc
 
-            // fallback: try first calendarNumber inside the group
-            // const an = a.calendars[0]?.calendarNumber ?? Number.MAX_SAFE_INTEGER
-            // const bn = b.calendars[0]?.calendarNumber ?? Number.MAX_SAFE_INTEGER
-            // return an - bn
+            // Always return a number (stable fallback)
+            return a.heading.localeCompare(b.heading)
         })
 
         return { title, groups }
     }
 
     const sections: OrganizedSection[] = sectionDefs.map((def) => {
-        const calendars = raw.filter((c) => def.match(c.calendarType))
+        const calendars = safeRaw.filter((c) => def.match(c.calendarType))
         return buildSection(def.title, calendars)
     })
 
@@ -184,80 +183,94 @@ export function organizeFloorCalendars(raw: FloorCalendar[]): { sections: Organi
 }
 
 const COLS = {
-    bill: "w-[92px]",           // consistent across all tables
-    sponsor: "w-[180px]",
-    title: "w-[520px]",         // the “main” column
-    committee: "w-[180px]",
-    vote: "w-[140px]",
-    action: "w-[160px]",
-    notes: "w-[230px]",         // wider notes
+    flag: "w-[28px]",
+    bill: "w-[92px]",
+    sponsor: "w-[140px]",
+    title: "w-[520px]",
+    committee: "w-[160px]",
+    vote: "w-[160px]",
+    action: "w-[180px]",
+    notes: "w-[260px]",
 } as const
 
 const cellBase = "align-top whitespace-normal"
 
-export default async function ReportPage() {
-    const calendarData = await fetchApi<CalendarDay>(`/api/calendar`, {
-        cache: "no-store",
-    })
+export async function CalendarReport({ calendarData }: { calendarData: CalendarDay }) {
+    // Show the filter by date, checkbox to show all bills or split votes only, show alert bills
 
-    const calendars = organizeFloorCalendars( calendarData.calendars )
+    // @TODO fix this eventually. Need central/correct type decs
+    const calendars = organizeFloorCalendars((calendarData as any).calendars)
     
     return (
-        <div className="space-y-6 px-4">
-            <div className="mb-6">
-                <h1 className="text-3xl font-bold tracking-tight">TEMP Report Page</h1>
-            </div>
+        <>
+            {calendars.sections.map(( section, index ) => (
+                <div key={`${index}-${section.title}`}>
+                    <h2 className="text-2xl font-bold tracking-tight text-center">
+                        {section.title}
+                    </h2>
+                    <p className="text-xl font-medium tracking-tight text-center mb-4">Date</p>
 
-            <div className="mb-6">
-                {calendars.sections.map(( section, index ) => (
-                    <div key={`${index}-${section.title}`}>
-                        <h2 className="text-2xl font-bold tracking-tight text-center">
-                            {section.title}
-                        </h2>
-                        <p className="text-xl font-medium tracking-tight text-center mb-4">Date</p>
+                    {(section.groups.length == 0) && (
+                        <div className="mb-6">No Bills on this calendar</div>
+                    )}
 
-                        {(section.groups.length == 0) && (
-                            <div className="mb-6">No Bills on this calendar</div>
-                        )}
+                    {section.groups.map(( group, groupIndex ) => (
+                        <div key={`${groupIndex}-${group.key}`}>
+                            <div className="mb-8 w-full overflow-x-auto">
+                                <Table className="min-w-[980px] table-fixed">
+                                    <colgroup>
+                                        <col className={COLS.flag} />
+                                        <col className={COLS.bill} />
+                                        <col className={`hidden md:table-column ${COLS.sponsor}`} />
+                                        <col className={COLS.title} />
+                                        <col className={`hidden md:table-column ${COLS.committee}`} />
+                                        <col className={`hidden lg:table-column ${COLS.vote}`} />
+                                        <col className={`hidden xl:table-column ${COLS.action}`} />
+                                        <col className={`hidden xl:table-column ${COLS.notes}`} />
+                                    </colgroup>
 
-                        {section.groups.map(( group, groupIndex ) => (
-                            <div key={`${groupIndex}-${group.key}`}>
-                                <div className="mb-8 w-full overflow-x-auto">
-                                    <Table className="min-w-[980px] table-fixed">
-                                        <colgroup>
-                                            <col className={COLS.bill} />
-                                            <col className={`hidden md:table-column ${COLS.sponsor}`} />
-                                            <col className={COLS.title} />
-                                            <col className={`hidden md:table-column ${COLS.committee}`} />
-                                            <col className={`hidden lg:table-column ${COLS.vote}`} />
-                                            <col className={`hidden xl:table-column ${COLS.action}`} />
-                                            <col className={`hidden xl:table-column ${COLS.notes}`} />
-                                        </colgroup>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead
+                                                colSpan={8}
+                                                className="text-md text-left font-semibold border-0 border-t-2 border-b-2 border-black"
+                                            >
+                                                {group.heading}
+                                            </TableHead>
+                                        </TableRow>
 
-                                        <TableHeader>
-                                            <TableRow>
-                                                <TableHead
-                                                    colSpan={7}
-                                                    className="text-md text-left font-semibold border-0 border-t-2 border-b-2 border-black"
-                                                >
-                                                    {group.heading}
-                                                </TableHead>
-                                            </TableRow>
+                                        <TableRow className="font-semibold">
+                                            <TableHead className={COLS.flag} />
+                                            <TableHead className={COLS.bill}>Bill</TableHead>
+                                            <TableHead className={`hidden md:table-cell ${COLS.sponsor}`}>Sponsor</TableHead>
+                                            <TableHead className={COLS.title}>Title</TableHead>
+                                            <TableHead className={`hidden md:table-cell ${COLS.committee}`}>Committee</TableHead>
+                                            <TableHead className={`hidden lg:table-cell ${COLS.vote}`}>Vote</TableHead>
+                                            <TableHead className={`hidden xl:table-cell ${COLS.action}`}>Action</TableHead>
+                                            <TableHead className={`hidden xl:table-cell ${COLS.notes}`}>Notes</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
 
-                                            <TableRow className="font-semibold">
-                                                <TableHead className={COLS.bill}>Bill</TableHead>
-                                                <TableHead className={`hidden md:table-cell ${COLS.sponsor}`}>Sponsor</TableHead>
-                                                <TableHead className={COLS.title}>Title</TableHead>
-                                                <TableHead className={`hidden md:table-cell ${COLS.committee}`}>Committee</TableHead>
-                                                <TableHead className={`hidden lg:table-cell ${COLS.vote}`}>Vote</TableHead>
-                                                <TableHead className={`hidden xl:table-cell ${COLS.action}`}>Action</TableHead>
-                                                <TableHead className={`hidden xl:table-cell ${COLS.notes}`}>Notes</TableHead>
-                                            </TableRow>
-                                        </TableHeader>
+                                    <TableBody>
+                                        {group.items.map((item: any) => {
+                                            const isFlagged = Boolean(item.bill?.isFlagged)
 
-                                        <TableBody>
-                                            {group.items.map((item: any) => (
-                                                <TableRow key={item.id}>
+                                            return (
+                                                <TableRow key={item.id} className={isFlagged ? "bg-yellow-100 hover:bg-yellow-200" : ""}>
+                                                    {/* <TableCell colSpan={8}>
+                                                        <pre>{JSON.stringify(item, null, 2)}</pre>
+                                                    </TableCell> */}
+                                                    <TableCell className={`${cellBase} ${COLS.flag} font-medium`}>
+                                                        {isFlagged ? (
+                                                            <span
+                                                                className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-yellow-400 text-black text-xs font-extrabold"
+                                                                aria-label="Flagged bill"
+                                                                title="Flagged bill"
+                                                            >
+                                                                !
+                                                            </span>
+                                                        ) : null}
+                                                    </TableCell>
                                                     <TableCell className={`${cellBase} ${COLS.bill} font-medium`}>
                                                         <Link href={`/bills/${item.billNumber}`} className="text-primary hover:underline">
                                                             {item.billNumber}
@@ -278,7 +291,7 @@ export default async function ReportPage() {
                                                     </TableCell>
 
                                                     <TableCell className={`${cellBase} hidden md:table-cell ${COLS.committee}`}>
-                                                        -- Committee --
+                                                        { item.committee?.abbreviation && item.committee.abbreviation }
                                                     </TableCell>
 
                                                     <TableCell className={`${cellBase} hidden lg:table-cell ${COLS.vote}`}>
@@ -309,20 +322,40 @@ export default async function ReportPage() {
 
                                                     <TableCell className={`${cellBase} hidden xl:table-cell ${COLS.notes}`}>
                                                         <div className="line-clamp-3">
-                                                            Notes
+                                                            {item.bill.crossFileExternalId && (
+                                                                <>
+                                                                    <span className="font-sm">
+                                                                        X-Filed Bill: {item.bill.crossFileExternalId}
+                                                                    </span>
+                                                                    <br />
+                                                                </>
+                                                            )}
+
+                                                            {item.bill.crossFileExternalId && (
+                                                                <>
+                                                                    <span className="font-sm">
+                                                                        House Vote: (000-000-00-00)
+                                                                    </span>
+                                                                    <br />
+                                                                </>
+                                                            )}
+
+                                                            Vote<br/>
+                                                            Other notes<br/>
+                                                            @TODO highlight row if bill is flagged
                                                         </div>
                                                     </TableCell>
                                                 </TableRow>
-                                            ))}
-                                        </TableBody>
-                                    </Table>
-                                </div>
-
+                                            )
+                                        })}
+                                    </TableBody>
+                                </Table>
                             </div>
-                        ))}
-                    </div>
-                ))}
-            </div>
-        </div>
+
+                        </div>
+                    ))}
+                </div>
+            ))}
+        </>
     )
 }

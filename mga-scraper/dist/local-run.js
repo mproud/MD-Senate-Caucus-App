@@ -66393,6 +66393,8 @@ async function runBillsFromJsonScrape(event, context) {
         console.warn("Skipping bill with no BillNumber", item);
         continue;
       }
+      console.log("Bill", { item });
+      return false;
       const billNumber = String(item.BillNumber).trim();
       const { sessionYear, sessionCode } = deriveSessionYearAndCode(item);
       const externalId = `${sessionCode}-${billNumber}`;
