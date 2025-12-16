@@ -72,6 +72,7 @@ export function VoteForm({ billNumber, voteType }: VoteFormProps) {
                             yeas: Number.parseInt(formData.yeas),
                             nays: Number.parseInt(formData.nays),
                             absent: formData.absent ? Number.parseInt(formData.absent) : undefined,
+                            excused: formData.excused ? Number.parseInt(formData.excused) : undefined,
                             details: formData.details || undefined,
                         }
                     : {
@@ -83,6 +84,7 @@ export function VoteForm({ billNumber, voteType }: VoteFormProps) {
                             yeas: Number.parseInt(formData.yeas),
                             nays: Number.parseInt(formData.nays),
                             absent: formData.absent ? Number.parseInt(formData.absent) : undefined,
+                            excused: formData.excused ? Number.parseInt(formData.excused) : undefined,
                             notVoting: formData.notVoting ? Number.parseInt(formData.notVoting) : undefined,
                         }
 
@@ -289,7 +291,7 @@ export function VoteForm({ billNumber, voteType }: VoteFormProps) {
                                     id="excused"
                                     type="number"
                                     min="0"
-                                    value={formData.notVoting}
+                                    value={formData.excused}
                                     onChange={(e) => setFormData({ ...formData, excused: e.target.value })}
                                 />
                             </div>

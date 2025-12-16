@@ -9,12 +9,40 @@ import { Calendar, FileText, Bell, ArrowRight } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 
+type FollowApiResponse = {
+    alerts?: Array<{
+        id: number
+        alertType: string
+        billId: number
+        active: boolean
+        bill: any
+    }>
+}
+
+type FlagApiResponse = {
+    bills?: Array<{
+        id: number
+        billNumber: string
+        shortTitle: string
+        chamber: string
+        statusDesc: string
+        crossFileExternalId?: string | null
+        crossFilleBill?: string | null
+        isFlagged?: boolean
+        updatedAt: string
+    }>
+}
+
 export const DashboardContent = () => {
     const currentSession = process.env.NEXT_PUBLIC_SESSION || "2025RS"
     const today = new Date().toISOString().split("T")[0]
 
     const [senateData, setSenateData] = useState<CalendarDay | null>(null)
     const [houseData, setHouseData] = useState<CalendarDay | null>(null)
+
+    const [ flaggedBills, setFlaggedBills ] = useState<FlagApiResponse | null>(null)
+    const [ followingBills, setFollowingBills ] = useState<FollowApiResponse | null>(null)
+
     const [loading, setLoading] = useState(true)
 
     // useEffect(() => {
@@ -35,12 +63,35 @@ export const DashboardContent = () => {
     //     fetchData()
     // }, [today])
 
+    useEffect(() => {
+        async function fetchData() {
+            try {
+                const [ flagBillsResponse, followingBillsResponse ] = await Promise.all([
+                    fetch('/api/flag'),
+                    fetch('/api/follow?view=dashboard'),
+                ])
+
+                const flagData = (await flagBillsResponse.json()) as FlagApiResponse
+                const followData = (await followingBillsResponse.json()) as FollowApiResponse
+
+                setFlaggedBills( flagData )
+                setFollowingBills( followData )
+            } catch ( error ) {
+                console.error("Failed to fetch dashboard content.")
+            } finally {
+                setLoading(false)
+            }
+        }
+
+        fetchData()
+    }, [ today ])
+
     const senateBillCount = senateData?.items?.length || 0
     const houseBillCount = houseData?.items?.length || 0
   
     return (
         <>
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {/* <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                 <Card className="hover:shadow-md transition-shadow">
                     <CardHeader>
                         <div className="flex items-center justify-between">
@@ -115,7 +166,72 @@ export const DashboardContent = () => {
                         </Link>
                     </CardContent>
                 </Card>
-            </div>
+            </div> */}
+
+            {loading ? (
+                <div className="mt-8">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Alert Bills</CardTitle>
+                            <CardDescription>Current status of Caucus flagged bills</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="space-y-4">
+                                {[1, 2, 3].map((i) => (
+                                    <div key={i} className="p-4 rounded-lg border">
+                                        <Skeleton className="h-4 w-24 mb-2" />
+                                        <Skeleton className="h-4 w-full mb-1" />
+                                        <Skeleton className="h-3 w-48" />
+                                    </div>
+                                ))}
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+            ) : (
+                ( flaggedBills ) && (
+                    <div className="mt-8">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Alert Bills</CardTitle>
+                                <CardDescription>Current status of Caucus flagged bills</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="space-y-4">
+                                    {flaggedBills?.bills?.map((item) => (
+                                        <Link
+                                            key={item.id}
+                                            href={`/bills/${item.billNumber}`}
+                                            className="block p-4 rounded-lg border hover:bg-accent transition-colors _border-1 _border-l-4 _border-red-500"
+                                        >
+                                            <div className="flex items-start justify-between gap-4">
+                                                <div className="flex-1">
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <span className="font-semibold text-primary">{item.billNumber}</span>
+                                                        <Badge variant="outline" className="text-xs">
+                                                            {item.chamber}
+                                                        </Badge>
+                                                    </div>
+                                                    <p className="text-sm text-foreground line-clamp-2">{item.shortTitle}</p>
+                                                    {/* {item.committee && (
+                                                        <p className="text-xs text-muted-foreground mt-1">Committee: {item.committee}</p>
+                                                    )} */}
+                                                    <p className="mt-4">
+                                                        Other fields to add -<br/>
+                                                        Last Updated: {item.updatedAt}<br/>
+                                                        Current Status: {item.statusDesc}<br/>
+                                                    </p>
+                                                </div>
+                                                <ArrowRight className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-1" />
+                                            </div>
+                                        </Link>
+                                    ))}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </div>
+                )
+            )}
 
             {loading ? (
                 <div className="mt-8">
@@ -138,7 +254,7 @@ export const DashboardContent = () => {
                     </Card>
                 </div>
             ) : (
-                (senateData || houseData) && (
+                ( followingBills ) && (
                     <div className="mt-8">
                         <Card>
                             <CardHeader>
@@ -147,61 +263,43 @@ export const DashboardContent = () => {
                             </CardHeader>
                             <CardContent>
                                 <div className="space-y-4">
-                                    {senateData?.items?.slice(0, 3).map((item) => (
+                                    {followingBills?.alerts?.map((item) => (
                                         <Link
-                                            key={item.billNumber}
-                                            href={`/bills/${item.billNumber}`}
+                                            key={item.id}
+                                            href={`/bills/${item.bill.billNumber}`}
                                             className="block p-4 rounded-lg border hover:bg-accent transition-colors"
                                         >
                                             <div className="flex items-start justify-between gap-4">
                                                 <div className="flex-1">
                                                     <div className="flex items-center gap-2 mb-1">
-                                                        <span className="font-semibold text-primary">{item.billNumber}</span>
+                                                        <span className="font-semibold text-primary">{item.bill.billNumber}</span>
                                                         <Badge variant="outline" className="text-xs">
-                                                            {item.chamber}
+                                                            {item.bill.chamber}
                                                         </Badge>
                                                     </div>
-                                                    <p className="text-sm text-foreground line-clamp-2">{item.title}</p>
-                                                    {item.committee && (
+                                                    <p className="text-sm text-foreground line-clamp-2">{item.bill.shortTitle}</p>
+                                                    {/* {item.committee && (
                                                         <p className="text-xs text-muted-foreground mt-1">Committee: {item.committee}</p>
-                                                    )}
-                                                </div>
-                                                <ArrowRight className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-1" />
-                                            </div>
-                                        </Link>
-                                    ))}
-                                    {houseData?.items?.slice(0, 2).map((item) => (
-                                        <Link
-                                            key={item.billNumber}
-                                            href={`/bills/${item.billNumber}`}
-                                            className="block p-4 rounded-lg border hover:bg-accent transition-colors"
-                                        >
-                                            <div className="flex items-start justify-between gap-4">
-                                                <div className="flex-1">
-                                                    <div className="flex items-center gap-2 mb-1">
-                                                        <span className="font-semibold text-primary">{item.billNumber}</span>
-                                                        <Badge variant="outline" className="text-xs">
-                                                            {item.chamber}
-                                                        </Badge>
-                                                    </div>
-                                                    <p className="text-sm text-foreground line-clamp-2">{item.title}</p>
-                                                    {item.committee && (
-                                                        <p className="text-xs text-muted-foreground mt-1">Committee: {item.committee}</p>
-                                                    )}
+                                                    )} */}
+                                                    <p className="mt-4">
+                                                        Other fields to add -<br/>
+                                                        Last Updated: {item.bill.updatedAt}<br/>
+                                                        Current Status: {item.bill.statusDesc}<br/>
+                                                    </p>
                                                 </div>
                                                 <ArrowRight className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-1" />
                                             </div>
                                         </Link>
                                     ))}
                                 </div>
-                                <div className="mt-4 pt-4 border-t">
+                                {/* <div className="mt-4 pt-4 border-t">
                                     <Link href="/calendar">
                                         <Button variant="ghost" className="w-full">
                                             View Full Calendar
                                             <ArrowRight className="ml-2 h-4 w-4" />
                                         </Button>
                                     </Link>
-                                </div>
+                                </div> */}
                             </CardContent>
                         </Card>
                     </div>

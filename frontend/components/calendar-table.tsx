@@ -130,6 +130,18 @@ export function buildGroupedItems(
     return grouped
 }
 
+// Shorten the name of the sponsor
+const shortenSponsor = ( name: string ) => {
+    return name.replace('Senator ', 'Sen. ').replace('Delegate ', 'Del. ').replace(' Committee', '').trim()
+}
+
+const CalendarTitle = ({ calendar } : { calendar: any }) => {
+    // if ( calendar.committeeType === "" )
+
+    // @TODO this function needs to format things a little better. The scraper may need to be adjusted
+    return calendar.calendarName
+}
+
 export function CalendarTable({ data }: CalendarTableProps) {
     if ( ! data.calendars || data.calendars.length === 0 ) {
         return (
@@ -148,6 +160,8 @@ export function CalendarTable({ data }: CalendarTableProps) {
     }
 
     const groupedCalendars = buildGroupedItems( data.calendars )
+
+    // return <textarea>{JSON.stringify( data.calendars, null, 2 )}</textarea>
 
     return (
         <div className="space-y-6">
@@ -175,7 +189,7 @@ export function CalendarTable({ data }: CalendarTableProps) {
                 </Card>
             ))} */}
 
-            <pre>{JSON.stringify( groupedCalendars, null, 2)}</pre>
+            {/* <pre>{JSON.stringify( groupedCalendars, null, 2)}</pre> */}
 
             {/* .filter(([, items]) => items.length > 0) */}
 
@@ -185,8 +199,7 @@ export function CalendarTable({ data }: CalendarTableProps) {
                     <Card key={index}>
                         <CardHeader>
                             <CardTitle className="text-lg">
-                                {index} Replace this with the title @TODO
-                                <pre>{JSON.stringify( calendar, null, 2 )}</pre>
+                                <CalendarTitle calendar={calendar} />
                             </CardTitle>
                         </CardHeader>
                         <CardContent>
@@ -215,17 +228,16 @@ export function CalendarTable({ data }: CalendarTableProps) {
                                                     </Link>
                                                 </TableCell>
                                                 <TableCell className="max-w-md">
-                                                    {item.bill.sponsorDisplay}
+                                                    {shortenSponsor(item.bill.sponsorDisplay)}
                                                 </TableCell>
                                                 <TableCell className="max-w-md">
-                                                    <div className="line-clamp-2">{item.bill.shortTitle}</div>
+                                                    <div className="line-clamp-3">{item.bill.shortTitle}</div>
                                                 </TableCell>
                                                 <TableCell className="hidden md:table-cell">
-                                                    {/* If you want to use getCommitteeAbbreviation, swap in your own mapping */}
                                                     {calendar.committee?.abbreviation}
                                                 </TableCell>
                                                 <TableCell className="hidden xl:table-cell">
-                                                    - Show the house vote -<br/>
+                                                    Committee vote<br/>
                                                     {item.voteResult ? (
                                                         <div className="flex items-center gap-2">
                                                             <Badge
@@ -249,6 +261,7 @@ export function CalendarTable({ data }: CalendarTableProps) {
                                                     {item.actionText}
                                                 </TableCell>
                                                 <TableCell>
+                                                    {/* {item.notes} */}
                                                     Notes...
                                                 </TableCell>
                                             </TableRow>

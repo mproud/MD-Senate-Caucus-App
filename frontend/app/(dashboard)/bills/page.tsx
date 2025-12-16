@@ -6,7 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { fetchApi } from "@/lib/api"
 import type { CalendarDay } from "@/lib/types"
 
-interface CalendarPageProps {
+interface BillsPageProps {
     searchParams: Promise<{
         chambers?: string
         sections?: string
@@ -20,7 +20,7 @@ interface CalendarPageProps {
     }>
 }
 
-async function CalendarContent({
+async function BillsContent({
     chambers,
     sections,
     startDate,
@@ -82,7 +82,7 @@ async function CalendarContent({
     }
 }
 
-function CalendarSkeleton() {
+function BillsSkeleton() {
     return (
         <Card>
             <CardContent className="py-8">
@@ -95,7 +95,7 @@ function CalendarSkeleton() {
     )
 }
 
-export default async function CalendarPage({ searchParams }: CalendarPageProps) {
+export default async function BillsPage({ searchParams }: BillsPageProps) {
     const params = await searchParams
     const chambers = params.chambers ? params.chambers.split(",") : ["Senate", "House"]
     const sections = params.sections ? params.sections.split(",") : []
@@ -110,11 +110,10 @@ export default async function CalendarPage({ searchParams }: CalendarPageProps) 
     return (
         <>
             <div className="mb-6">
-                <h1 className="text-3xl font-bold tracking-tight">Legislative Calendar</h1>
-                <p className="mt-2 text-muted-foreground">View daily Second and Third Reading calendars</p>
+                <h1 className="text-3xl font-bold tracking-tight">Find Legislation</h1>
             </div>
 
-            {/* <FiltersBar
+            <FiltersBar
                 initialChambers={chambers}
                 initialSections={sections}
                 initialStartDate={startDate}
@@ -124,13 +123,11 @@ export default async function CalendarPage({ searchParams }: CalendarPageProps) 
                 initialCommittees={committees}
                 initialSubjects={subjects}
                 initialSearchText={searchText}
-            /> */}
-            
-            {/* Updated agenda filter bar */}
+            />
 
             <div className="mt-6">
-                <Suspense fallback={<CalendarSkeleton />}>
-                    <CalendarContent
+                <Suspense fallback={<BillsSkeleton />}>
+                    <BillsContent
                         chambers={chambers}
                         sections={sections}
                         startDate={startDate}

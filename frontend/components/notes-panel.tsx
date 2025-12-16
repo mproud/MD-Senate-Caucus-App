@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Pin, Loader2 } from "lucide-react"
-import type { Note } from "@/lib/types"
+import type { BillNote as Note } from "@prisma/client"
 import { toast } from "sonner"
 
 interface NotesPanelProps {
@@ -41,7 +41,7 @@ export function NotesPanel({ billNumber, initialNotes }: NotesPanelProps) {
                     "Content-Type": "application/json",
                 },
                 body: JSON.stringify({
-                    body: newNoteBody,
+                    content: newNoteBody,
                     pinned: false,
                 }),
             })
@@ -73,7 +73,7 @@ export function NotesPanel({ billNumber, initialNotes }: NotesPanelProps) {
             <Card>
                 <CardHeader>
                     <CardTitle>Add Note</CardTitle>
-                    <CardDescription>Add a personal note to track your thoughts on this bill</CardDescription>
+                    <CardDescription>This note will be visible to all users.</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <form onSubmit={handleSubmit} className="space-y-4">
@@ -107,7 +107,7 @@ export function NotesPanel({ billNumber, initialNotes }: NotesPanelProps) {
                     <Card>
                         <CardContent className="py-8">
                             <div className="text-center text-muted-foreground">
-                                <p className="text-sm">No notes yet. Add your first note above.</p>
+                                <p className="text-sm">No notes yet. Add the first note above.</p>
                             </div>
                         </CardContent>
                     </Card>
@@ -118,13 +118,14 @@ export function NotesPanel({ billNumber, initialNotes }: NotesPanelProps) {
                                 <div className="flex items-start justify-between">
                                     <div className="flex-1">
                                         <div className="flex items-center gap-2">
-                                            <CardTitle className="text-base">{note.author}</CardTitle>
+                                            @TODO author; pin notes
+                                            {/* <CardTitle className="text-base">{note.author}</CardTitle>
                                             {note.pinned && (
                                                 <Badge variant="secondary" className="gap-1">
                                                     <Pin className="h-3 w-3" />
                                                     Pinned
                                                 </Badge>
-                                            )}
+                                            )} */}
                                         </div>
                                         <CardDescription>
                                             {new Date(note.createdAt).toLocaleDateString("en-US", {
@@ -139,7 +140,7 @@ export function NotesPanel({ billNumber, initialNotes }: NotesPanelProps) {
                                 </div>
                             </CardHeader>
                             <CardContent>
-                                <p className="text-sm leading-relaxed whitespace-pre-wrap">{note.body}</p>
+                                <p className="text-sm leading-relaxed whitespace-pre-wrap">{note.content}</p>
                             </CardContent>
                         </Card>
                     ))

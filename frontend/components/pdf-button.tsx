@@ -11,6 +11,9 @@ interface PdfButtonProps {
     dates: string[]
 }
 
+// Let's take a different approach on this - base tutorial here:
+// https://developers.cloudflare.com/browser-rendering/how-to/pdf-generation/#3-generate-and-return-pdf
+
 export function PdfButton({ chambers, sections, dates }: PdfButtonProps) {
     const [isLoading, setIsLoading] = useState(false)
 
@@ -25,15 +28,17 @@ export function PdfButton({ chambers, sections, dates }: PdfButtonProps) {
 
         setIsLoading(true)
         try {
-            const response = await fetch("/api/reports", {
+            const response = await fetch("/api/reports/pdf", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                 },
+                credentials: "include",
                 body: JSON.stringify({
                     chambers: chambers.join(","),
                     sections: sections.join(","),
                     dates: dates.join(","),
+                    path: '/calendar',
                 }),
             })
 
@@ -46,7 +51,7 @@ export function PdfButton({ chambers, sections, dates }: PdfButtonProps) {
 
             const a = document.createElement("a")
             a.href = url
-            a.download = `mga-calendar-report-${new Date().toISOString().split("T")[0]}.txt`
+            a.download = `mga-calendar-report-${new Date().toISOString()}.pdf`
             document.body.appendChild(a)
             a.click()
             document.body.removeChild(a)

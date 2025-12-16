@@ -287,6 +287,9 @@ model Bill {
   /// For things like "Sponsored by the President (by request of the Administration)".
   sponsorDisplay String?
 
+  /// Flag a bill for all users
+  isFlagged        Boolean @default(false)
+
   /// Versions (First Reader, Third Reader, Enrolled, etc.)
   versions         BillVersion[]
   /// Full action history, including committee reports and floor actions
@@ -356,7 +359,11 @@ model BillAction {
   yesVotes   Int?
   noVotes    Int?
   excused    Int?
+  absent     Int?
   notVoting  Int?
+
+  /// Optional notes if the vote was entered manually
+  notes      String?
 
   // Where the action came from - the JSON feed, a manual entry, or the web scraper
   source ActionSource @default(MGA_JSON)
@@ -379,9 +386,10 @@ model BillNote {
   userId String?
 
   visibility String?
-  note       String
+  content    String
 
   createdAt DateTime @default(now())
+  updatedAt DateTime  @updatedAt
 }
 
 /// The committee a bill is currently assigned to (fast lookup)

@@ -5,7 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Skeleton } from "@/components/ui/skeleton"
 import { fetchApi } from "@/lib/api"
-import type { Bill, Note } from "@/lib/types"
+import type { Note } from "@/lib/types"
+import type { Bill, BillAction } from "@prisma/client"
 import { Badge } from "@/components/ui/badge"
 import { VoteForm } from "@/components/vote-form"
 
@@ -15,9 +16,23 @@ interface BillPageProps {
     }>
 }
 
+// This isnt' going to work... @TODO
+type BillExtended = Bill & {
+    notes?: any
+    currentCommittee: {
+        name: string
+    }
+    committeeVotes: []
+    dataSource?: {
+        CommitteePrimaryOrigin: string
+        CommitteePrimaryOpposite: string
+    }
+    actions?: BillAction[]
+}
+
 async function BillContent({ billNumber }: { billNumber: string }) {
     try {
-        const bill = await fetchApi<Bill>(`/api/bills/${billNumber}`, {
+        const bill = await fetchApi<BillExtended>(`/api/bills/${billNumber}`, {
             cache: "no-store",
         })
 
@@ -30,11 +45,12 @@ async function BillContent({ billNumber }: { billNumber: string }) {
                 <BillHeader bill={bill} />
 
                 <Tabs defaultValue="overview" className="mt-6">
-                    <TabsList className="grid w-full max-w-2xl grid-cols-4">
+                    <TabsList className="grid w-full max-w-2xl grid-cols-5">
                         <TabsTrigger value="overview">Overview</TabsTrigger>
                         <TabsTrigger value="history">History</TabsTrigger>
                         <TabsTrigger value="votes">Votes</TabsTrigger>
-                        <TabsTrigger value="notes">Notes ({notes.length})</TabsTrigger>
+                        <TabsTrigger value="notes">Notes ({bill.notes.length})</TabsTrigger>
+                        <TabsTrigger value="raw-data">Raw Data</TabsTrigger>
                     </TabsList>
 
                     <TabsContent value="overview" className="mt-6">
@@ -45,23 +61,21 @@ async function BillContent({ billNumber }: { billNumber: string }) {
                                 </CardHeader>
                                 <CardContent className="space-y-4">
                                     <div>
-                                        <dt className="text-sm font-medium text-muted-foreground">Bill Number</dt>
+                                        <dt className="text-sm font-medium text-muted-foreground">Primary Sponsor</dt>
                                         <dd className="mt-1 text-sm">{bill.billNumber}</dd>
                                     </div>
                                     <div>
-                                        <dt className="text-sm font-medium text-muted-foreground">Chamber</dt>
+                                        <dt className="text-sm font-medium text-muted-foreground">Additional Sponsors</dt>
                                         <dd className="mt-1 text-sm">{bill.chamber}</dd>
                                     </div>
-                                    {bill.sponsor && (
-                                        <div>
-                                            <dt className="text-sm font-medium text-muted-foreground">Sponsor</dt>
-                                            <dd className="mt-1 text-sm">{bill.sponsor}</dd>
-                                        </div>
-                                    )}
-                                    {bill.crossfile && (
+                                    {bill.crossFileExternalId && (
                                         <div>
                                             <dt className="text-sm font-medium text-muted-foreground">Crossfile</dt>
-                                            <dd className="mt-1 text-sm">{bill.crossfile}</dd>
+                                            <dd className="mt-1 text-sm">
+                                                <a href={`/bills/${bill.crossFileExternalId}`} className="text-primary hover:underline">
+                                                    {bill.crossFileExternalId}
+                                                </a>
+                                            </dd>
                                         </div>
                                     )}
                                 </CardContent>
@@ -69,19 +83,25 @@ async function BillContent({ billNumber }: { billNumber: string }) {
 
                             <Card>
                                 <CardHeader>
-                                    <CardTitle>Status</CardTitle>
+                                    <CardTitle>Current Status</CardTitle>
                                 </CardHeader>
                                 <CardContent className="space-y-4">
-                                    {bill.latestStatus && (
+                                    {bill.currentCommittee && (
                                         <div>
-                                            <dt className="text-sm font-medium text-muted-foreground">Latest Status</dt>
-                                            <dd className="mt-1 text-sm">{bill.latestStatus}</dd>
+                                            <dt className="text-sm font-medium text-muted-foreground">Current Committee</dt>
+                                            <dd className="mt-1 text-sm">{bill.currentCommittee.name}</dd>
                                         </div>
                                     )}
-                                    {bill.latestAgenda && (
+                                    {bill.dataSource?.CommitteePrimaryOrigin && (
                                         <div>
-                                            <dt className="text-sm font-medium text-muted-foreground">Latest Agenda</dt>
-                                            <dd className="mt-1 text-sm">{bill.latestAgenda}</dd>
+                                            <dt className="text-sm font-medium text-muted-foreground">House of Origin Committee</dt>
+                                            <dd className="mt-1 text-sm">{bill.dataSource.CommitteePrimaryOrigin}</dd>
+                                        </div>
+                                    )}
+                                    {bill.dataSource?.CommitteePrimaryOpposite && (
+                                        <div>
+                                            <dt className="text-sm font-medium text-muted-foreground">Opposite House Committee</dt>
+                                            <dd className="mt-1 text-sm">{bill.dataSource.CommitteePrimaryOpposite}</dd>
                                         </div>
                                     )}
                                 </CardContent>
@@ -106,34 +126,62 @@ async function BillContent({ billNumber }: { billNumber: string }) {
                                 <CardTitle>Bill History</CardTitle>
                             </CardHeader>
                             <CardContent>
-                                {bill.history && bill.history.length > 0 ? (
+                                {bill.actions && bill.actions.length > 0 ? (
                                     <div className="space-y-4">
-                                        {bill.history.map((event, index) => (
-                                            <div key={event.id} className="flex gap-4">
-                                                <div className="flex flex-col items-center">
-                                                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-medium">
-                                                        {bill.history!.length - index}
+                                        {bill.actions
+                                            .sort((a, b) => new Date(b.actionDate).getTime() - new Date(a.actionDate).getTime())
+                                            .map((action, index) => (
+                                                <div key={action.id} className="flex gap-4">
+                                                    <div className="flex flex-col items-center">
+                                                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-medium">
+                                                            {index + 1}
+                                                        </div>
+                                                        {index < bill.actions!.length - 1 && <div className="w-px flex-1 bg-border mt-2" />}
                                                     </div>
-                                                    {index < bill.history!.length - 1 && <div className="w-px flex-1 bg-border mt-2" />}
-                                                </div>
-                                                <div className="flex-1 pb-8">
-                                                    <div className="flex items-center gap-2 mb-1">
-                                                        <p className="font-medium">{event.action}</p>
-                                                        <Badge variant="outline" className="text-xs">
-                                                            {event.chamber}
-                                                        </Badge>
+                                                    <div className="flex-1 pb-8">
+                                                        <div className="flex items-center gap-2 mb-1">
+                                                            <p className="font-medium">{action.description}</p>
+                                                            <Badge variant="outline" className="text-xs">
+                                                                {action.chamber}
+                                                            </Badge>
+                                                            {action.isVote && (
+                                                                <Badge variant="secondary" className="text-xs">
+                                                                    Vote
+                                                                </Badge>
+                                                            )}
+                                                        </div>
+                                                        <p className="text-sm text-muted-foreground mb-1">
+                                                            {new Date(action.actionDate).toLocaleDateString("en-US", {
+                                                                year: "numeric",
+                                                                month: "long",
+                                                                day: "numeric",
+                                                            })}
+                                                        </p>
+                                                        {/* {action.committee && (
+                                                            <p className="text-sm text-muted-foreground">Committee: {action.committee.name}</p>
+                                                        )} */}
+                                                        {action.voteResult && (
+                                                            <p className="text-sm mt-2">
+                                                                <span className="font-medium">Result:</span> {action.voteResult}
+                                                                {action.yesVotes !== null && action.noVotes !== null && (
+                                                                    <span className="text-muted-foreground">
+                                                                        {" "}
+                                                                        {action.yesVotes ?? 0}{" - "}
+                                                                        {action.noVotes ?? 0}{" "}
+                                                                        (Excused: {action.excused ?? 0}{" "}
+                                                                        Absent: {action.absent ?? 0})
+                                                                    </span>
+                                                                )}
+                                                            </p>
+                                                        )}
+                                                        {action.notes && (
+                                                            <p className="text-sm mt-2">
+                                                                <span className="font-medium">Notes:</span> {action.notes}
+                                                            </p>
+                                                        )}
                                                     </div>
-                                                    <p className="text-sm text-muted-foreground mb-1">
-                                                        {new Date(event.date).toLocaleDateString("en-US", {
-                                                            year: "numeric",
-                                                            month: "long",
-                                                            day: "numeric",
-                                                        })}
-                                                    </p>
-                                                    {event.details && <p className="text-sm leading-relaxed mt-2">{event.details}</p>}
                                                 </div>
-                                            </div>
-                                        ))}
+                                            ))}
                                     </div>
                                 ) : (
                                     <p className="text-sm text-muted-foreground text-center py-8">No history available for this bill</p>
@@ -151,7 +199,7 @@ async function BillContent({ billNumber }: { billNumber: string }) {
                                     <VoteForm billNumber={billNumber} voteType="committee" />
                                 </CardHeader>
                                 <CardContent>
-                                    {bill.committeeVotes && bill.committeeVotes.length > 0 ? (
+                                    {/* {bill.committeeVotes && bill.committeeVotes.length > 0 ? (
                                         <div className="space-y-6">
                                             {bill.committeeVotes.map((vote) => (
                                                 <div key={vote.id} className="border-b last:border-0 pb-6 last:pb-0">
@@ -200,7 +248,7 @@ async function BillContent({ billNumber }: { billNumber: string }) {
                                         <p className="text-sm text-muted-foreground text-center py-8">
                                             No committee votes recorded for this bill
                                         </p>
-                                    )}
+                                    )} */}
                                 </CardContent>
                             </Card>
 
@@ -211,7 +259,7 @@ async function BillContent({ billNumber }: { billNumber: string }) {
                                     <VoteForm billNumber={billNumber} voteType="floor" />
                                 </CardHeader>
                                 <CardContent>
-                                    {bill.floorVotes && bill.floorVotes.length > 0 ? (
+                                    {/* {bill.floorVotes && bill.floorVotes.length > 0 ? (
                                         <div className="space-y-6">
                                             {bill.floorVotes.map((vote) => (
                                                 <div key={vote.id} className="border-b last:border-0 pb-6 last:pb-0">
@@ -259,14 +307,29 @@ async function BillContent({ billNumber }: { billNumber: string }) {
                                         <p className="text-sm text-muted-foreground text-center py-8">
                                             No floor votes recorded for this bill
                                         </p>
-                                    )}
+                                    )} */}
                                 </CardContent>
                             </Card>
                         </div>
                     </TabsContent>
 
                     <TabsContent value="notes" className="mt-6">
-                        <NotesPanel billNumber={billNumber} initialNotes={notes} />
+                        <NotesPanel billNumber={billNumber} initialNotes={bill.notes} />
+                    </TabsContent>
+
+                    <TabsContent value="raw-data" className="mt-6">
+                        <div className="space-y-6">
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Raw JSON Data</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <pre className="bg-muted p-4 rounded-lg overflow-auto text-xs">
+                                        <code>{JSON.stringify(bill, null, 2)}</code>
+                                    </pre>
+                                </CardContent>
+                            </Card>
+                        </div>
                     </TabsContent>
                 </Tabs>
             </>

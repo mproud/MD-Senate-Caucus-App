@@ -190,7 +190,7 @@ export async function POST(req: NextRequest) {
 //    - GET /api/alert?status=1&alertType=...&billId=...&target=... (natural match)
 //    - GET /api/alert    -> list current user’s alerts (optionally filter by active=1)
 export async function GET(req: NextRequest) {
-    const userId = getUserId()
+    const userId = await getUserId()
     if ( ! userId ) return json({ error: "Unauthorized" }, 401)
 
     const url = new URL(req.url)
@@ -198,6 +198,7 @@ export async function GET(req: NextRequest) {
 
     const idParam = url.searchParams.get("id")
     const activeParam = url.searchParams.get("active")
+    const viewParam = url.searchParams.get("view")
 
     // If id provided, fetch that single alert (must belong to user)
     if (idParam) {
@@ -214,6 +215,23 @@ export async function GET(req: NextRequest) {
 
         if (!alert) return json({ error: "Not found" }, 404)
         return json({ alert })
+    }
+
+    // Export the custom view for the Dashboard
+    if ( viewParam === "dashboard" ) {
+        const alerts = await prisma.alert.findMany({
+            where: {
+                userId,
+                active: true
+            },
+            include: {
+                // @TODO whatever else needs to be returned here too!
+                bill: true,
+            }
+        })
+
+        if ( ! alerts ) return json({ error: "Not found" }, 404 )
+        return json({ alerts })
     }
 
     // Status-by-natural-key
@@ -259,7 +277,7 @@ export async function GET(req: NextRequest) {
 
 // ---------- DELETE: remove (by id or natural key) ----------
 export async function DELETE(req: NextRequest) {
-    const userId = getUserId()
+    const userId = await getUserId()
     if ( ! userId ) return json({ error: "Unauthorized" }, 401)
 
     const url = new URL(req.url)

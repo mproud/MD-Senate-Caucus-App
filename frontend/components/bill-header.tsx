@@ -8,8 +8,24 @@ import { Button } from "./ui/button"
 import { AlertTriangle, Bell, BellOff, ExternalLink } from "lucide-react"
 import { useEffect, useState } from "react"
 
+// @TODO fix the type at some point
 interface BillHeaderProps {
-    bill: Bill
+    bill: any
+}
+
+// @TODO this should be shared with the api. Move into the /types folder at some point
+type FollowApiResponse = {
+    alerts?: Array<{
+        id: number
+        alertType: string
+        billId: number
+        active: boolean
+    }>
+}
+
+type FlagApiResponse = {
+    isFlag: boolean
+    success: boolean
 }
 
 export function BillHeader({ bill }: BillHeaderProps) {
@@ -23,13 +39,13 @@ export function BillHeader({ bill }: BillHeaderProps) {
     useEffect(() => {
         const fetchStatus = async () => {
             try {
-                const [followRes, flagRes] = await Promise.all([
+                const [ followRes, flagRes ] = await Promise.all([
                     fetch(`/api/follow?billId=${bill.id}`),
                     fetch(`/api/flag?billId=${bill.id}`),
                 ])
 
-                const followData = await followRes.json()
-                // const flagData = await flagRes.json()
+                const followData = (await followRes.json()) as FollowApiResponse
+                const flagData = (await flagRes.json()) as FlagApiResponse
 
                 const isFollowing =
                     Array.isArray(followData.alerts) &&
@@ -41,7 +57,7 @@ export function BillHeader({ bill }: BillHeaderProps) {
                     )
 
                 setIsFollowing(isFollowing)
-                // setIsFlag(flagData.isFlag ?? false)
+                setIsFlag(flagData.isFlag ?? false)
             } catch (error) {
                 console.error("Failed to fetch bill status:", error)
             }
@@ -111,7 +127,7 @@ export function BillHeader({ bill }: BillHeaderProps) {
                 }),
             })
 
-            const data = await response.json()
+            const data = (await response.json()) as FlagApiResponse
             if ( data.success ) {
                 setIsFlag( data.isFlag )
             }
@@ -123,7 +139,7 @@ export function BillHeader({ bill }: BillHeaderProps) {
     }
 
     return (
-        <Card>
+        <Card className={isFlag ? "border-2 border-t-5 border-red-500" : ""}>
             <CardHeader>
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div className="flex-1">

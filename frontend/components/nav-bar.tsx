@@ -1,10 +1,48 @@
 "use client"
 
 import Link from "next/link"
-import { Calendar, Home, Bell } from "lucide-react"
+import { Calendar, Home, Bell, Search } from "lucide-react"
 import { UserDropdown } from "./user-dropdown"
+import { Button } from "@/components/ui/button"
+// import { useEffect, useState } from "react"
 
 export function Navbar() {
+    // const [lastFetched, setLastFetched] = useState<Date | null>(null)
+    // const [isRefreshing, setIsRefreshing] = useState(false)
+
+    // useEffect(() => {
+    //     // Set initial timestamp on mount
+    //     setLastFetched(new Date())
+    // }, [])
+
+    // const handleRefresh = async () => {
+    //     setIsRefreshing(true)
+    //     try {
+    //         // Trigger a router refresh to refetch data
+    //         // router.refresh()
+    //         setLastFetched(new Date())
+    //     } finally {
+    //         setTimeout(() => setIsRefreshing(false), 1000)
+    //     }
+    // }
+
+    // const formatTimestamp = (date: Date | null) => {
+    //     if (!date) return "Never"
+    //     const now = new Date()
+    //     const diffMs = now.getTime() - date.getTime()
+    //     const diffMins = Math.floor(diffMs / 60000)
+
+    //     if (diffMins < 1) return "Just now"
+    //     if (diffMins === 1) return "1 minute ago"
+    //     if (diffMins < 60) return `${diffMins} minutes ago`
+
+    //     const diffHours = Math.floor(diffMins / 60)
+    //     if (diffHours === 1) return "1 hour ago"
+    //     if (diffHours < 24) return `${diffHours} hours ago`
+
+    //     return date.toLocaleString()
+    // }
+
     return (
         <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
             <div className="container flex h-16 items-center justify-between">
@@ -31,6 +69,13 @@ export function Navbar() {
                             Calendar
                         </Link>
                         <Link
+                            href="/bills"
+                            className="flex items-center gap-2 text-muted-foreground transition-colors hover:text-foreground"
+                        >
+                            <Search className="h-4 w-4" />
+                            Search Bills
+                        </Link>
+                        <Link
                             href="/alerts"
                             className="flex items-center gap-2 text-muted-foreground transition-colors hover:text-foreground"
                         >
@@ -40,6 +85,20 @@ export function Navbar() {
                     </nav>
                 </div>
                 <div className="flex items-center gap-4">
+                    {/* <div className="hidden lg:flex items-center gap-2 text-sm text-muted-foreground">
+                        <span>Data Last Fetched:</span>
+                        <span className="font-medium">{formatTimestamp(lastFetched)}</span>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isRefreshing}>
+                        <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
+                        <span className="hidden sm:inline ml-2">Refresh</span>
+                    </Button> */}
+                    <div>
+                        <span className="text-xs">
+                            Data last fetched: December 15, 2025 7:42am
+                        </span>
+                        {/* <Button size="sm" variant="secondary">Fetch New Data</Button> */}
+                    </div>
                     <UserDropdown />
                 </div>
             </div>
