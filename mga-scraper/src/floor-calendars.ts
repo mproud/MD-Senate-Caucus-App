@@ -285,7 +285,8 @@ async function parseSenateAgenda(url: string): Promise<ParsedAgenda> {
                 /Committee Report No\./i.test(t) ||
                 /Special Order Calendar/i.test(t) ||
                 /Second Reading Calendar/i.test(t) ||
-                /Third Reading Calendar/i.test(t)
+                /Third Reading Calendar/i.test(t) ||
+                /Vetoed Bills Calendar/i.test(t)
             )
         })
         .each((_, el) => {

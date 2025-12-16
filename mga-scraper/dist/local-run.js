@@ -66058,7 +66058,8 @@ function parseAgendaHeader(header, headerId) {
   const primaryPatterns = [
     { type: "committee_report", regex: /Committee Report No\.\s*(\d+)/i },
     { type: "third_reading_calendar", regex: /Third Reading Calendar No\.\s*(\d+)/i },
-    { type: "special_order_calendar", regex: /Special Order Calendar No\.\s*(\d+)/i }
+    { type: "special_order_calendar", regex: /Special Order Calendar No\.\s*(\d+)/i },
+    { type: "vetoed_bills_calendar", regex: /Calendar of Vetoed(?:\s+(Senate|House))?\s+Bills?\s+No\.\s*(\d+)/i }
   ];
   const consentRegex = /Consent(?: Calendar)? No\.\s*(\d+)/i;
   const heading = header.replace(/\s+/g, " ").trim();
@@ -66071,9 +66072,10 @@ function parseAgendaHeader(header, headerId) {
   for (const { type, regex } of primaryPatterns) {
     const match = heading.match(regex);
     if (match) {
+      const number = type === "vetoed_bills_calendar" ? parseInt(match[2], 10) : parseInt(match[1], 10);
       return {
         calendarType: type,
-        calendarNumber: parseInt(match[1], 10),
+        calendarNumber: number,
         consentCalendar,
         distributionDate,
         readingDate,
@@ -66104,6 +66106,7 @@ async function scrapeAgendaUrl(url2) {
     if (!headerText) return;
     const headerId = $table.find("thead a[id]").attr("id") || null;
     const parsedHeader = parseAgendaHeader(headerText, headerId);
+    console.log("><><><>< Header", { headerText, headerId, parsedHeader });
     const items = [];
     $table.find("tbody > tr").each((__, row) => {
       const $row = $3(row);
@@ -66201,6 +66204,7 @@ function mapCalendarType(type) {
   if (t === "third_reading_calendar") return "THIRD_READING";
   if (t === "special_order_calendar") return "SPECIAL_ORDER";
   if (t === "consent_calendar") return "CONSENT";
+  if (t === "vetoed_bills_calendar") return "VETOED";
   return null;
 }
 async function createCalendarPublishedEvent(opts) {
@@ -66502,7 +66506,7 @@ async function createBillAddedToCalendarEvent(opts) {
 }
 var handler = async (event, context) => {
   const urlFromEvent = event?.url;
-  const url2 = "http://localhost:8000/20250327131337-senate-agenda.html";
+  const url2 = "https://mgaleg.maryland.gov/mgawebsite/FloorActions/Agenda/senate-12162025-1";
   const chamber = "SENATE";
   const run = await startScrapeRun(`MGA_${chamber}_AGENDA`);
   let agendaCount = 1;

@@ -37,6 +37,7 @@ enum CalendarType {
   COMMITTEE
   COMMITTEE_REPORT
   SPECIAL_ORDER
+  VETOED
   OTHER
 }
 

@@ -45,6 +45,7 @@ function parseAgendaHeader( header: string, headerId: string | null ): ParsedHea
         { type: 'committee_report', regex: /Committee Report No\.\s*(\d+)/i },
         { type: 'third_reading_calendar', regex: /Third Reading Calendar No\.\s*(\d+)/i },
         { type: 'special_order_calendar', regex: /Special Order Calendar No\.\s*(\d+)/i },
+        { type: "vetoed_bills_calendar", regex: /Calendar of Vetoed(?:\s+(Senate|House))?\s+Bills?\s+No\.\s*(\d+)/i },
     ]
 
     const consentRegex = /Consent(?: Calendar)? No\.\s*(\d+)/i
@@ -66,9 +67,14 @@ function parseAgendaHeader( header: string, headerId: string | null ): ParsedHea
     for (const { type, regex } of primaryPatterns) {
         const match = heading.match(regex)
         if (match) {
+            const number =
+                type === "vetoed_bills_calendar"
+                    ? parseInt(match[2], 10)
+                    : parseInt(match[1], 10)
+                
             return {
                 calendarType: type,
-                calendarNumber: parseInt(match[1], 10),
+                calendarNumber: number,
                 consentCalendar,
                 distributionDate,
                 readingDate,
@@ -113,6 +119,8 @@ async function scrapeAgendaUrl( url: string ) {
         const headerId = $table.find('thead a[id]').attr('id') || null
 
         const parsedHeader = parseAgendaHeader( headerText, headerId )
+
+        console.log('>>> Parsed Header', { parsedHeader })
 
         const items: ParsedAgendaItem[] = []
 
@@ -254,6 +262,7 @@ function mapCalendarType(type: string | undefined | null): CalendarType | null {
     if (t === 'third_reading_calendar') return 'THIRD_READING'
     if (t === 'special_order_calendar') return 'SPECIAL_ORDER'
     if (t === 'consent_calendar') return 'CONSENT'
+    if (t === 'vetoed_bills_calendar') return 'VETOED'
     return null
 }
 
@@ -686,7 +695,8 @@ export const handler = async ( event: any, context: Context ) => {
     //     urlFromEvent ??
     //     `${MGA_BASE}/FloorActions/Agenda/senate-03272025-1`
 
-    const url = 'http://localhost:8000/20250327131337-senate-agenda.html' // ugh I lost the archive.
+    // const url = 'http://localhost:8000/20250327131337-senate-agenda.html' // ugh I lost the archive.
+    const url = 'https://mgaleg.maryland.gov/mgawebsite/FloorActions/Agenda/senate-12162025-1'
 
     const chamber: Chamber = 'SENATE' // for now
 

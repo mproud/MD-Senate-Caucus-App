@@ -201,7 +201,7 @@ export async function GET(request: NextRequest) {
 
         return NextResponse.json( response, { status: 200 })
         */
-
+/*
 async function legacy___GET(request: NextRequest) {
     try {
         const searchParams = request.nextUrl.searchParams
@@ -441,3 +441,4 @@ async function legacy___GET(request: NextRequest) {
         )
     }
 }
+*/

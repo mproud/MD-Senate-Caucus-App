@@ -105,6 +105,7 @@ function organizeFloorCalendars(raw: FloorCalendar[] | undefined | null): { sect
         { title: "Third Reading Calendar", match: (t) => t === "THIRD_READING" },
         { title: "Special Order Calendar", match: (t) => t === "SPECIAL_ORDER" },
         { title: "Laid Over Bills Calendar", match: (t) => t === "LAID_OVER" },
+        { title: "Vetoed Bills Calendar", match: (t) => t === "VETOED" },
     ]
 
     const getConsentNumber = (c: FloorCalendar): number | null => {
@@ -241,10 +242,11 @@ export async function CalendarReport({ calendarData }: { calendarData: CalendarD
                         {(() => {
                             // map section title -> calendarType used in your organizer defs
                             const typeByTitle: Record<string, CalendarType> = {
-                            "Second Reading Calendar": "COMMITTEE_REPORT",
-                            "Third Reading Calendar": "THIRD_READING",
-                            "Special Order Calendar": "SPECIAL_ORDER",
-                            "Laid Over Bills Calendar": "LAID_OVER",
+                                "Second Reading Calendar": "COMMITTEE_REPORT",
+                                "Third Reading Calendar": "THIRD_READING",
+                                "Special Order Calendar": "SPECIAL_ORDER",
+                                "Laid Over Bills Calendar": "LAID_OVER",
+                                "Vetoed Bills Calendar": "VETOED",
                             }
 
                             const t = typeByTitle[section.title]
