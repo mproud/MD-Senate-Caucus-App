@@ -26,7 +26,7 @@ const handleExcelReport = () => {
 
 export const ReportButtons = () => {
     return (
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2 report-button-wrapper">
             <Button variant="outline" onClick={handleExcelReport}>
                 <Download className="mr-2 h-4 w-4" />
                 Download as Excel

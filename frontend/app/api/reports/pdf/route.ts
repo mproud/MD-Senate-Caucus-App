@@ -2,7 +2,7 @@ import puppeteer from "@cloudflare/puppeteer"
 import { NextResponse } from "next/server"
 import { getCloudflareContext } from "@opennextjs/cloudflare"
 
-export const runtime = "edge"
+// export const runtime = "edge"
 
 type Env = {
     BROWSER: any

@@ -50,7 +50,7 @@ export function Navbar() {
                         <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
                             <span className="text-sm font-bold">MD</span>
                         </div>
-                        <span className="hidden sm:inline-block">MD Senate GOP Reporting</span>
+                        <span className="hidden sm:inline-block">MD Senate Caucus Reporting</span>
                     </Link>
                     <nav className="hidden md:flex items-center gap-6 text-sm">
                         <Link
@@ -97,6 +97,10 @@ export function Navbar() {
                     </div>
                     <UserDropdown />
                 </div>
+            </div>
+
+            <div className="print-meta">
+                <span className="user-name">User Name!</span>
             </div>
         </header>
     )

@@ -233,176 +233,180 @@ export async function CalendarReport({ calendarData }: { calendarData: CalendarD
     
     return (
         <>
-            {calendars.sections.map(( section, index ) => (
-                <div key={`${index}-${section.title}`}>
-                    <h2 className="text-2xl font-bold tracking-tight text-center">
-                        {section.title}
-                    </h2>
-                    <p className="text-xl font-medium tracking-tight text-center mb-4">
-                        {(() => {
-                            // map section title -> calendarType used in your organizer defs
-                            const typeByTitle: Record<string, CalendarType> = {
-                                "Second Reading Calendar": "COMMITTEE_REPORT",
-                                "Third Reading Calendar": "THIRD_READING",
-                                "Special Order Calendar": "SPECIAL_ORDER",
-                                "Laid Over Bills Calendar": "LAID_OVER",
-                                "Vetoed Bills Calendar": "VETOED",
-                            }
+            {calendars.sections.map(( section, index ) => {
+                const isLast = index === calendars.sections.length - 1
 
-                            const t = typeByTitle[section.title]
-                            return t ? sectionDateLabel(rawCalendars, t) : ""
-                        })()}
-                    </p>
+                return (
+                    <div key={`${index}-${section.title}`} className={!isLast ? 'page-break-after' : undefined}>
+                        <h2 className="text-2xl font-bold tracking-tight text-center">
+                            {section.title}
+                        </h2>
+                        <p className="text-xl font-medium tracking-tight text-center mb-4">
+                            {(() => {
+                                // map section title -> calendarType used in your organizer defs
+                                const typeByTitle: Record<string, CalendarType> = {
+                                    "Second Reading Calendar": "COMMITTEE_REPORT",
+                                    "Third Reading Calendar": "THIRD_READING",
+                                    "Special Order Calendar": "SPECIAL_ORDER",
+                                    "Laid Over Bills Calendar": "LAID_OVER",
+                                    "Vetoed Bills Calendar": "VETOED",
+                                }
 
-                    {(section.groups.length == 0) && (
-                        <div className="mb-6">No Bills on this calendar</div>
-                    )}
+                                const t = typeByTitle[section.title]
+                                return t ? sectionDateLabel(rawCalendars, t) : ""
+                            })()}
+                        </p>
 
-                    {section.groups.map(( group, groupIndex ) => (
-                        <div key={`${groupIndex}-${group.key}`}>
-                            <div className="mb-8 w-full overflow-x-auto">
-                                <Table className="min-w-[980px] table-fixed">
-                                    <colgroup>
-                                        <col className={COLS.flag} />
-                                        <col className={COLS.bill} />
-                                        <col className={`hidden md:table-column ${COLS.sponsor}`} />
-                                        <col className={COLS.title} />
-                                        <col className={`hidden md:table-column ${COLS.committee}`} />
-                                        <col className={`hidden lg:table-column ${COLS.vote}`} />
-                                        <col className={`hidden xl:table-column ${COLS.action}`} />
-                                        <col className={`hidden xl:table-column ${COLS.notes}`} />
-                                    </colgroup>
+                        {(section.groups.length == 0) && (
+                            <div className="mb-6">No Bills on this calendar</div>
+                        )}
 
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead
-                                                colSpan={8}
-                                                className="text-md text-left font-semibold border-0 border-t-2 border-b-2 border-black"
-                                            >
-                                                {group.heading}
-                                            </TableHead>
-                                        </TableRow>
+                        {section.groups.map(( group, groupIndex ) => (
+                            <div key={`${groupIndex}-${group.key}`}>
+                                <div className="mb-8 w-full no-print-scroll overflow-x-auto">
+                                    <Table className="min-w-[980px] table-fixed print-friendly">
+                                        <colgroup>
+                                            <col className={COLS.flag} />
+                                            <col className={COLS.bill} />
+                                            <col className={`hidden md:table-column ${COLS.sponsor}`} />
+                                            <col className={COLS.title} />
+                                            <col className={`hidden md:table-column ${COLS.committee}`} />
+                                            <col className={`hidden lg:table-column ${COLS.vote}`} />
+                                            <col className={`hidden xl:table-column ${COLS.action}`} />
+                                            <col className={`hidden xl:table-column ${COLS.notes}`} />
+                                        </colgroup>
 
-                                        <TableRow className="font-semibold">
-                                            <TableHead className={COLS.flag} />
-                                            <TableHead className={COLS.bill}>Bill</TableHead>
-                                            <TableHead className={`hidden md:table-cell ${COLS.sponsor}`}>Sponsor</TableHead>
-                                            <TableHead className={COLS.title}>Title</TableHead>
-                                            <TableHead className={`hidden md:table-cell ${COLS.committee}`}>Committee</TableHead>
-                                            <TableHead className={`hidden lg:table-cell ${COLS.vote}`}>Vote</TableHead>
-                                            <TableHead className={`hidden xl:table-cell ${COLS.action}`}>Action</TableHead>
-                                            <TableHead className={`hidden xl:table-cell ${COLS.notes}`}>Notes</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead
+                                                    colSpan={8}
+                                                    className="text-md text-left font-semibold border-0 border-t-2 border-b-2 border-black"
+                                                >
+                                                    {group.heading}
+                                                </TableHead>
+                                            </TableRow>
 
-                                    <TableBody>
-                                        {group.items.map((item: any) => {
-                                            const isFlagged = Boolean(item.bill?.isFlagged)
+                                            <TableRow className="font-semibold">
+                                                <TableHead className={COLS.flag} />
+                                                <TableHead className={COLS.bill}>Bill</TableHead>
+                                                <TableHead className={`hidden md:table-cell ${COLS.sponsor}`}>Sponsor</TableHead>
+                                                <TableHead className={COLS.title}>Title</TableHead>
+                                                <TableHead className={`hidden md:table-cell ${COLS.committee}`}>Committee</TableHead>
+                                                <TableHead className={`hidden lg:table-cell ${COLS.vote}`}>Vote</TableHead>
+                                                <TableHead className={`hidden xl:table-cell ${COLS.action}`}>Action</TableHead>
+                                                <TableHead className={`hidden xl:table-cell ${COLS.notes}`}>Notes</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
 
-                                            return (
-                                                <TableRow key={item.id} className={isFlagged ? "bg-yellow-100 hover:bg-yellow-200" : ""}>
-                                                    {/* <TableCell colSpan={8}>
-                                                        <pre>{JSON.stringify(item, null, 2)}</pre>
-                                                    </TableCell> */}
-                                                    <TableCell className={`${cellBase} ${COLS.flag} font-medium`}>
-                                                        {isFlagged ? (
-                                                            <span
-                                                                className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-yellow-400 text-black text-xs font-extrabold"
-                                                                aria-label="Flagged bill"
-                                                                title="Flagged bill"
-                                                            >
-                                                                !
-                                                            </span>
-                                                        ) : null}
-                                                    </TableCell>
-                                                    <TableCell className={`${cellBase} ${COLS.bill} font-medium`}>
-                                                        <Link href={`/bills/${item.billNumber}`} className="text-primary hover:underline">
-                                                            {item.billNumber}
-                                                        </Link>
-                                                    </TableCell>
+                                        <TableBody>
+                                            {group.items.map((item: any) => {
+                                                const isFlagged = Boolean(item.bill?.isFlagged)
 
-                                                    <TableCell className={`${cellBase} hidden md:table-cell ${COLS.sponsor}`}>
-                                                        <div className="line-clamp-2">
-                                                            {shortenSponsor(item.bill.sponsorDisplay)}
-                                                        </div>
-                                                    </TableCell>
+                                                return (
+                                                    <TableRow key={item.id} className={isFlagged ? "bg-yellow-100 hover:bg-yellow-200" : ""}>
+                                                        {/* <TableCell colSpan={8}>
+                                                            <pre>{JSON.stringify(item, null, 2)}</pre>
+                                                        </TableCell> */}
+                                                        <TableCell className={`${cellBase} ${COLS.flag} font-medium`}>
+                                                            {isFlagged ? (
+                                                                <span
+                                                                    className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-yellow-400 text-black text-xs font-extrabold"
+                                                                    aria-label="Flagged bill"
+                                                                    title="Flagged bill"
+                                                                >
+                                                                    !
+                                                                </span>
+                                                            ) : null}
+                                                        </TableCell>
+                                                        <TableCell className={`${cellBase} ${COLS.bill} font-medium`}>
+                                                            <Link href={`/bills/${item.billNumber}`} className="text-primary hover:underline">
+                                                                {item.billNumber}
+                                                            </Link>
+                                                        </TableCell>
 
-                                                    <TableCell className={`${cellBase} ${COLS.title}`}>
-                                                        {/* 3-line clamp with ellipsis */}
-                                                        <div className="line-clamp-3 leading-snug">
-                                                            {item.bill.shortTitle}
-                                                        </div>
-                                                    </TableCell>
-
-                                                    <TableCell className={`${cellBase} hidden md:table-cell ${COLS.committee}`}>
-                                                        { item.committee?.abbreviation && item.committee.abbreviation }
-                                                    </TableCell>
-
-                                                    <TableCell className={`${cellBase} hidden lg:table-cell ${COLS.vote}`}>
-                                                        <div className="text-sm">
-                                                            11-0
-                                                            <div className="mt-1 flex items-center gap-2">
-                                                                <Badge variant="destructive">
-                                                                    8-2-0-1
-                                                                </Badge>
+                                                        <TableCell className={`${cellBase} hidden md:table-cell ${COLS.sponsor}`}>
+                                                            <div className="line-clamp-2">
+                                                                {shortenSponsor(item.bill.sponsorDisplay)}
                                                             </div>
-                                                            {/* {item.voteResult ? (
+                                                        </TableCell>
+
+                                                        <TableCell className={`${cellBase} ${COLS.title}`}>
+                                                            {/* 3-line clamp with ellipsis */}
+                                                            <div className="line-clamp-3 leading-snug">
+                                                                {item.bill.shortTitle}
+                                                            </div>
+                                                        </TableCell>
+
+                                                        <TableCell className={`${cellBase} hidden md:table-cell ${COLS.committee}`}>
+                                                            { item.committee?.abbreviation && item.committee.abbreviation }
+                                                        </TableCell>
+
+                                                        <TableCell className={`${cellBase} hidden lg:table-cell ${COLS.vote}`}>
+                                                            <div className="text-sm">
+                                                                11-0
                                                                 <div className="mt-1 flex items-center gap-2">
-                                                                    <Badge
-                                                                        variant={item.voteResult.result === "Passed" ? "default" : "destructive"}
-                                                                    >
-                                                                        {item.voteResult.result}
+                                                                    <Badge variant="destructive">
+                                                                        8-2-0-1
                                                                     </Badge>
-                                                                    <span className="text-xs text-muted-foreground">
-                                                                        {item.voteResult.yeas}-{item.voteResult.nays}
-                                                                    </span>
                                                                 </div>
-                                                            ) : (
-                                                                <div className="mt-1 text-muted-foreground">--</div>
-                                                            )} */}
-                                                        </div>
-                                                    </TableCell>
+                                                                {/* {item.voteResult ? (
+                                                                    <div className="mt-1 flex items-center gap-2">
+                                                                        <Badge
+                                                                            variant={item.voteResult.result === "Passed" ? "default" : "destructive"}
+                                                                        >
+                                                                            {item.voteResult.result}
+                                                                        </Badge>
+                                                                        <span className="text-xs text-muted-foreground">
+                                                                            {item.voteResult.yeas}-{item.voteResult.nays}
+                                                                        </span>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="mt-1 text-muted-foreground">--</div>
+                                                                )} */}
+                                                            </div>
+                                                        </TableCell>
 
-                                                    <TableCell className={`${cellBase} hidden xl:table-cell ${COLS.action}`}>
-                                                        <div className="line-clamp-2">
-                                                            {item.actionText}
-                                                        </div>
-                                                    </TableCell>
+                                                        <TableCell className={`${cellBase} hidden xl:table-cell ${COLS.action}`}>
+                                                            <div className="line-clamp-2">
+                                                                {item.actionText}
+                                                            </div>
+                                                        </TableCell>
 
-                                                    <TableCell className={`${cellBase} hidden xl:table-cell ${COLS.notes}`}>
-                                                        <div className="line-clamp-5">
-                                                            {item.bill.crossFileExternalId && (
-                                                                <>
-                                                                    <span className="font-sm">
-                                                                        X-Filed Bill: {item.bill.crossFileExternalId}
-                                                                    </span>
-                                                                    <br />
-                                                                </>
-                                                            )}
+                                                        <TableCell className={`${cellBase} hidden xl:table-cell ${COLS.notes}`}>
+                                                            <div className="line-clamp-5">
+                                                                {item.bill.crossFileExternalId && (
+                                                                    <>
+                                                                        <span className="font-sm">
+                                                                            X-Filed Bill: {item.bill.crossFileExternalId}
+                                                                        </span>
+                                                                        <br />
+                                                                    </>
+                                                                )}
 
-                                                            {item.bill.crossFileExternalId && (
-                                                                <>
-                                                                    <span className="font-sm">
-                                                                        House Vote: (90-42-1-1)
-                                                                    </span>
-                                                                    <br />
-                                                                </>
-                                                            )}
+                                                                {item.bill.crossFileExternalId && (
+                                                                    <>
+                                                                        <span className="font-sm">
+                                                                            House Vote: (90-42-1-1)
+                                                                        </span>
+                                                                        <br />
+                                                                    </>
+                                                                )}
 
-                                                            Other notes
-                                                        </div>
-                                                    </TableCell>
-                                                </TableRow>
-                                            )
-                                        })}
-                                    </TableBody>
-                                </Table>
+                                                                Other notes
+                                                            </div>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                )
+                                            })}
+                                        </TableBody>
+                                    </Table>
+                                </div>
+
                             </div>
-
-                        </div>
-                    ))}
-                </div>
-            ))}
+                        ))}
+                    </div>
+                )
+            })}
         </>
     )
 }

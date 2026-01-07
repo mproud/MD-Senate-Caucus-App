@@ -126,3 +126,85 @@
     @apply bg-background text-foreground;
   }
 }
+
+.print-meta { display: none; }
+
+.user-name {
+  string-set: userName content(text);
+}
+
+/** Handle Printing Reports **/
+@media print {
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* @TODO print landscape, hide extras, but only on the calendar page */
+  @page {
+    size: landscape;
+    margin: 2.5rem 1rem 3.5rem;
+
+    @bottom-right {
+      content: "Page " counter(page) " of " counter(pages);
+      font-size: 10px;
+      color: #333;
+    }
+  }
+
+  html, body,
+  body > div {
+    width: 100%;
+  }
+
+  header,
+  header * {
+    visibility: hidden !important;
+    display: none !important;
+  }
+
+  main.container {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin-left: 0px !important;
+    margin-right: 0px !important;
+    padding-top: 0px !important;
+  }
+
+  .calendar-heading-wrapper,
+  .report-filter-wrapper {
+    visibility: hidden !important;
+    display: none !important;
+  }
+
+  /* .calendar-wrapper > div:not(first-of-type) {
+    break-before: page;
+    page-break-before: always;
+  } */
+
+  .page-break-before {
+    break-before: page;
+    page-break-before: always;
+  }
+
+  .page-break-after {
+    break-after: page;
+    page-break-after: always;
+  }
+
+  /* Calendar Tables */
+  .no-print-scroll { overflow: visible !important; max-height: none !important; height: auto !important; }
+  .no-print-scroll * { overflow: visible !important; }
+
+  table.print-friendly { width: 100% !important; min-width: 0 !important; table-layout: auto !important; }
+  table.print-friendly th, table.print-friendly td {
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  thead { display: table-header-group; }
+  tr { break-inside: avoid; page-break-inside: avoid; }
+}

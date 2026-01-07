@@ -39,8 +39,8 @@ export default async function ReportPage({
     })
 
     return (
-        <div className="space-y-6 px-4">
-            <div className="flex items-center justify-between gap-3 border-b pb-4">
+        <div className="space-y-6 px-4 calendar-page-wrapper">
+            <div className="flex items-center justify-between gap-3 border-b pb-4 calendar-heading-wrapper">
                 <div className="min-w-0">
                     <h1 className="truncate text-2xl font-semibold">Calendar Report</h1>
                 </div>
@@ -54,7 +54,7 @@ export default async function ReportPage({
                 flaggedOnly={flaggedOnly}
             />
 
-            <div className="mb-6">
+            <div className="mb-6 calendar-wrapper">
                 <CalendarReport calendarData={calendarData} />
             </div>
         </div>
