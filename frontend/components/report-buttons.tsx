@@ -1,9 +1,22 @@
 "use client"
 
+import axios from "axios"
 import { Download, Printer } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
-const handlePdfReport = () => {
+const handlePdfReport = async () => {
+    const userId = 12
+    const documentId = 13
+    
+    // make the call to /api/reports/pdf
+    // @TODO use fetchApi function
+    
+    const res = await axios.post(
+        `/api/reports/pdf`,
+        { documentId, userId },
+        { responseType: "arraybuffer" } // Ensures binary data is received for the PDF
+    )
+
     return
 }
 
