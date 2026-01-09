@@ -696,7 +696,9 @@ export const handler = async ( event: any, context: Context ) => {
     //     `${MGA_BASE}/FloorActions/Agenda/senate-03272025-1`
 
     // const url = 'http://localhost:8000/20250327131337-senate-agenda.html' // ugh I lost the archive.
-    const url = 'https://mgaleg.maryland.gov/mgawebsite/FloorActions/Agenda/senate-12162025-1'
+    // const url = 'https://mgaleg.maryland.gov/mgawebsite/FloorActions/Agenda/senate-12162025-1'
+    // @TODO this needs to be found automatically!!
+    const url = 'https://mgaleg.maryland.gov/mgawebsite/FloorActions/Agenda/senate-01092026-1'
 
     const chamber: Chamber = 'SENATE' // for now
 

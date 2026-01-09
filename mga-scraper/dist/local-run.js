@@ -66106,7 +66106,7 @@ async function scrapeAgendaUrl(url2) {
     if (!headerText) return;
     const headerId = $table.find("thead a[id]").attr("id") || null;
     const parsedHeader = parseAgendaHeader(headerText, headerId);
-    console.log("><><><>< Header", { headerText, headerId, parsedHeader });
+    console.log(">>> Parsed Header", { parsedHeader });
     const items = [];
     $table.find("tbody > tr").each((__, row) => {
       const $row = $3(row);
@@ -66506,7 +66506,7 @@ async function createBillAddedToCalendarEvent(opts) {
 }
 var handler = async (event, context) => {
   const urlFromEvent = event?.url;
-  const url2 = "https://mgaleg.maryland.gov/mgawebsite/FloorActions/Agenda/senate-12162025-1";
+  const url2 = "https://mgaleg.maryland.gov/mgawebsite/FloorActions/Agenda/senate-01092026-1";
   const chamber = "SENATE";
   const run = await startScrapeRun(`MGA_${chamber}_AGENDA`);
   let agendaCount = 1;

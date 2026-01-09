@@ -6,7 +6,7 @@
   margin-right: auto;
 }
 
-
+@custom-variant print (@media print);
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {

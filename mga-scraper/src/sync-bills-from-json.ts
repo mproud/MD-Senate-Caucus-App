@@ -8,7 +8,8 @@ import { startScrapeRun, finishScrapeRun } from './shared/logging'
 
 // @TODO this needs to pull from the archive link optionally too
 const LEGISLATION_JSON_URL =
-    'https://web.archive.org/web/20250327170322/https://mgaleg.maryland.gov/2025rs/misc/billsmasterlist/legislation.json'
+    'https://mgaleg.maryland.gov/2026rs/misc/billsmasterlist/legislation.json'
+    // 'https://web.archive.org/web/20250327170322/https://mgaleg.maryland.gov/2025rs/misc/billsmasterlist/legislation.json'
     // 'https://mgaleg.maryland.gov/2025rs/misc/billsmasterlist/legislation.json'
 
 type Subject = {

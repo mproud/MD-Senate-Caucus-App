@@ -214,8 +214,8 @@ function organizeFloorCalendars(raw: FloorCalendar[] | undefined | null): { sect
 const COLS = {
     flag: "w-[28px]",
     bill: "w-[92px]",
-    sponsor: "w-[140px]",
-    title: "w-[520px]",
+    sponsor: "w-[140px] print:w-[100px]",
+    title: "w-[520px] print:w-[250px]",
     committee: "w-[160px]",
     vote: "w-[160px]",
     action: "w-[180px]",
@@ -268,12 +268,12 @@ export async function CalendarReport({ calendarData }: { calendarData: CalendarD
                                         <colgroup>
                                             <col className={COLS.flag} />
                                             <col className={COLS.bill} />
-                                            <col className={`hidden md:table-column ${COLS.sponsor}`} />
+                                            <col className={`hidden md:table-column print:!table-column ${COLS.sponsor}`} />
                                             <col className={COLS.title} />
-                                            <col className={`hidden md:table-column ${COLS.committee}`} />
-                                            <col className={`hidden lg:table-column ${COLS.vote}`} />
-                                            <col className={`hidden xl:table-column ${COLS.action}`} />
-                                            <col className={`hidden xl:table-column ${COLS.notes}`} />
+                                            <col className={`hidden md:table-column print:!table-column ${COLS.committee}`} />
+                                            <col className={`hidden lg:table-column print:!table-column ${COLS.vote}`} />
+                                            <col className={`hidden xl:table-column print:!table-column ${COLS.action}`} />
+                                            <col className={`hidden xl:table-column print:!table-column ${COLS.notes}`} />
                                         </colgroup>
 
                                         <TableHeader>
@@ -289,12 +289,12 @@ export async function CalendarReport({ calendarData }: { calendarData: CalendarD
                                             <TableRow className="font-semibold">
                                                 <TableHead className={COLS.flag} />
                                                 <TableHead className={COLS.bill}>Bill</TableHead>
-                                                <TableHead className={`hidden md:table-cell ${COLS.sponsor}`}>Sponsor</TableHead>
+                                                <TableHead className={`hidden md:table-cell print:!table-cell ${COLS.sponsor}`}>Sponsor</TableHead>
                                                 <TableHead className={COLS.title}>Title</TableHead>
-                                                <TableHead className={`hidden md:table-cell ${COLS.committee}`}>Committee</TableHead>
-                                                <TableHead className={`hidden lg:table-cell ${COLS.vote}`}>Vote</TableHead>
-                                                <TableHead className={`hidden xl:table-cell ${COLS.action}`}>Action</TableHead>
-                                                <TableHead className={`hidden xl:table-cell ${COLS.notes}`}>Notes</TableHead>
+                                                <TableHead className={`hidden md:table-cell print:!table-cell ${COLS.committee}`}>Committee</TableHead>
+                                                <TableHead className={`hidden lg:table-cell print:!table-cell ${COLS.vote}`}>Vote</TableHead>
+                                                <TableHead className={`hidden xl:table-cell print:!table-cell ${COLS.action}`}>Action</TableHead>
+                                                <TableHead className={`hidden xl:table-cell print:!table-cell ${COLS.notes}`}>Notes</TableHead>
                                             </TableRow>
                                         </TableHeader>
 
@@ -324,7 +324,7 @@ export async function CalendarReport({ calendarData }: { calendarData: CalendarD
                                                             </Link>
                                                         </TableCell>
 
-                                                        <TableCell className={`${cellBase} hidden md:table-cell ${COLS.sponsor}`}>
+                                                        <TableCell className={`${cellBase} hidden md:table-cell print:!table-cell ${COLS.sponsor}`}>
                                                             <div className="line-clamp-2">
                                                                 {shortenSponsor(item.bill.sponsorDisplay)}
                                                             </div>
@@ -337,11 +337,11 @@ export async function CalendarReport({ calendarData }: { calendarData: CalendarD
                                                             </div>
                                                         </TableCell>
 
-                                                        <TableCell className={`${cellBase} hidden md:table-cell ${COLS.committee}`}>
+                                                        <TableCell className={`${cellBase} hidden md:table-cell print:!table-cell ${COLS.committee}`}>
                                                             { item.committee?.abbreviation && item.committee.abbreviation }
                                                         </TableCell>
 
-                                                        <TableCell className={`${cellBase} hidden lg:table-cell ${COLS.vote}`}>
+                                                        <TableCell className={`${cellBase} hidden lg:table-cell print:!table-cell ${COLS.vote}`}>
                                                             <div className="text-sm">
                                                                 11-0
                                                                 <div className="mt-1 flex items-center gap-2">
@@ -366,13 +366,13 @@ export async function CalendarReport({ calendarData }: { calendarData: CalendarD
                                                             </div>
                                                         </TableCell>
 
-                                                        <TableCell className={`${cellBase} hidden xl:table-cell ${COLS.action}`}>
+                                                        <TableCell className={`${cellBase} hidden xl:table-cell print:!table-cell ${COLS.action}`}>
                                                             <div className="line-clamp-2">
                                                                 {item.actionText}
                                                             </div>
                                                         </TableCell>
 
-                                                        <TableCell className={`${cellBase} hidden xl:table-cell ${COLS.notes}`}>
+                                                        <TableCell className={`${cellBase} hidden xl:table-cell print:!table-cell ${COLS.notes}`}>
                                                             <div className="line-clamp-5">
                                                                 {item.bill.crossFileExternalId && (
                                                                     <>

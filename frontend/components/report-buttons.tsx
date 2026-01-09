@@ -4,20 +4,21 @@ import axios from "axios"
 import { Download, Printer } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
-const handlePdfReport = async () => {
-    const userId = 12
-    const documentId = 13
+const handlePdfReport = () => {
+    window.print()
+    // const userId = 12
+    // const documentId = 13
     
-    // make the call to /api/reports/pdf
-    // @TODO use fetchApi function
+    // // make the call to /api/reports/pdf
+    // // @TODO use fetchApi function
     
-    const res = await axios.post(
-        `/api/reports/pdf`,
-        { documentId, userId },
-        { responseType: "arraybuffer" } // Ensures binary data is received for the PDF
-    )
+    // const res = await axios.post(
+    //     `/api/reports/pdf`,
+    //     { documentId, userId },
+    //     { responseType: "arraybuffer" } // Ensures binary data is received for the PDF
+    // )
 
-    return
+    // return
 }
 
 const handleExcelReport = () => {
@@ -27,7 +28,7 @@ const handleExcelReport = () => {
 export const ReportButtons = () => {
     return (
         <div className="flex shrink-0 items-center gap-2 report-button-wrapper">
-            <Button variant="outline" onClick={handleExcelReport}>
+            <Button variant="outline" onClick={handleExcelReport} disabled>
                 <Download className="mr-2 h-4 w-4" />
                 Download as Excel
             </Button>
