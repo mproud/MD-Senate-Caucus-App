@@ -126,57 +126,50 @@ async function BillContent({ billNumber }: { billNumber: string }) {
                                 <CardTitle>Bill History</CardTitle>
                             </CardHeader>
                             <CardContent>
-                                {bill.actions && bill.actions.length > 0 ? (
+                                {bill.events && bill.events.length > 0 ? (
                                     <div className="space-y-4">
-                                        {bill.actions
-                                            .sort((a, b) => new Date(b.actionDate).getTime() - new Date(a.actionDate).getTime())
-                                            .map((action, index) => (
-                                                <div key={action.id} className="flex gap-4">
+                                        {bill.events
+                                            .sort((a, b) => new Date(b.eventTime).getTime() - new Date(a.eventTime).getTime())
+                                            .map((event, index) => (
+                                                <div key={event.id} className="flex gap-4">
                                                     <div className="flex flex-col items-center">
                                                         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-medium">
                                                             {index + 1}
                                                         </div>
-                                                        {index < bill.actions!.length - 1 && <div className="w-px flex-1 bg-border mt-2" />}
+                                                        {index < bill.events!.length - 1 && <div className="w-px flex-1 bg-border mt-2" />}
                                                     </div>
                                                     <div className="flex-1 pb-8">
                                                         <div className="flex items-center gap-2 mb-1">
-                                                            <p className="font-medium">{action.description}</p>
+                                                            <p className="font-medium">{event.summary}</p>
                                                             <Badge variant="outline" className="text-xs">
-                                                                {action.chamber}
+                                                                {event.chamber}
                                                             </Badge>
-                                                            {action.isVote && (
-                                                                <Badge variant="secondary" className="text-xs">
-                                                                    Vote
-                                                                </Badge>
-                                                            )}
                                                         </div>
                                                         <p className="text-sm text-muted-foreground mb-1">
-                                                            {new Date(action.actionDate).toLocaleDateString("en-US", {
+                                                            {new Date(event.eventTime).toLocaleDateString("en-US", {
                                                                 year: "numeric",
                                                                 month: "long",
                                                                 day: "numeric",
+                                                                hour: "numeric",
+                                                                minute: "2-digit",
+                                                                hour12: true,
                                                             })}
                                                         </p>
-                                                        {/* {action.committee && (
-                                                            <p className="text-sm text-muted-foreground">Committee: {action.committee.name}</p>
-                                                        )} */}
-                                                        {action.voteResult && (
+                                                        {event.committeeId && (
+                                                            <p className="text-sm text-muted-foreground">Committee: {event.committeeId}</p>
+                                                        )}
+                                                        {event.payload?.vote && (
                                                             <p className="text-sm mt-2">
-                                                                <span className="font-medium">Result:</span> {action.voteResult}
-                                                                {action.yesVotes !== null && action.noVotes !== null && (
+                                                                <span className="font-medium">Result:</span> {event.payload.result}
+                                                                {event.payload.vote.yeas !== null && event.payload.vote.nays !== null && (
                                                                     <span className="text-muted-foreground">
                                                                         {" "}
-                                                                        {action.yesVotes ?? 0}{" - "}
-                                                                        {action.noVotes ?? 0}{" "}
-                                                                        (Excused: {action.excused ?? 0}{" "}
-                                                                        Absent: {action.absent ?? 0})
+                                                                        {event.payload.vote.yeas ?? 0}{" - "}
+                                                                        {event.payload.vote.nays ?? 0}{" "}
+                                                                        (Excused: {event.payload.vote.excused ?? 0}{" "}
+                                                                        Absent: {event.payload.vote.absent ?? 0})
                                                                     </span>
                                                                 )}
-                                                            </p>
-                                                        )}
-                                                        {action.notes && (
-                                                            <p className="text-sm mt-2">
-                                                                <span className="font-medium">Notes:</span> {action.notes}
                                                             </p>
                                                         )}
                                                     </div>
@@ -199,6 +192,73 @@ async function BillContent({ billNumber }: { billNumber: string }) {
                                     <VoteForm billNumber={billNumber} voteType="committee" />
                                 </CardHeader>
                                 <CardContent>
+                                    {bill.actions && bill.actions.length > 0 ? (
+                                        <div className="space-y-4">
+                                            {bill.actions
+                                                    .sort((a, b) => new Date(b.actionDate).getTime() - new Date(a.actionDate).getTime())
+                                                    .map((action) => (
+                                                        <div key={action.id} className="border-b last:border-0 pb-6 last:pb-0">
+                                                            <div className="flex items-start justify-between mb-3">
+                                                                <div>
+                                                                    <p className="font-medium">{action?.committee?.name}</p>
+                                                                    <p className="text-sm text-muted-foreground">
+                                                                        {new Date(action.actionDate).toLocaleDateString("en-US", {
+                                                                            year: "numeric",
+                                                                            month: "long",
+                                                                            day: "numeric",
+                                                                        })}
+                                                                    </p>
+                                                                </div>
+                                                                <div>
+                                                                    { action.source == "MANUAL" && (
+                                                                        <Badge variant="outline" className="mr-5">
+                                                                            MANUAL
+                                                                        </Badge>
+                                                                    )}
+                                                                    <Badge
+                                                                        variant={
+                                                                            action.voteResult === "Favorable" || action.voteResult === "Favorable with Amendments"
+                                                                                ? "default"
+                                                                                : "destructive"
+                                                                        }
+                                                                    >
+                                                                        {action.voteResult}
+                                                                    </Badge>
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="flex gap-6 mb-3">
+                                                                <div>
+                                                                    <span className="font-medium">Yes: </span>
+                                                                    <span className="text-green-600 dark:text-green-400">{action.yesVotes || 0}</span>
+                                                                </div>
+                                                                <div>
+                                                                    <span className="font-medium">No: </span>
+                                                                    <span className="text-red-600 dark:text-red-400">{action.noVotes || 0}</span>
+                                                                </div>
+                                                                <div>
+                                                                    <span className="text-sm font-medium">Not Voting: </span>
+                                                                    <span className="text-sm text-gray-600 dark:text-gray-400">{action.notVoting || 0}</span>
+                                                                </div>
+                                                                <div>
+                                                                    <span className="text-sm font-medium">Excused: </span>
+                                                                    <span className="text-sm text-gray-600 dark:text-gray-400">{action.excused || 0}</span>
+                                                                </div>
+                                                                <div>
+                                                                    <span className="text-sm font-medium">Absent: </span>
+                                                                    <span className="text-sm text-gray-600 dark:text-gray-400">{action.absent || 0}</span>
+                                                                </div>
+                                                            </div>
+
+                                                            {action.notes && <p className="text-sm leading-relaxed">{action.notes}</p>}
+                                                        </div>
+                                                    )
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <p className="text-sm text-muted-foreground text-center py-8">No committee votes available for this bill</p>
+                                    )}
+
                                     {/* {bill.committeeVotes && bill.committeeVotes.length > 0 ? (
                                         <div className="space-y-6">
                                             {bill.committeeVotes.map((vote) => (
@@ -259,6 +319,7 @@ async function BillContent({ billNumber }: { billNumber: string }) {
                                     <VoteForm billNumber={billNumber} voteType="floor" />
                                 </CardHeader>
                                 <CardContent>
+                                    @TODO separate Floor Votes from Committee Votes. Also, record notes!
                                     {/* {bill.floorVotes && bill.floorVotes.length > 0 ? (
                                         <div className="space-y-6">
                                             {bill.floorVotes.map((vote) => (

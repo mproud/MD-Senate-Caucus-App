@@ -64,6 +64,201 @@ type OrganizedSection = {
     groups: OrganizedGroup[]
 }
 
+// Helpers to pick and format committee votes from billEvents
+type VoteCounts = {
+    yesVotes?: number | null
+    noVotes?: number | null
+    abstain?: number | null
+    excused?: number | null
+    absent?: number | null
+    notVoting?: number | null
+}
+
+type CommitteeVoteEvent = {
+    id?: number | string
+    type?: string | null
+    eventType?: string | null
+    committeeId?: number | string | null
+    source?: "MGA" | "MANUAL" | string | null
+
+    // common count field names (support multiple)
+    yesVotes?: number | null
+    noVotes?: number | null
+    abstain?: number | null
+    abstains?: number | null
+    excused?: number | null
+    absent?: number | null
+    notVoting?: number | null
+
+    voteCounts?: VoteCounts | null // if you store nested counts
+    result?: string | null
+    motion?: string | null
+    details?: string | null
+    date?: string | Date | null
+}
+
+function toInt(n: unknown): number | null {
+    if (typeof n === "number" && Number.isFinite(n)) return n
+    if (typeof n === "string" && n.trim() !== "" && Number.isFinite(Number(n))) return Number(n)
+    return null
+}
+
+function extractCounts(e: CommitteeVoteEvent | null | undefined): Required<VoteCounts> {
+    const vc = (e?.voteCounts ?? {}) as VoteCounts
+
+    const yesVotes = toInt(e?.yesVotes ?? vc.yesVotes) ?? 0
+    const noVotes = toInt(e?.noVotes ?? vc.noVotes) ?? 0
+    const abstain = toInt(e?.abstain ?? (e as any)?.abstains ?? vc.abstain) ?? 0
+    const excused = toInt(e?.excused ?? vc.excused) ?? 0
+    const absent = toInt(e?.absent ?? vc.absent) ?? 0
+    const notVoting = toInt(e?.notVoting ?? vc.notVoting) ?? 0
+
+    return { yesVotes, noVotes, abstain, excused, absent, notVoting }
+}
+
+function hasAnyCounts(counts: VoteCounts): boolean {
+    return (
+        (counts.yesVotes ?? 0) > 0 ||
+        (counts.noVotes ?? 0) > 0 ||
+        (counts.abstain ?? 0) > 0 ||
+        (counts.excused ?? 0) > 0 ||
+        (counts.absent ?? 0) > 0 ||
+        (counts.notVoting ?? 0) > 0
+    )
+}
+
+function looksLikeCommitteeVote(e: CommitteeVoteEvent): boolean {
+    // @TODO this isn't working as neatly as I had hoped.
+    // Some events aren't logged as committee votes, or they're in the "events" not "actions"
+    return true
+
+    // const t = (e.type ?? e.eventType ?? "").toString().toUpperCase()
+    // // adjust this to the actual BillEventType(s)
+    // return t.includes("COMMITTEE") && (t.includes("VOTE") || t.includes("ACTION"))
+}
+
+
+// >>>>>>>>>>>>> this needs to use billActions, not billEvents
+
+function pickCommitteeVoteForCommittee(args: {
+    billNumber: string
+    billActions: CommitteeVoteEvent[]
+    committeeId: number | string | null | undefined
+}): {
+    action: CommitteeVoteEvent | null
+    counts: Required<VoteCounts> | null
+    source: "MGA" | "MANUAL" | string | null
+    usedManualCountsToFillMGA: boolean
+    manualEvent: CommitteeVoteEvent | null
+} {
+    const { billNumber, billActions, committeeId } = args
+    // console.log('----- Pick committe vote', billNumber, committeeId, { billActions } )
+    if (!committeeId) {
+        return {
+            action: null,
+            counts: null,
+            source: null,
+            usedManualCountsToFillMGA: false,
+            manualEvent: null,
+        }
+    }
+
+    const relevant = (billActions ?? []).filter((e) => {
+        const sameCommittee = String(e.committeeId ?? "") === String(committeeId)
+        return sameCommittee && looksLikeCommitteeVote(e)
+    })
+
+    if (relevant.length === 0) {
+        return {
+            action: null,
+            counts: null,
+            source: null,
+            usedManualCountsToFillMGA: false,
+            manualEvent: null,
+        }
+    }
+
+    const mga = relevant.filter((e) => (e.source ?? "").toString().toUpperCase() === "MGA")
+    const manual = relevant.filter((e) => (e.source ?? "").toString().toUpperCase() === "MANUAL")
+
+    console.log( billNumber, { relevant, mga, manual })
+
+    const bestManual = manual[0] ?? null
+    const bestMga = mga[0] ?? null
+
+    const mgaCounts = bestMga ? extractCounts(bestMga) : null
+    const manualCounts = bestManual ? extractCounts(bestManual) : null
+
+    const mgaHasCounts = mgaCounts ? hasAnyCounts(mgaCounts) : false
+    const manualHasCounts = manualCounts ? hasAnyCounts(manualCounts) : false
+
+    // Prefer MGA *if* it has counts
+    if (bestMga && mgaHasCounts) {
+        console.log(billNumber, '0000000 - 1')
+        return {
+            action: bestMga,
+            counts: mgaCounts!,
+            source: bestMga.source ?? "MGA",
+            usedManualCountsToFillMGA: false,
+            manualEvent: bestManual,
+        }
+    }
+
+    // MGA exists but has no counts -> fill counts from manual if possible
+    if (bestMga && !mgaHasCounts && bestManual && manualHasCounts) {
+        console.log(billNumber, '0000000 - 2')
+        return {
+            action: bestMga,
+            counts: manualCounts!,
+            source: bestMga.source ?? "MGA",
+            usedManualCountsToFillMGA: true,
+            manualEvent: bestManual,
+        }
+    }
+
+    // Otherwise fall back to manual (even if it's also empty, at least you can show motion/result)
+    if (bestManual) {
+        console.log(billNumber, '0000000 - 3')
+        return {
+            action: bestManual,
+            counts: manualCounts ?? extractCounts(bestManual),
+            source: bestManual.source ?? "MANUAL",
+            usedManualCountsToFillMGA: false,
+            manualEvent: bestManual,
+        }
+    }
+
+    // Last resort: MGA (no counts)
+    console.log(billNumber, '0000000 - 4')
+    return {
+        action: bestMga,
+        counts: mgaCounts ?? (bestMga ? extractCounts(bestMga) : null),
+        source: bestMga?.source ?? "MGA",
+        usedManualCountsToFillMGA: false,
+        manualEvent: bestManual,
+    }
+}
+
+function formatCountsShort(counts: Required<VoteCounts> | null): string {
+    if (!counts) return "--"
+    // short common display
+    return `${counts.yesVotes}-${counts.noVotes}`
+}
+
+function formatCountsBreakdown(counts: Required<VoteCounts> | null): string | null {
+    if (!counts) return null
+    // full breakdown like 8-2-0-1 (yea-nay-abstain-absent) + optionally excused/notVoting if you want
+    const core = `${counts.yesVotes}-${counts.noVotes}` // -${counts.abstain}-${counts.absent}`
+    // const extras =
+    //     counts.excused > 0 || counts.notVoting > 0
+    //         ? ` (E:${counts.excused} NV:${counts.notVoting})`
+    //         : ""
+    // return core + extras
+    return core // @TODO add absent, excused, etc
+}
+
+
+
 // Shorten the name of the sponsor
 const shortenSponsor = ( name: string ) => {
     return name.replace('Senator ', 'Sen. ').replace('Delegate ', 'Del. ').replace(' Committee', '').trim()
@@ -230,6 +425,13 @@ export async function CalendarReport({ calendarData }: { calendarData: CalendarD
     // @TODO fix this eventually. Need central/correct type decs
     const rawCalendars = ((calendarData as any).calendars ?? []) as FloorCalendar[]
     const calendars = organizeFloorCalendars(rawCalendars)
+
+    // Need to find -- Second Reading, find vote with Committee ID. Prefer official if there are numbers, or unofficial if there aren't any numbers
+    //                 Match house votes if this bill was in the house OR if it has a crossfile with motion
+
+    // return (
+    //     <code><pre>{JSON.stringify(calendarData, null, 2)}</pre></code>
+    // )
     
     return (
         <>
@@ -300,12 +502,26 @@ export async function CalendarReport({ calendarData }: { calendarData: CalendarD
 
                                         <TableBody>
                                             {group.items.map((item: any) => {
+                                                // pull billEvents + current committee id for this row/section
+                                                // const billEvents = (item.bill?.events ?? []) as CommitteeVoteEvent[]
+                                                const billActions = (item.bill?.actions ?? [])
+                                                const currentCommitteeId = item.committeeId ?? item.committee?.id ?? null
+
+                                                // console.log('>>>> item', { currentCommitteeId, committeeId: item.committeeId })
+                                                // console.log('>>> item', item.billNumber, { billActions, item })
+
+                                                const committeeVote = pickCommitteeVoteForCommittee({
+                                                    billNumber: item.billNumber,
+                                                    billActions,
+                                                    committeeId: currentCommitteeId,
+                                                })
+
                                                 const isFlagged = Boolean(item.bill?.isFlagged)
 
                                                 return (
                                                     <TableRow key={item.id} className={isFlagged ? "bg-yellow-100 hover:bg-yellow-200" : ""}>
-                                                        {/* <TableCell colSpan={8}>
-                                                            <pre>{JSON.stringify(item, null, 2)}</pre>
+                                                        {/* <TableCell>
+                                                            <pre>{JSON.stringify(committeeVote, null, 2)}</pre>
                                                         </TableCell> */}
                                                         <TableCell className={`${cellBase} ${COLS.flag} font-medium`}>
                                                             {isFlagged ? (
@@ -341,7 +557,7 @@ export async function CalendarReport({ calendarData }: { calendarData: CalendarD
                                                             { item.committee?.abbreviation && item.committee.abbreviation }
                                                         </TableCell>
 
-                                                        <TableCell className={`${cellBase} hidden lg:table-cell print:!table-cell ${COLS.vote}`}>
+                                                        {/* <TableCell className={`${cellBase} hidden lg:table-cell print:!table-cell ${COLS.vote}`}>
                                                             <div className="text-sm">
                                                                 11-0
                                                                 <div className="mt-1 flex items-center gap-2">
@@ -349,7 +565,7 @@ export async function CalendarReport({ calendarData }: { calendarData: CalendarD
                                                                         8-2-0-1
                                                                     </Badge>
                                                                 </div>
-                                                                {/* {item.voteResult ? (
+                                                                --- {item.voteResult ? (
                                                                     <div className="mt-1 flex items-center gap-2">
                                                                         <Badge
                                                                             variant={item.voteResult.result === "Passed" ? "default" : "destructive"}
@@ -362,7 +578,44 @@ export async function CalendarReport({ calendarData }: { calendarData: CalendarD
                                                                     </div>
                                                                 ) : (
                                                                     <div className="mt-1 text-muted-foreground">--</div>
-                                                                )} */}
+                                                                )} ---
+                                                            </div>
+                                                        </TableCell> */}
+
+                                                        <TableCell className={`${cellBase} hidden lg:table-cell print:!table-cell ${COLS.vote}`}>
+                                                            <div className="text-sm">
+                                                                {committeeVote.action ? (
+                                                                    <>
+                                                                        {/* <div className="flex items-center gap-2">
+                                                                            <span className="font-medium">
+                                                                                {formatCountsShort(committeeVote.counts)}
+                                                                            </span>
+
+                                                                            <Badge variant={String(committeeVote.source).toUpperCase() === "MGA" ? "default" : "destructive"}>
+                                                                                {String(committeeVote.source ?? "--").toUpperCase()}
+                                                                                {committeeVote.usedManualCountsToFillMGA ? " (counts from manual)" : ""}
+                                                                            </Badge>
+                                                                        </div> */}
+
+                                                                        {/* breakdown line (optional) */}
+                                                                        {committeeVote.counts && hasAnyCounts(committeeVote.counts) ? (
+                                                                            <div>
+                                                                                {formatCountsBreakdown(committeeVote.counts)}
+                                                                            </div>
+                                                                        ) : (
+                                                                            <div className="mt-1 text-xs text-muted-foreground">No recorded counts</div>
+                                                                        )}
+
+                                                                        {/* Optional: show motion/result if I can grab it? @TODO ---
+                                                                        {(committeeVote.action.motion || committeeVote.action.result) && (
+                                                                            <div className="mt-1 text-xs">
+                                                                                {committeeVote.action.motion ?? committeeVote.action.result}
+                                                                            </div>
+                                                                        )}*/}
+                                                                    </>
+                                                                ) : (
+                                                                    <div className="text-muted-foreground">---</div>
+                                                                )}
                                                             </div>
                                                         </TableCell>
 

@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { Fragment, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import {
@@ -18,7 +18,32 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { Plus } from "lucide-react"
+import { Plus, Check, ChevronsUpDown } from "lucide-react"
+
+// ShadCN Combobox building blocks
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import {
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from "@/components/ui/command"
+
+type Chamber = "HOUSE" | "SENATE" | null
+
+type Committee = {
+    id: number
+    chamber: Chamber
+    abbreviation: string
+    name: string
+    committeeType: string | null
+}
+
+type CommitteesApiResponse = {
+    committees: Committee[]
+}
 
 interface VoteFormProps {
     billNumber: string
@@ -30,9 +55,15 @@ export function VoteForm({ billNumber, voteType }: VoteFormProps) {
     const [loading, setLoading] = useState(false)
     const router = useRouter()
 
+    // Committee selection uses a combobox:
+    // - User sees "FIN - Finance Committee"
+    // - We store committeeId and committeeChamber for submission
+    const [committeePickerOpen, setCommitteePickerOpen] = useState(false)
+
     const [formData, setFormData] = useState({
         date: new Date().toISOString().split("T")[0],
-        committee: "",
+        committeeId: null as number | null,
+        committeeChamber: null as "HOUSE" | "SENATE" | null,
         chamber: "HOUSE" as "HOUSE" | "SENATE",
         voteTypeFloor: "Third Reading" as "Second Reading" | "Third Reading" | "Final Passage",
         result: "",
@@ -44,49 +75,113 @@ export function VoteForm({ billNumber, voteType }: VoteFormProps) {
         details: "",
     })
 
-    const committees = [
-        { name: "Budget and Taxation", abbr: "B&T" },
-        { name: "Economic Matters", abbr: "ECM" },
-        { name: "Education, Energy, and the Environment", abbr: "EEE" },
-        { name: "Environment and Transportation", abbr: "ENV" },
-        { name: "Finance", abbr: "FIN" },
-        { name: "Health and Government Operations", abbr: "HGO" },
-        { name: "Judiciary", abbr: "JPR" },
-        { name: "Ways and Means", abbr: "W&M" },
-        { name: "Appropriations", abbr: "APP" },
-        { name: "Rules and Executive Nominations", abbr: "REN" },
-    ]
+    const [committees, setCommittees] = useState<Committee[]>([])
+    const [committeesLoading, setCommitteesLoading] = useState(false)
+    const [committeesError, setCommitteesError] = useState<string | null>(null)
+
+    useEffect(() => {
+        if (!open) return
+
+        let cancelled = false
+
+        ;(async () => {
+            try {
+                setCommitteesLoading(true)
+                setCommitteesError(null)
+
+                // Fetch committees from the API route
+                const res = await fetch("/api/committees", { cache: "no-store" })
+                if (!res.ok) throw new Error("Failed to fetch committees")
+
+                const committeesData = (await res.json()) as CommitteesApiResponse
+                const list = committeesData.committees ?? []
+
+                if (!cancelled) setCommittees(list)
+            } catch (e) {
+                console.error(e)
+                if (!cancelled) setCommitteesError("Failed to load committees")
+            } finally {
+                if (!cancelled) setCommitteesLoading(false)
+            }
+        })()
+
+        return () => {
+            cancelled = true
+        }
+    }, [open])
+
+    // Map committeeId -> committee record for quick lookups
+    const committeeById = useMemo(() => {
+        const m = new Map<number, Committee>()
+        for (const c of committees) m.set(c.id, c)
+        return m
+    }, [committees])
+
+    // Group committees for headings: Senate, House, Other
+    // Do not re-sort here; preserve server ordering within each group.
+    const grouped = useMemo(() => {
+        const senate: Committee[] = []
+        const house: Committee[] = []
+        const other: Committee[] = []
+
+        for (const c of committees) {
+            if (c.chamber === "SENATE") senate.push(c)
+            else if (c.chamber === "HOUSE") house.push(c)
+            else other.push(c)
+        }
+
+        return { senate, house, other }
+    }, [committees])
+
+    const selectedCommittee = useMemo(() => {
+        if (formData.committeeId == null) return undefined
+        return committeeById.get(formData.committeeId)
+    }, [formData.committeeId, committeeById])
+
+    // Display label shown to the user in the combobox trigger
+    const committeeLabel = useMemo(() => {
+        if (!selectedCommittee) return ""
+        return `${selectedCommittee.abbreviation} - ${selectedCommittee.name}`
+    }, [selectedCommittee])
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
         setLoading(true)
 
         try {
+            if (voteType === "committee") {
+                if (formData.committeeId == null || !committeeById.has(formData.committeeId)) {
+                    alert("Please select a committee.")
+                    return
+                }
+            }
+
             const voteData =
                 voteType === "committee"
                     ? {
-                            type: "committee",
-                            date: formData.date,
-                            committee: formData.committee,
-                            result: formData.result,
-                            yeas: Number.parseInt(formData.yeas),
-                            nays: Number.parseInt(formData.nays),
-                            absent: formData.absent ? Number.parseInt(formData.absent) : undefined,
-                            excused: formData.excused ? Number.parseInt(formData.excused) : undefined,
-                            details: formData.details || undefined,
-                        }
+                          type: "committee",
+                          date: formData.date,
+                          committeeId: formData.committeeId,
+                          chamber: formData.committeeChamber,
+                          result: formData.result,
+                          yeas: Number.parseInt(formData.yeas),
+                          nays: Number.parseInt(formData.nays),
+                          absent: formData.absent ? Number.parseInt(formData.absent) : undefined,
+                          excused: formData.excused ? Number.parseInt(formData.excused) : undefined,
+                          details: formData.details || undefined,
+                      }
                     : {
-                            type: "floor",
-                            date: formData.date,
-                            chamber: formData.chamber,
-                            voteType: formData.voteTypeFloor,
-                            result: formData.result,
-                            yeas: Number.parseInt(formData.yeas),
-                            nays: Number.parseInt(formData.nays),
-                            absent: formData.absent ? Number.parseInt(formData.absent) : undefined,
-                            excused: formData.excused ? Number.parseInt(formData.excused) : undefined,
-                            notVoting: formData.notVoting ? Number.parseInt(formData.notVoting) : undefined,
-                        }
+                          type: "floor",
+                          date: formData.date,
+                          chamber: formData.chamber,
+                          voteType: formData.voteTypeFloor,
+                          result: formData.result,
+                          yeas: Number.parseInt(formData.yeas),
+                          nays: Number.parseInt(formData.nays),
+                          absent: formData.absent ? Number.parseInt(formData.absent) : undefined,
+                          excused: formData.excused ? Number.parseInt(formData.excused) : undefined,
+                          notVoting: formData.notVoting ? Number.parseInt(formData.notVoting) : undefined,
+                      }
 
             const response = await fetch(`/api/bills/${billNumber}/votes`, {
                 method: "POST",
@@ -97,9 +192,11 @@ export function VoteForm({ billNumber, voteType }: VoteFormProps) {
             if (!response.ok) throw new Error("Failed to add vote")
 
             setOpen(false)
+            setCommitteePickerOpen(false)
             setFormData({
                 date: new Date().toISOString().split("T")[0],
-                committee: "",
+                committeeId: null,
+                committeeChamber: null,
                 chamber: "HOUSE",
                 voteTypeFloor: "Third Reading",
                 result: "",
@@ -149,25 +246,126 @@ export function VoteForm({ billNumber, voteType }: VoteFormProps) {
                         {voteType === "committee" ? (
                             <>
                                 <div className="space-y-2">
-                                    <Label htmlFor="committee">Committee</Label>
-                                    <Input
-                                        id="committee"
-                                        list="committees"
-                                        placeholder="e.g., Judiciary or JPR"
-                                        value={formData.committee}
-                                        onChange={(e) => setFormData({ ...formData, committee: e.target.value })}
-                                        required
-                                    />
-                                    <datalist id="committees">
-                                        {committees.map((committee) => (
-                                            <Fragment key={committee.abbr}>
-                                                <option key={committee.name} value={committee.name} />
-                                                <option key={committee.abbr} value={`${committee.abbr} - ${committee.name}`} />
-                                            </Fragment>
-                                        ))}
-                                    </datalist>
+                                    <Label>Committee</Label>
+
+                                    {/* ShadCN combobox: user sees label; we store committeeId + committeeChamber */}
+                                    <Popover open={committeePickerOpen} onOpenChange={setCommitteePickerOpen}>
+                                        <PopoverTrigger asChild>
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                role="combobox"
+                                                aria-expanded={committeePickerOpen}
+                                                className="w-full justify-between"
+                                                disabled={committeesLoading}
+                                            >
+                                                {committeeLabel || "Select a committee"}
+                                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                                            <Command>
+                                                <CommandInput placeholder="Search committees..." />
+                                                <CommandList>
+                                                    <CommandEmpty>
+                                                        {committeesError
+                                                            ? committeesError
+                                                            : committeesLoading
+                                                              ? "Loading committees..."
+                                                              : "No committees found."}
+                                                    </CommandEmpty>
+
+                                                    {grouped.senate.length > 0 && (
+                                                        <CommandGroup heading="Senate Committees">
+                                                            {grouped.senate.map((c) => {
+                                                                const label = `${c.abbreviation} - ${c.name}`
+                                                                const selected = formData.committeeId === c.id
+                                                                return (
+                                                                    <CommandItem
+                                                                        key={c.id}
+                                                                        value={label}
+                                                                        onSelect={() => {
+                                                                            setFormData((prev) => ({
+                                                                                ...prev,
+                                                                                committeeId: c.id,
+                                                                                committeeChamber:
+                                                                                    c.chamber === "HOUSE" || c.chamber === "SENATE" ? c.chamber : null,
+                                                                            }))
+                                                                            setCommitteePickerOpen(false)
+                                                                        }}
+                                                                    >
+                                                                        <Check className={`mr-2 h-4 w-4 ${selected ? "opacity-100" : "opacity-0"}`} />
+                                                                        {label}
+                                                                    </CommandItem>
+                                                                )
+                                                            })}
+                                                        </CommandGroup>
+                                                    )}
+
+                                                    {grouped.house.length > 0 && (
+                                                        <CommandGroup heading="House Committees">
+                                                            {grouped.house.map((c) => {
+                                                                const label = `${c.abbreviation} - ${c.name}`
+                                                                const selected = formData.committeeId === c.id
+                                                                return (
+                                                                    <CommandItem
+                                                                        key={c.id}
+                                                                        value={label}
+                                                                        onSelect={() => {
+                                                                            setFormData((prev) => ({
+                                                                                ...prev,
+                                                                                committeeId: c.id,
+                                                                                committeeChamber:
+                                                                                    c.chamber === "HOUSE" || c.chamber === "SENATE" ? c.chamber : null,
+                                                                            }))
+                                                                            setCommitteePickerOpen(false)
+                                                                        }}
+                                                                    >
+                                                                        <Check className={`mr-2 h-4 w-4 ${selected ? "opacity-100" : "opacity-0"}`} />
+                                                                        {label}
+                                                                    </CommandItem>
+                                                                )
+                                                            })}
+                                                        </CommandGroup>
+                                                    )}
+
+                                                    {grouped.other.length > 0 && (
+                                                        <CommandGroup heading="Other Committees">
+                                                            {grouped.other.map((c) => {
+                                                                const label = `${c.abbreviation} - ${c.name}`
+                                                                const selected = formData.committeeId === c.id
+                                                                return (
+                                                                    <CommandItem
+                                                                        key={c.id}
+                                                                        value={label}
+                                                                        onSelect={() => {
+                                                                            setFormData((prev) => ({
+                                                                                ...prev,
+                                                                                committeeId: c.id,
+                                                                                committeeChamber:
+                                                                                    c.chamber === "HOUSE" || c.chamber === "SENATE" ? c.chamber : null,
+                                                                            }))
+                                                                            setCommitteePickerOpen(false)
+                                                                        }}
+                                                                    >
+                                                                        <Check className={`mr-2 h-4 w-4 ${selected ? "opacity-100" : "opacity-0"}`} />
+                                                                        {label}
+                                                                    </CommandItem>
+                                                                )
+                                                            })}
+                                                        </CommandGroup>
+                                                    )}
+                                                </CommandList>
+                                            </Command>
+                                        </PopoverContent>
+                                    </Popover>
+
                                     <p className="text-xs text-muted-foreground">
-                                        Type full name or abbreviation (e.g., "JPR" for Judiciary)
+                                        {committeesLoading
+                                            ? "Loading committees..."
+                                            : committeesError
+                                              ? committeesError
+                                              : "Select a committee (stores committeeId and chamber internally)."}
                                     </p>
                                 </div>
 

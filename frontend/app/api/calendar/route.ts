@@ -119,17 +119,22 @@ export async function GET(request: NextRequest) {
                                 isFlagged: true,
 
                                 actions: {
-                                    where: { isVote: true },
+                                    // where: { isVote: true },
                                     orderBy: [{ actionDate: "desc" }, { sequence: "desc" }],
-                                    take: 1,
+                                    // take: 1,
                                     select: {
+                                        committeeId: true,
+                                        source: true,
                                         voteResult: true,
                                         yesVotes: true,
                                         noVotes: true,
+                                        absent: true,
                                         excused: true,
                                         notVoting: true,
                                     },
                                 },
+
+                                events: true,
                             },
                         },
                     },
