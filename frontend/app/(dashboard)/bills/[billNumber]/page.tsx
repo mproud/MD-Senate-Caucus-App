@@ -22,12 +22,13 @@ type BillExtended = Bill & {
     currentCommittee: {
         name: string
     }
+    events?: any[]
     committeeVotes: []
     dataSource?: {
         CommitteePrimaryOrigin: string
         CommitteePrimaryOpposite: string
     }
-    actions?: BillAction[]
+    actions?: any[]
 }
 
 async function BillContent({ billNumber }: { billNumber: string }) {
