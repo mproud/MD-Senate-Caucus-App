@@ -9,16 +9,20 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Pin, Loader2 } from "lucide-react"
-import type { BillNote as Note } from "@prisma/client"
+import { Prisma } from "@prisma/client"
 import { toast } from "sonner"
+
+type BillNoteWithUser = Prisma.BillNoteGetPayload<{
+    include: { user: { select: { name: true } } }
+}>
 
 interface NotesPanelProps {
     billNumber: string
-    initialNotes: Note[]
+    initialNotes: BillNoteWithUser[]
 }
 
 export function NotesPanel({ billNumber, initialNotes }: NotesPanelProps) {
-    const [notes, setNotes] = useState<Note[]>(initialNotes)
+    const [notes, setNotes] = useState<BillNoteWithUser[]>(initialNotes)
     const [newNoteBody, setNewNoteBody] = useState("")
     const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -50,7 +54,7 @@ export function NotesPanel({ billNumber, initialNotes }: NotesPanelProps) {
                 throw new Error("Failed to create note")
             }
 
-            const newNote: Note = await response.json()
+            const newNote: BillNoteWithUser = await response.json()
 
             // Optimistic update
             setNotes([newNote, ...notes])
@@ -114,7 +118,7 @@ export function NotesPanel({ billNumber, initialNotes }: NotesPanelProps) {
                 ) : (
                     notes
                         .slice() // avoid mutating the original notes array
-                        .filter((note: any) => note.visibility !== "HIDDEN")
+                        .filter((note: BillNoteWithUser) => note.visibility !== "HIDDEN")
                         .sort((a, b) => {
                             const aPinned = a.visibility === "PINNED"
                             const bPinned = b.visibility === "PINNED"
@@ -123,7 +127,7 @@ export function NotesPanel({ billNumber, initialNotes }: NotesPanelProps) {
 
                             return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
                         })
-                        .map((note) => {
+                        .map((note: BillNoteWithUser) => {
                             const isPinned = note.visibility === "PINNED"
 
                             return (
