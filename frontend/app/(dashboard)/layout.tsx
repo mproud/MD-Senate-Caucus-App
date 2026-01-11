@@ -1,4 +1,5 @@
 import { Navbar } from "@/components/nav-bar";
+import { PrintUserFooter } from "@/components/print-user-footer";
 import { Toaster } from "@/components/ui/sonner";
 
 export default function DashboardLayout({
@@ -16,6 +17,7 @@ export default function DashboardLayout({
                 </main>
             </div>
 
+            <PrintUserFooter />
             <Toaster />
         </>
     )
