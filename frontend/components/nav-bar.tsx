@@ -1,11 +1,16 @@
 "use client"
 
 import Link from "next/link"
-import { Calendar, Home, Bell, Search } from "lucide-react"
+import { Calendar, Home, Bell, Search, Shield } from "lucide-react"
 import { UserDropdown } from "./user-dropdown"
 import { ScrapeRunStatus } from "./header/scrape-run-status"
+import { useUser } from "@clerk/nextjs"
 
 export function Navbar() {
+    const { user, isLoaded } = useUser()
+
+    const isAdmin = isLoaded && user && (user.publicMetadata as { role?: string })?.role === "admin"
+
     // const [lastFetched, setLastFetched] = useState<Date | null>(null)
     // const [isRefreshing, setIsRefreshing] = useState(false)
 
@@ -81,6 +86,15 @@ export function Navbar() {
                             <Bell className="h-4 w-4" />
                             Alerts
                         </Link>
+                        {isAdmin && (
+                            <Link
+                                href="/admin"
+                                className="flex items-center gap-2 text-muted-foreground transition-colors hover:text-foreground"
+                            >
+                                <Shield className="h-4 w-4" />
+                                Admin
+                            </Link>
+                        )}
                     </nav>
                 </div>
                 <div className="flex items-center gap-4">

@@ -635,10 +635,11 @@ export async function CalendarReport({ calendarData }: { calendarData: CalendarD
 
                                                                 {item.bill.crossFileExternalId && (
                                                                     <>
-                                                                        <span className="font-sm">
+                                                                        {/* @TODO - get the house vote if there is one */}
+                                                                        {/* <span className="font-sm">
                                                                             House Vote: (90-42-1-1)
                                                                         </span>
-                                                                        <br />
+                                                                        <br /> */}
                                                                     </>
                                                                 )}
 

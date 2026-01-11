@@ -24,6 +24,9 @@ function isAllowedRedirectPath( pathname: string ) {
     return true
 }
 
+const isAdminRoute = createRouteMatcher(["/admin(.*)"])
+const isApiAdminRoute = createRouteMatcher(["/api/admin(.*)"])
+
 // Make sure the redirect_url is same origin
 function getSafeSameOriginRedirect(req: Request, raw: string | null): string | null {
     if (!raw) return null
@@ -60,7 +63,7 @@ function getSafeSameOriginRedirect(req: Request, raw: string | null): string | n
 }
 
 export default clerkMiddleware(async (auth, req) => {
-    const { userId } = await auth()
+    const { userId, sessionClaims } = await auth()
 
     // If signed in and on marketing/auth pages, bounce to dashboard
     if (userId && isRedirectIfAuthedRoute(req)) {
@@ -86,6 +89,23 @@ export default clerkMiddleware(async (auth, req) => {
     if ( ! isPublicRoute( req )) {
         await auth.protect()
     }
+
+    // Check if accessing admin routes
+    // if (isAdminRoute(req) || isApiAdminRoute(req)) {
+    //     // If not signed in, redirect to sign-in
+    //     if ( ! userId) {
+    //         const signInUrl = new URL("/login", req.url)
+    //         signInUrl.searchParams.set("redirect_url", req.url)
+    //         return NextResponse.redirect(signInUrl)
+    //     }
+
+    //     // Check if user has admin role
+    //     const role = (sessionClaims?.publicMetadata as { role?: string })?.role
+    //     if (role !== "admin") {
+    //         // Redirect non-admins to dashboard
+    //         return NextResponse.redirect(new URL("/", req.url))
+    //     }
+    // }
 
     return NextResponse.next()
 })
