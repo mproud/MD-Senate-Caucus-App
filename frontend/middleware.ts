@@ -101,9 +101,10 @@ export default clerkMiddleware(async (auth, req) => {
 
     //     // Check if user has admin role
     //     const role = (sessionClaims?.publicMetadata as { role?: string })?.role
-    //     if (role !== "admin") {
+    //     if (role !== "admin" && role !== "super_admin") {
+    //         console.log('>>>>> NOT ADMIN!', role)
     //         // Redirect non-admins to dashboard
-    //         return NextResponse.redirect(new URL("/", req.url))
+    //         return NextResponse.redirect(new URL("/?issue=not_admin", req.url))
     //     }
     // }
 

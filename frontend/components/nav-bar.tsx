@@ -9,7 +9,8 @@ import { useUser } from "@clerk/nextjs"
 export function Navbar() {
     const { user, isLoaded } = useUser()
 
-    const isAdmin = isLoaded && user && (user.publicMetadata as { role?: string })?.role === "admin"
+    const userRole = isLoaded && user ? (user.publicMetadata as { role?: string })?.role : null
+    const isAdmin = userRole === "admin" || userRole === "super_admin"
 
     // const [lastFetched, setLastFetched] = useState<Date | null>(null)
     // const [isRefreshing, setIsRefreshing] = useState(false)

@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { UserPlus, Trash2, Mail, Shield, Clock, Users } from "lucide-react"
+import { UserPlus, Trash2, Mail, Shield, Clock, Users, ShieldAlert } from "lucide-react"
 import { useUser } from "@clerk/nextjs"
 import { useRouter } from "next/navigation"
 
@@ -53,6 +53,7 @@ interface Invitation {
 
 interface UsersResponse {
     users: User[]
+    isSuperAdmin: boolean
 }
 
 interface InvitationsResponse {
@@ -69,28 +70,23 @@ export const AdminContent = () => {
     const [inviteRole, setInviteRole] = useState("member")
     const [isInviting, setIsInviting] = useState(false)
     const [inviteDialogOpen, setInviteDialogOpen] = useState(false)
+    const [isSuperAdmin, setIsSuperAdmin] = useState(false)
 
-    // @TODO re-enable this after promoting one user...
-    // useEffect(() => {
-    //     if (isLoaded && (!user || (user.publicMetadata as { role?: string })?.role !== "admin")) {
-    //         router.push("/")
-    //     }
-    // }, [isLoaded, user, router])
+    const userRole = (user?.publicMetadata as { role?: string })?.role
+    const isAdmin = userRole === "admin" || userRole === "super_admin"
 
-    // useEffect(() => {
-    //     if (isLoaded && user && (user.publicMetadata as { role?: string })?.role === "admin") {
-    //         fetchUsers()
-    //         fetchInvitations()
-    //     }
-    // }, [isLoaded, user])
-
-    // Override temporarily
     useEffect(() => {
-        if (isLoaded && user) {
+        if (isLoaded && (!user || !isAdmin)) {
+            router.push("/")
+        }
+    }, [isLoaded, user, isAdmin, router])
+
+    useEffect(() => {
+        if (isLoaded && user && isAdmin) {
             fetchUsers()
             fetchInvitations()
         }
-    }, [isLoaded, user])
+    }, [isLoaded, user, isAdmin])
 
     const fetchUsers = async () => {
         try {
@@ -98,6 +94,7 @@ export const AdminContent = () => {
             if (response.ok) {
                 const data: UsersResponse = await response.json()
                 setUsers(data.users || [])
+                setIsSuperAdmin(data.isSuperAdmin || false)
             }
         } catch (error) {
             console.error("Failed to fetch users:", error)
@@ -196,16 +193,18 @@ export const AdminContent = () => {
 
     const getRoleBadgeVariant = (role: string | undefined) => {
         switch (role) {
+            case "super_admin":
+                return "default"
             case "admin":
                 return "destructive"
             case "editor":
-                return "default"
-            default:
                 return "secondary"
+            default:
+                return "outline"
         }
     }
 
-    if (!isLoaded || !user || (user.publicMetadata as { role?: string })?.role !== "admin") {
+    if (!isLoaded || !user || !isAdmin) {
         return (
             <div className="flex items-center justify-center h-64">
                 <p className="text-muted-foreground">Checking permissions...</p>
@@ -253,6 +252,7 @@ export const AdminContent = () => {
                                         <SelectItem value="member">Member</SelectItem>
                                         {/* <SelectItem value="editor">Editor</SelectItem> */}
                                         <SelectItem value="admin">Admin</SelectItem>
+                                        {isSuperAdmin && <SelectItem value="super_admin">Super Admin</SelectItem>}
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -269,7 +269,7 @@ export const AdminContent = () => {
                 </Dialog>
             </div>
 
-            <div className="grid gap-6 md:grid-cols-3 mb-6">
+            <div className="grid gap-6 md:grid-cols-4 mb-6">
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Total Users</CardTitle>
@@ -297,6 +297,19 @@ export const AdminContent = () => {
                         <div className="text-2xl font-bold">{users.filter((u) => u.publicMetadata?.role === "admin").length}</div>
                     </CardContent>
                 </Card>
+                {isSuperAdmin && (
+                    <Card>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-medium">Super Admins</CardTitle>
+                            <ShieldAlert className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold">
+                                {users.filter((u) => u.publicMetadata?.role === "super_admin").length}
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
             </div>
 
             <div className="space-y-6">
@@ -323,38 +336,39 @@ export const AdminContent = () => {
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {users.map((user) => (
-                                        <TableRow key={user.id}>
+                                    {users.map((u) => (
+                                        <TableRow key={u.id}>
                                             <TableCell className="font-medium">
                                                 <div className="flex items-center gap-2">
-                                                    {user.imageUrl && (
-                                                        <img src={user.imageUrl || "/placeholder.svg"} alt="" className="h-8 w-8 rounded-full" />
+                                                    {u.imageUrl && (
+                                                        <img src={u.imageUrl || "/placeholder.svg"} alt="" className="h-8 w-8 rounded-full" />
                                                     )}
                                                     <span>
-                                                        {user.firstName || user.lastName
-                                                            ? `${user.firstName || ""} ${user.lastName || ""}`.trim()
+                                                        {u.firstName || u.lastName
+                                                            ? `${u.firstName || ""} ${u.lastName || ""}`.trim()
                                                             : "No name"}
                                                     </span>
                                                 </div>
                                             </TableCell>
-                                            <TableCell>{user.emailAddresses[0]?.emailAddress}</TableCell>
+                                            <TableCell>{u.emailAddresses[0]?.emailAddress}</TableCell>
                                             <TableCell>
                                                 <Select
-                                                    value={user.publicMetadata?.role || "member"}
-                                                    onValueChange={(value) => handleUpdateRole(user.id, value)}
+                                                    value={u.publicMetadata?.role || "member"}
+                                                    onValueChange={(value) => handleUpdateRole(u.id, value)}
                                                 >
-                                                    <SelectTrigger className="w-28 capitalize">
-                                                        {user.publicMetadata?.role || "member"}
+                                                    <SelectTrigger className="w-32 capitalize">
+                                                        {u.publicMetadata?.role?.replace("_", " ") || "member"}
                                                     </SelectTrigger>
                                                     <SelectContent>
                                                         <SelectItem value="member">Member</SelectItem>
                                                         {/* <SelectItem value="editor">Editor</SelectItem> */}
                                                         <SelectItem value="admin">Admin</SelectItem>
+                                                        {isSuperAdmin && <SelectItem value="super_admin">Super Admin</SelectItem>}
                                                     </SelectContent>
                                                 </Select>
                                             </TableCell>
-                                            <TableCell>{formatDate(user.createdAt)}</TableCell>
-                                            <TableCell>{user.lastSignInAt ? formatDate(user.lastSignInAt) : "Never"}</TableCell>
+                                            <TableCell>{formatDate(u.createdAt)}</TableCell>
+                                            <TableCell>{u.lastSignInAt ? formatDate(u.lastSignInAt) : "Never"}</TableCell>
                                             <TableCell className="text-right">
                                                 <AlertDialog>
                                                     <AlertDialogTrigger asChild>
@@ -372,7 +386,7 @@ export const AdminContent = () => {
                                                         <AlertDialogFooter>
                                                             <AlertDialogCancel>Cancel</AlertDialogCancel>
                                                             <AlertDialogAction
-                                                                onClick={() => handleDeleteUser(user.id)}
+                                                                onClick={() => handleDeleteUser(u.id)}
                                                                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                                                             >
                                                                 Remove

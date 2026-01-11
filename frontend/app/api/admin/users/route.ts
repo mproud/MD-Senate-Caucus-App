@@ -10,9 +10,18 @@ export async function GET() {
         }
 
         const clerk = await clerkClient()
+
+        const currentUser = await clerk.users.getUser(userId)
+        const currentUserRole = (currentUser.publicMetadata as { role?: string })?.role
+        const isSuperAdmin = currentUserRole === "super_admin"
+
         const users = await clerk.users.getUserList({ limit: 100 })
 
-        return NextResponse.json({ users: users.data })
+        const filteredUsers = isSuperAdmin
+            ? users.data
+            : users.data.filter((user) => (user.publicMetadata as { role?: string })?.role !== "super_admin")
+
+        return NextResponse.json({ users: filteredUsers, isSuperAdmin })
     } catch (error) {
         console.error("Failed to fetch users:", error)
         return NextResponse.json({ error: "Failed to fetch users" }, { status: 500 })
