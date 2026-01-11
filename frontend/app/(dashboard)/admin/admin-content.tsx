@@ -51,6 +51,14 @@ interface Invitation {
     publicMetadata: { role?: string }
 }
 
+interface UsersResponse {
+    users: User[]
+}
+
+interface InvitationsResponse {
+    invitations: Invitation[]
+}
+
 export const AdminContent = () => {
     const { user, isLoaded } = useUser()
     const router = useRouter()
@@ -88,7 +96,7 @@ export const AdminContent = () => {
         try {
             const response = await fetch("/api/admin/users")
             if (response.ok) {
-                const data = await response.json()
+                const data: UsersResponse = await response.json()
                 setUsers(data.users || [])
             }
         } catch (error) {
@@ -102,7 +110,7 @@ export const AdminContent = () => {
         try {
             const response = await fetch("/api/admin/invitations")
             if (response.ok) {
-                const data = await response.json()
+                const data: InvitationsResponse = await response.json()
                 setInvitations(data.invitations || [])
             }
         } catch (error) {
