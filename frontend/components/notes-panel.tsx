@@ -104,7 +104,7 @@ export function NotesPanel({ billNumber, initialNotes }: NotesPanelProps) {
 
             <div className="space-y-4">
                 {notes.length === 0 ? (
-                    <Card>
+                    <Card key="no-notes">
                         <CardContent className="py-8">
                             <div className="text-center text-muted-foreground">
                                 <p className="text-sm">No notes yet. Add the first note above.</p>
@@ -112,38 +112,63 @@ export function NotesPanel({ billNumber, initialNotes }: NotesPanelProps) {
                         </CardContent>
                     </Card>
                 ) : (
-                    notes.map((note) => (
-                        <Card key={note.id}>
-                            <CardHeader>
-                                <div className="flex items-start justify-between">
-                                    <div className="flex-1">
-                                        <div className="flex items-center gap-2">
-                                            @TODO author; pin notes
-                                            {/* <CardTitle className="text-base">{note.author}</CardTitle>
-                                            {note.pinned && (
-                                                <Badge variant="secondary" className="gap-1">
+                    notes
+                        .slice() // avoid mutating the original notes array
+                        .sort((a, b) => {
+                            const aPinned = a.visibility === "PINNED"
+                            const bPinned = b.visibility === "PINNED"
+
+                            if (aPinned !== bPinned) return aPinned ? -1 : 1
+
+                            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+                        })
+                        .map((note) => {
+                            const isPinned = note.visibility === "PINNED"
+
+                            return (
+                                <Card
+                                    key={note.id}
+                                    className={
+                                    isPinned
+                                        ? "border-muted-foreground/40 bg-muted/70"
+                                        : undefined
+                                    }
+                                >
+                                    <CardHeader>
+                                        <div className="flex items-start justify-between gap-4">
+                                            {/* Left side: date + author */}
+                                            <div className="flex-1">
+                                                <CardDescription>
+                                                    {new Date(note.createdAt).toLocaleDateString("en-US", {
+                                                    year: "numeric",
+                                                    month: "long",
+                                                    day: "numeric",
+                                                    hour: "2-digit",
+                                                    minute: "2-digit",
+                                                    })}
+
+                                                    {note.userId && note.user?.name && <> - {note.user.name}</>}
+                                                </CardDescription>
+                                            </div>
+
+                                            {/* Right side: pin */}
+                                            {isPinned && (
+                                                <Badge
+                                                    variant="secondary"
+                                                    className="flex items-center gap-1 shrink-0"
+                                                >
                                                     <Pin className="h-3 w-3" />
-                                                    Pinned
+                                                    <span className="sr-only">Pinned</span>
                                                 </Badge>
-                                            )} */}
+                                            )}
                                         </div>
-                                        <CardDescription>
-                                            {new Date(note.createdAt).toLocaleDateString("en-US", {
-                                                year: "numeric",
-                                                month: "long",
-                                                day: "numeric",
-                                                hour: "2-digit",
-                                                minute: "2-digit",
-                                            })}
-                                        </CardDescription>
-                                    </div>
-                                </div>
-                            </CardHeader>
-                            <CardContent>
-                                <p className="text-sm leading-relaxed whitespace-pre-wrap">{note.content}</p>
-                            </CardContent>
-                        </Card>
-                    ))
+                                    </CardHeader>
+                                    <CardContent>
+                                        <p className="text-sm leading-relaxed whitespace-pre-wrap">{note.content}</p>
+                                    </CardContent>
+                                </Card>
+                            )
+                        })
                 )}
             </div>
         </div>

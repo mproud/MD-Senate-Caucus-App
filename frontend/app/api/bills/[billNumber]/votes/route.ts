@@ -136,6 +136,7 @@ export async function POST(
                         }
                     : {
                             actionCode: "FLOOR_VOTE",
+                            motion: body.voteType,
                         }),
             },
             select: {

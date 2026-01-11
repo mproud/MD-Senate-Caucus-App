@@ -45,14 +45,17 @@ export async function GET(
         const notes = await prisma.billNote.findMany({
             where: { billId: bill.id },
             orderBy: { updatedAt: "desc" },
-            select: {
-                id: true,
-                billId: true,
-                content: true,
-                createdAt: true,
-                updatedAt: true,
-                // userId: true, // uncomment if your schema includes this field
-            },
+            include: {
+                user: true,
+            }
+            // select: {
+            //     id: true,
+            //     billId: true,
+            //     content: true,
+            //     createdAt: true,
+            //     updatedAt: true,
+            //     // userId: true, // uncomment if your schema includes this field
+            // },
         })
 
         return json({ billNumber: bill.billNumber, billId: bill.id, notes })
@@ -93,19 +96,23 @@ export async function POST(
             data: {
                 billId: bill.id,
                 content: parsed.data.content,
-                // userId, // ✅ KEEP if BillNote has userId; REMOVE if it doesn't
+                userId,
             },
-            select: {
-                id: true,
-                billId: true,
-                content: true,
-                createdAt: true,
-                updatedAt: true,
-                // userId: true,
-            },
+            include: {
+                user: true,
+            }
+            // select: {
+            //     id: true,
+            //     billId: true,
+            //     content: true,
+            //     createdAt: true,
+            //     updatedAt: true,
+            //     userId: true,
+            //     user: true,
+            // },
         })
 
-        return json({ success: true, note }, 201)
+        return json({ ...note }, 201)
     } catch (error) {
         console.error("POST bill note error:", error)
         return json({ error: "Failed to create note" }, 500)
@@ -207,7 +214,7 @@ export async function DELETE(
             where: {
                 id: noteId,
                 billId: bill.id,
-                // userId, // ✅ enforce ownership if BillNote has userId
+                // userId, // enforce ownership if BillNote has userId
             },
             select: { id: true },
         })

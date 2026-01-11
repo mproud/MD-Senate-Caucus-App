@@ -58,7 +58,11 @@ export async function GET(
             include: {
                 primarySponsor: true,
                 events: true,
-                notes: true,
+                notes: {
+                    include: {
+                        user: true,
+                    }
+                },
                 crossFileBill: true,
                 crossFileOf: true,
                 committeeHistory: true,

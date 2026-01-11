@@ -31,7 +31,7 @@ import {
     CommandList,
 } from "@/components/ui/command"
 
-type Chamber = "HOUSE" | "SENATE" | null
+type Chamber = "SENATE" | "HOUSE" | null
 
 type Committee = {
     id: number
@@ -64,7 +64,7 @@ export function VoteForm({ billNumber, voteType }: VoteFormProps) {
         date: new Date().toISOString().split("T")[0],
         committeeId: null as number | null,
         committeeChamber: null as "HOUSE" | "SENATE" | null,
-        chamber: "HOUSE" as "HOUSE" | "SENATE",
+        chamber: "SENATE" as "HOUSE" | "SENATE",
         voteTypeFloor: "Third Reading" as "Second Reading" | "Third Reading" | "Final Passage",
         result: "",
         yeas: "",
@@ -421,7 +421,7 @@ export function VoteForm({ billNumber, voteType }: VoteFormProps) {
                                         <SelectContent>
                                             <SelectItem value="Second Reading">Second Reading</SelectItem>
                                             <SelectItem value="Third Reading">Third Reading</SelectItem>
-                                            <SelectItem value="Final Passage">Final Passage</SelectItem>
+                                            <SelectItem value="Final Passage">Final Passage (other types?)</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -454,7 +454,6 @@ export function VoteForm({ billNumber, voteType }: VoteFormProps) {
                                     min="0"
                                     value={formData.yeas}
                                     onChange={(e) => setFormData({ ...formData, yeas: e.target.value })}
-                                    required
                                 />
                             </div>
 
@@ -466,7 +465,6 @@ export function VoteForm({ billNumber, voteType }: VoteFormProps) {
                                     min="0"
                                     value={formData.nays}
                                     onChange={(e) => setFormData({ ...formData, nays: e.target.value })}
-                                    required
                                 />
                             </div>
                         </div>

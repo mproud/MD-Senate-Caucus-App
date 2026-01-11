@@ -115,6 +115,7 @@ model User {
   welcomeEmailSentAt DateTime?
 
   alerts    Alert[]
+  billNotes BillNote[]
 }
 
 model Legislator {
@@ -424,6 +425,7 @@ model BillNote {
 
   /// User ID from Clerk, etc
   userId String?
+  user   User?     @relation(fields: [userId], references: [clerkId])
 
   visibility String?
   content    String

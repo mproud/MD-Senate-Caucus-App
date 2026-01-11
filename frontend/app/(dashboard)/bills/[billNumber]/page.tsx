@@ -37,9 +37,10 @@ async function BillContent({ billNumber }: { billNumber: string }) {
             cache: "no-store",
         })
 
-        const notes = await fetchApi<Note[]>(`/api/bills/${billNumber}/notes`, {
-            cache: "no-store",
-        })
+        // Notes are included in the now massive bill query...
+        // const notes = await fetchApi<Note[]>(`/api/bills/${billNumber}/notes`, {
+        //     cache: "no-store",
+        // })
 
         return (
             <>
@@ -196,64 +197,65 @@ async function BillContent({ billNumber }: { billNumber: string }) {
                                     {bill.actions && bill.actions.length > 0 ? (
                                         <div className="space-y-4">
                                             {bill.actions
-                                                    .sort((a, b) => new Date(b.actionDate).getTime() - new Date(a.actionDate).getTime())
-                                                    .map((action) => (
-                                                        <div key={action.id} className="border-b last:border-0 pb-6 last:pb-0">
-                                                            <div className="flex items-start justify-between mb-3">
-                                                                <div>
-                                                                    <p className="font-medium">{action?.committee?.name}</p>
-                                                                    <p className="text-sm text-muted-foreground">
-                                                                        {new Date(action.actionDate).toLocaleDateString("en-US", {
-                                                                            year: "numeric",
-                                                                            month: "long",
-                                                                            day: "numeric",
-                                                                        })}
-                                                                    </p>
-                                                                </div>
-                                                                <div>
-                                                                    { action.source == "MANUAL" && (
-                                                                        <Badge variant="outline" className="mr-5">
-                                                                            MANUAL
-                                                                        </Badge>
-                                                                    )}
-                                                                    <Badge
-                                                                        variant={
-                                                                            action.voteResult === "Favorable" || action.voteResult === "Favorable with Amendments"
-                                                                                ? "default"
-                                                                                : "destructive"
-                                                                        }
-                                                                    >
-                                                                        {action.voteResult}
+                                                .filter((action) => action.actionCode === "COMMITTEE_VOTE")
+                                                .sort((a, b) => new Date(b.actionDate).getTime() - new Date(a.actionDate).getTime())
+                                                .map((action) => (
+                                                    <div key={action.id} className="border-b last:border-0 pb-6 last:pb-0">
+                                                        <div className="flex items-start justify-between mb-3">
+                                                            <div>
+                                                                <p className="font-medium">{action?.committee?.name}</p>
+                                                                <p className="text-sm text-muted-foreground">
+                                                                    {new Date(action.actionDate).toLocaleDateString("en-US", {
+                                                                        year: "numeric",
+                                                                        month: "long",
+                                                                        day: "numeric",
+                                                                    })}
+                                                                </p>
+                                                            </div>
+                                                            <div>
+                                                                { action.source == "MANUAL" && (
+                                                                    <Badge variant="outline" className="mr-5">
+                                                                        MANUAL
                                                                     </Badge>
-                                                                </div>
+                                                                )}
+                                                                <Badge
+                                                                    variant={
+                                                                        action.voteResult === "Favorable" || action.voteResult === "Favorable with Amendments"
+                                                                            ? "default"
+                                                                            : "destructive"
+                                                                    }
+                                                                >
+                                                                    {action.voteResult}
+                                                                </Badge>
                                                             </div>
-
-                                                            <div className="flex gap-6 mb-3">
-                                                                <div>
-                                                                    <span className="font-medium">Yes: </span>
-                                                                    <span className="text-green-600 dark:text-green-400">{action.yesVotes || 0}</span>
-                                                                </div>
-                                                                <div>
-                                                                    <span className="font-medium">No: </span>
-                                                                    <span className="text-red-600 dark:text-red-400">{action.noVotes || 0}</span>
-                                                                </div>
-                                                                <div>
-                                                                    <span className="text-sm font-medium">Not Voting: </span>
-                                                                    <span className="text-sm text-gray-600 dark:text-gray-400">{action.notVoting || 0}</span>
-                                                                </div>
-                                                                <div>
-                                                                    <span className="text-sm font-medium">Excused: </span>
-                                                                    <span className="text-sm text-gray-600 dark:text-gray-400">{action.excused || 0}</span>
-                                                                </div>
-                                                                <div>
-                                                                    <span className="text-sm font-medium">Absent: </span>
-                                                                    <span className="text-sm text-gray-600 dark:text-gray-400">{action.absent || 0}</span>
-                                                                </div>
-                                                            </div>
-
-                                                            {action.notes && <p className="text-sm leading-relaxed">{action.notes}</p>}
                                                         </div>
-                                                    )
+
+                                                        <div className="flex gap-6 mb-3">
+                                                            <div>
+                                                                <span className="font-medium">Yes: </span>
+                                                                <span className="text-green-600 dark:text-green-400">{action.yesVotes || 0}</span>
+                                                            </div>
+                                                            <div>
+                                                                <span className="font-medium">No: </span>
+                                                                <span className="text-red-600 dark:text-red-400">{action.noVotes || 0}</span>
+                                                            </div>
+                                                            <div>
+                                                                <span className="text-sm font-medium">Not Voting: </span>
+                                                                <span className="text-sm text-gray-600 dark:text-gray-400">{action.notVoting || 0}</span>
+                                                            </div>
+                                                            <div>
+                                                                <span className="text-sm font-medium">Excused: </span>
+                                                                <span className="text-sm text-gray-600 dark:text-gray-400">{action.excused || 0}</span>
+                                                            </div>
+                                                            <div>
+                                                                <span className="text-sm font-medium">Absent: </span>
+                                                                <span className="text-sm text-gray-600 dark:text-gray-400">{action.absent || 0}</span>
+                                                            </div>
+                                                        </div>
+
+                                                        {action.notes && <p className="text-sm leading-relaxed">{action.notes}</p>}
+                                                    </div>
+                                                )
                                             )}
                                         </div>
                                     ) : (
@@ -320,7 +322,75 @@ async function BillContent({ billNumber }: { billNumber: string }) {
                                     <VoteForm billNumber={billNumber} voteType="floor" />
                                 </CardHeader>
                                 <CardContent>
-                                    @TODO separate Floor Votes from Committee Votes. Also, record notes!
+                                    @TODO crawler needs to use actionCode to separate committee and floor votes automatically
+                                    {bill.actions && bill.actions.length > 0 ? (
+                                        <div className="space-y-4">
+                                            {bill.actions
+                                                .filter((action) => action.actionCode === "FLOOR_VOTE")
+                                                .sort((a, b) => new Date(b.actionDate).getTime() - new Date(a.actionDate).getTime())
+                                                .map((action) => (
+                                                    <div key={action.id} className="border-b last:border-0 pb-6 last:pb-0">
+                                                        <div className="flex items-start justify-between mb-3">
+                                                            <div>
+                                                                <p className="font-medium">{action?.chamber} - {action?.voteResult} - {action?.motion}</p>
+                                                                <p className="text-sm text-muted-foreground">
+                                                                    {new Date(action.actionDate).toLocaleDateString("en-US", {
+                                                                        year: "numeric",
+                                                                        month: "long",
+                                                                        day: "numeric",
+                                                                    })}
+                                                                </p>
+                                                            </div>
+                                                            <div>
+                                                                { action.source == "MANUAL" && (
+                                                                    <Badge variant="outline" className="mr-5">
+                                                                        MANUAL
+                                                                    </Badge>
+                                                                )}
+                                                                <Badge
+                                                                    variant={
+                                                                        action.voteResult === "Passed"
+                                                                            ? "default"
+                                                                            : "destructive"
+                                                                    }
+                                                                >
+                                                                    {action.voteResult}
+                                                                </Badge>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="flex gap-6 mb-3">
+                                                            <div>
+                                                                <span className="font-medium">Yes: </span>
+                                                                <span className="text-green-600 dark:text-green-400">{action.yesVotes || 0}</span>
+                                                            </div>
+                                                            <div>
+                                                                <span className="font-medium">No: </span>
+                                                                <span className="text-red-600 dark:text-red-400">{action.noVotes || 0}</span>
+                                                            </div>
+                                                            <div>
+                                                                <span className="text-sm font-medium">Not Voting: </span>
+                                                                <span className="text-sm text-gray-600 dark:text-gray-400">{action.notVoting || 0}</span>
+                                                            </div>
+                                                            <div>
+                                                                <span className="text-sm font-medium">Excused: </span>
+                                                                <span className="text-sm text-gray-600 dark:text-gray-400">{action.excused || 0}</span>
+                                                            </div>
+                                                            <div>
+                                                                <span className="text-sm font-medium">Absent: </span>
+                                                                <span className="text-sm text-gray-600 dark:text-gray-400">{action.absent || 0}</span>
+                                                            </div>
+                                                        </div>
+
+                                                        {action.notes && <p className="text-sm leading-relaxed">{action.notes}</p>}
+                                                    </div>
+                                                )
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <p className="text-sm text-muted-foreground text-center py-8">No floor votes available for this bill</p>
+                                    )}
+
                                     {/* {bill.floorVotes && bill.floorVotes.length > 0 ? (
                                         <div className="space-y-6">
                                             {bill.floorVotes.map((vote) => (
@@ -376,6 +446,7 @@ async function BillContent({ billNumber }: { billNumber: string }) {
                     </TabsContent>
 
                     <TabsContent value="notes" className="mt-6">
+                        @TODO pin/unpin notes (restricted permission)
                         <NotesPanel billNumber={billNumber} initialNotes={bill.notes} />
                     </TabsContent>
 
