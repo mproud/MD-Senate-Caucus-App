@@ -114,6 +114,7 @@ export function NotesPanel({ billNumber, initialNotes }: NotesPanelProps) {
                 ) : (
                     notes
                         .slice() // avoid mutating the original notes array
+                        .filter((note: any) => note.visibility !== "HIDDEN")
                         .sort((a, b) => {
                             const aPinned = a.visibility === "PINNED"
                             const bPinned = b.visibility === "PINNED"

@@ -402,14 +402,15 @@ function organizeFloorCalendars(raw: FloorCalendar[] | undefined | null): { sect
     return { sections }
 }
 
+// @TODO these need to be responsive
 const COLS = {
     flag: "w-[28px]",
     bill: "w-[92px]",
-    sponsor: "w-[140px] print:w-[100px]",
-    title: "w-[520px] print:w-[250px]",
-    committee: "w-[160px]",
-    vote: "w-[160px]",
-    action: "w-[180px]",
+    sponsor: "w-[100px] lg:w-[140px] print:w-[100px]",
+    title: "w-[350px] lg:w-[520px] print:w-[250px]",
+    committee: "w-[90px] lg:w-[160px]",
+    vote: "w-[100px]",
+    action: "w-[100px] lg:w-[180px]",
     notes: "w-[260px]",
 } as const
 
@@ -517,7 +518,7 @@ export async function CalendarReport({ calendarData }: { calendarData: CalendarD
                                                 return (
                                                     <TableRow key={item.id} className={isFlagged ? "bg-yellow-100 hover:bg-yellow-200" : ""}>
                                                         {/* <TableCell>
-                                                            <pre>{JSON.stringify(committeeVote, null, 2)}</pre>
+                                                            <pre>{JSON.stringify(item.bill, null, 2)}</pre>
                                                         </TableCell> */}
                                                         <TableCell className={`${cellBase} ${COLS.flag} font-medium`}>
                                                             {isFlagged ? (
@@ -641,7 +642,25 @@ export async function CalendarReport({ calendarData }: { calendarData: CalendarD
                                                                     </>
                                                                 )}
 
-                                                                Other notes
+                                                                <div>
+                                                                    {item.bill.notes
+                                                                        .slice()
+                                                                        .filter((note: any) => note.visibility !== "HIDDEN")
+                                                                        // Pinned notes first, then unpinned
+                                                                        .sort((a: any, b: any) => {
+                                                                            const aPinned = a.visibility === "PINNED"
+                                                                            const bPinned = b.visibility === "PINNED"
+
+                                                                            if (aPinned !== bPinned) return aPinned ? -1 : 1
+
+                                                                            // Within each group, most recent first
+                                                                            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+                                                                        })
+                                                                        .map((note: any) => (
+                                                                            <p key={note.id}>{note.content}</p>
+                                                                        ))
+                                                                    }
+                                                                </div>
                                                             </div>
                                                         </TableCell>
                                                     </TableRow>

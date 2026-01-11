@@ -135,6 +135,7 @@ export async function GET(request: NextRequest) {
                                 },
 
                                 events: true,
+                                notes: true,
                             },
                         },
                     },
