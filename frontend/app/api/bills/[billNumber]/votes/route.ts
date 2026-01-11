@@ -5,6 +5,7 @@ import { ActionSource, BillEventType, Chamber, Prisma } from "@prisma/client"
 interface CommitteeVoteRequest {
     type: "committee"
     date: string
+    committeeId: number
     committee: string
     result: string
     yeas: number
@@ -69,13 +70,16 @@ export async function POST(
         // Optional: resolve committee by name for committee votes
         let committeeId: number | null = null
         let chamber: Chamber | null = null
+        let committeeName: string | null | undefined = null
 
+        // @TODO this isnt pulling by committee ID, just by what's submitted.
         if (body.type === "committee") {
             const committee = await prisma.committee.findFirst({
-                where: { name: body.committee },
-                select: { id: true, chamber: true },
+                where: { id: body.committeeId },
+                select: { id: true, chamber: true, name: true },
             })
             committeeId = committee?.id ?? null
+            committeeName = committee?.name
             chamber = committee?.chamber ?? null
         } else {
             chamber = parseChamber(body.chamber)
@@ -98,10 +102,8 @@ export async function POST(
 
         const description =
             body.type === "committee"
-                ? `Manual committee vote: ${body.committee} — ${body.result} (${body.yeas}-${body.nays})`
-                : `Manual floor vote: ${chamber} ${body.voteType} — ${body.result} (${body.yeas}-${body.nays})`
-
-        console.log('Record vote/billAction', { body, voteCounts })
+                ? `Committee vote: ${committeeName} - ${body.result} (${body.yeas}-${body.nays}) (Manually entered)`
+                : `Floor vote: ${chamber} ${body.voteType} - ${body.result} (${body.yeas}-${body.nays}) (Manually entered)`
 
         // 1) Create the BillAction (this is the "vote record" in the current schema)
         const createdAction = await prisma.billAction.create({
@@ -121,13 +123,20 @@ export async function POST(
                     type: body.type,
                     ...(body.type === "committee"
                         ? {
-                                committeeName: body.committee,
+                                committeeId: body.committeeId,
                                 details: body.details ?? null,
                             }
                         : {
                                 voteType: body.voteType,
                             }),
                 },
+                ...(body.type === "committee"
+                    ? {
+                            actionCode: "COMMITTEE_VOTE",
+                        }
+                    : {
+                            actionCode: "FLOOR_VOTE",
+                        }),
             },
             select: {
                 id: true,
@@ -156,8 +165,8 @@ export async function POST(
 
         const summary =
             body.type === "committee"
-                ? `Manual committee vote recorded: ${body.committee} — ${body.result} (${body.yeas}-${body.nays})`
-                : `Manual floor vote recorded: ${chamber} ${body.voteType} — ${body.result} (${body.yeas}-${body.nays})`
+                ? `Committee vote recorded: ${committeeName} — ${body.result} (${body.yeas}-${body.nays}) (Manually entered)`
+                : `Floor vote recorded: ${chamber} ${body.voteType} — ${body.result} (${body.yeas}-${body.nays}) (Manually entered)`
 
         const createdEvent = await prisma.billEvent.create({
             data: {

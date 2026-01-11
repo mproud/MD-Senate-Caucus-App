@@ -181,7 +181,7 @@ function pickCommitteeVoteForCommittee(args: {
     const mga = relevant.filter((e) => (e.source ?? "").toString().toUpperCase() === "MGA")
     const manual = relevant.filter((e) => (e.source ?? "").toString().toUpperCase() === "MANUAL")
 
-    console.log( billNumber, { relevant, mga, manual })
+    // console.log( billNumber, { relevant, mga, manual })
 
     const bestManual = manual[0] ?? null
     const bestMga = mga[0] ?? null
@@ -194,7 +194,6 @@ function pickCommitteeVoteForCommittee(args: {
 
     // Prefer MGA *if* it has counts
     if (bestMga && mgaHasCounts) {
-        console.log(billNumber, '0000000 - 1')
         return {
             action: bestMga,
             counts: mgaCounts!,
@@ -206,7 +205,6 @@ function pickCommitteeVoteForCommittee(args: {
 
     // MGA exists but has no counts -> fill counts from manual if possible
     if (bestMga && !mgaHasCounts && bestManual && manualHasCounts) {
-        console.log(billNumber, '0000000 - 2')
         return {
             action: bestMga,
             counts: manualCounts!,
@@ -218,7 +216,6 @@ function pickCommitteeVoteForCommittee(args: {
 
     // Otherwise fall back to manual (even if it's also empty, at least you can show motion/result)
     if (bestManual) {
-        console.log(billNumber, '0000000 - 3')
         return {
             action: bestManual,
             counts: manualCounts ?? extractCounts(bestManual),
@@ -229,7 +226,6 @@ function pickCommitteeVoteForCommittee(args: {
     }
 
     // Last resort: MGA (no counts)
-    console.log(billNumber, '0000000 - 4')
     return {
         action: bestMga,
         counts: mgaCounts ?? (bestMga ? extractCounts(bestMga) : null),
