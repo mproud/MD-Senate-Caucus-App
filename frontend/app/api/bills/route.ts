@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
 
     // Get the active session code from the settings DB
-    const { value: activeSessionCode } = await prisma.settings.findUnique({
+    const setting = await prisma.settings.findUnique({
         where: {
             name: 'activeSessionCode'
         },
@@ -25,6 +25,15 @@ export async function GET(request: NextRequest) {
             value: true,
         }
     })
+
+    const activeSessionCode = setting?.value
+
+    if (!activeSessionCode) {
+        return NextResponse.json(
+            { error: "activeSessionCode is not set" },
+            { status: 400 }
+        )
+    }
 
     const q = searchParams.get("q")?.toLowerCase() || ""
     const chamberParam = searchParams.get("chamber") || ""

@@ -1,6 +1,12 @@
 import { prisma } from "@/lib/prisma"
 import { NextResponse } from "next/server"
 
+type JsonRecord = Record<string, unknown>
+
+function isRecord(value: unknown): value is JsonRecord {
+    return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
 function getQuery(request: Request) {
     const url = new URL(request.url)
     const idParam = url.searchParams.get("id")
@@ -59,25 +65,28 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-    const body = await request.json().catch(() => null)
+    const body: unknown = await request.json().catch(() => null)
 
-    if (!body || typeof body !== "object" || Array.isArray(body)) {
+    if (!isRecord(body)) {
         return NextResponse.json(
             { error: "Invalid body. Expected { name: string, value?: string|null }" },
             { status: 400 }
         )
     }
 
-    if (typeof body.name !== "string" || body.name.trim() === "") {
+    const rawName = body["name"]
+
+    if (typeof rawName !== "string" || rawName.trim() === "") {
         return NextResponse.json(
             { error: "Invalid body. Expected { name: string, value?: string|null }" },
             { status: 400 }
         )
     }
 
-    const name = body.name.trim()
+    const name = rawName.trim()
+    const rawValue = body["value"]
     const value =
-        body.value === undefined ? null : body.value === null ? null : String(body.value)
+        rawValue === undefined ? null : rawValue === null ? null : String(rawValue)
 
     try {
         const setting = await prisma.settings.create({
@@ -96,9 +105,9 @@ export async function POST(request: Request) {
 
 export async function PUT(request: Request) {
     const { id, name } = getQuery(request)
-    const body = await request.json().catch(() => null)
+    const body: unknown = await request.json().catch(() => null)
 
-    if (!body || typeof body !== "object" || Array.isArray(body)) {
+    if (!isRecord(body)) {
         return NextResponse.json(
             { error: "Invalid body. Expected an object." },
             { status: 400 }
@@ -106,7 +115,6 @@ export async function PUT(request: Request) {
     }
 
     // Bulk upsert: PUT /api/admin/settings with body { key: value, ... }
-    // Example: { activeSessionCode: "2026RS", sessionYear: 2026 }
     if (!id && !name) {
         const entries = Object.entries(body)
 
@@ -142,7 +150,6 @@ export async function PUT(request: Request) {
             })
         )
 
-        // Return the full map after update so the UI can set state in one shot
         const rows = await prisma.settings.findMany({
             select: { name: true, value: true },
             orderBy: { name: "asc" },
@@ -155,18 +162,21 @@ export async function PUT(request: Request) {
     const data: { value?: string | null; name?: string } = {}
 
     if ("value" in body) {
-        data.value = body.value === null ? null : String(body.value)
+        const rawValue = body["value"]
+        data.value = rawValue === null ? null : String(rawValue)
     }
 
     if ("name" in body) {
-        if (typeof body.name !== "string" || body.name.trim() === "") {
+        const rawNewName = body["name"]
+
+        if (typeof rawNewName !== "string" || rawNewName.trim() === "") {
             return NextResponse.json(
                 { error: "If provided, name must be a non-empty string" },
                 { status: 400 }
             )
         }
 
-        data.name = body.name.trim()
+        data.name = rawNewName.trim()
     }
 
     if (!("value" in body) && !("name" in body)) {
