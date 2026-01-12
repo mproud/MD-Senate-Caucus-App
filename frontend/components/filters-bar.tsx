@@ -541,7 +541,7 @@ export function FiltersBar({
                                 Reset Filters
                             </Button>
                         </div>
-                        <div className="flex gap-3">
+                        {/* <div className="flex gap-3">
                             <ExcelButton
                                 chambers={initialChambers}
                                 sections={initialSections}
@@ -552,7 +552,7 @@ export function FiltersBar({
                                 sections={initialSections}
                                 dates={initialStartDate && initialEndDate ? [initialStartDate, initialEndDate] : []}
                             />
-                        </div>
+                        </div> */}
                     </div>
                 </div>
             </CardContent>

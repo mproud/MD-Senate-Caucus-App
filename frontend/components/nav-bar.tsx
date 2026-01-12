@@ -66,13 +66,15 @@ export function Navbar() {
                             <Home className="h-4 w-4" />
                             Dashboard
                         </Link>
-                        <Link
-                            href="/calendar"
-                            className="flex items-center gap-2 text-muted-foreground transition-colors hover:text-foreground"
-                        >
-                            <Calendar className="h-4 w-4" />
-                            Calendar
-                        </Link>
+                        {isAdmin && (
+                            <Link
+                                href="/calendar"
+                                className="flex items-center gap-2 text-muted-foreground transition-colors hover:text-foreground"
+                            >
+                                <Calendar className="h-4 w-4" />
+                                Calendar
+                            </Link>
+                        )}
                         <Link
                             href="/bills"
                             className="flex items-center gap-2 text-muted-foreground transition-colors hover:text-foreground"

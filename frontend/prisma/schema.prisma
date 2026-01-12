@@ -744,4 +744,11 @@ model ScrapeRun {
   @@map("scrape_runs")
 }
 
+model Settings {
+  id Int @id @default(autoincrement())
+
+  name  String  @unique
+  value String?
+}
+
 /// TODO
