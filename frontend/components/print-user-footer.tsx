@@ -7,6 +7,9 @@ export function PrintUserFooter() {
 
     if (!user) return null
 
+    const userRole = (user?.publicMetadata as { role?: string })?.role
+    const isAdmin = userRole === "admin" || userRole === "super_admin"
+
     const displayName =
         user.fullName ||
         user.username ||
@@ -15,10 +18,14 @@ export function PrintUserFooter() {
 
     return (
         <>
-            <div className="print-meta print-watermark" aria-hidden="true" />
-            <div className="print-meta print-user-footer" aria-hidden="true">
-                Printed by {displayName} on {new Date().toLocaleString()}
-            </div>
+            {(!isAdmin) && (
+                <>
+                    <div className="print-meta print-watermark" aria-hidden="true" />
+                    <div className="print-meta print-user-footer" aria-hidden="true">
+                        Printed by {displayName} on {new Date().toLocaleString()}
+                    </div>
+                </>
+            )}
         </>
     )
 }
