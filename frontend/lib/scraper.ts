@@ -1,5 +1,5 @@
 // Get the last scrape run
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/prisma"
 
 export async function getLatestScrapeRun( kind?: string ) {
     return prisma.scrapeRun.findFirst({
