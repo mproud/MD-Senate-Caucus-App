@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight, FileText } from "lucide-react"
 import { fetchApi } from "@/lib/api"
 
 interface BillsSearchResultsProps {
+    activeSessionCode: string
     query: string
     chamber: string
     committee: string
@@ -22,7 +23,7 @@ type BroadSubjects = {
 
 interface SearchResult {
     billNumber: string
-    title: string
+    shortTitle: string
     chamber: string
     sponsorDisplay: string
     committee: string
@@ -44,6 +45,7 @@ interface SearchResponse {
 }
 
 export async function BillsSearchResults({
+    activeSessionCode,
     query,
     chamber,
     committee,
@@ -147,7 +149,7 @@ export async function BillsSearchResults({
                                             </Link>
                                         )}
                                     </div>
-                                    <h3 className="mt-1 font-medium line-clamp-2">{bill.title}</h3>
+                                    <h3 className="mt-1 font-medium line-clamp-2">{bill.shortTitle}</h3>
                                     {bill.synopsis && <p className="mt-1 text-sm text-muted-foreground line-clamp-2">{bill.synopsis}</p>}
                                     <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
                                         <span>

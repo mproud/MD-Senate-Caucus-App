@@ -1,3 +1,9 @@
+# To Do
+
+- When a user joins the waitlist, send an email to all admins (BCC super admins). Deep link to invite page?
+- When deleting a user, remove their alerts
+- Scraper isn't attaching a bill to a committee automatically
+
 # Known issues/gotchas
 
 - Users - invite/add/remove user functionality!

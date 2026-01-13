@@ -3,6 +3,7 @@ import { BillsSearchResults } from "@/components/bills/bills-search-results"
 import { BillsSearchFilters } from "@/components/bills/bills-search-filters"
 import { Card, CardContent } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { getActiveSessionCode } from "@/lib/get-active-session"
 
 interface BillsPageProps {
     searchParams: Promise<{
@@ -41,6 +42,8 @@ export default async function BillsPage({ searchParams }: BillsPageProps) {
     const status = params.status || ""
     const page = Number.parseInt(params.page || "1", 10)
 
+    const activeSessionCode = await getActiveSessionCode()
+
     return (
         <>
 			<div className="mb-6">
@@ -60,6 +63,7 @@ export default async function BillsPage({ searchParams }: BillsPageProps) {
 			<div className="mt-6">
 				<Suspense fallback={<BillsSkeleton />}>
 					<BillsSearchResults
+                        activeSessionCode={activeSessionCode}
 						query={q}
 						chamber={chamber}
 						committee={committee}

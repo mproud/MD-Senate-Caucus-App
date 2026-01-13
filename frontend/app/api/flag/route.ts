@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { getActiveSessionCode } from "@/lib/get-active-session"
 
 // Flag this bill for all users
 // export async function mock___GET( request: NextRequest ) {
@@ -31,10 +32,15 @@ export async function GET(req: NextRequest) {
         const billId = toInt(url.searchParams.get("billId"))
         const billNumber = url.searchParams.get("billNumber")
 
+        const activeSessionCode = await getActiveSessionCode()
+
         // No bill selector => list all flagged bills
         if (!billId && !billNumber) {
             const bills = await prisma.bill.findMany({
-                where: { isFlagged: true },
+                where: {
+                    isFlagged: true,
+                    sessionCode: activeSessionCode,
+                },
                 select: {
                     id: true,
                     billNumber: true,
@@ -59,7 +65,10 @@ export async function GET(req: NextRequest) {
                     select: { id: true, billNumber: true, isFlagged: true },
                 })
             : await prisma.bill.findFirst({
-                    where: { billNumber: billNumber ?? "" },
+                    where: {
+                        billNumber: billNumber ?? "",
+                        sessionCode: activeSessionCode,
+                    },
                     select: { id: true, billNumber: true, isFlagged: true },
                 })
 

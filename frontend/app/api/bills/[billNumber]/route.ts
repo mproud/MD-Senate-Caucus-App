@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { Prisma } from "@prisma/client"
+import { getActiveSessionCode } from "@/lib/get-active-session"
 
 function normalizeBillIdentifier(raw: string): {
     billType: string
@@ -30,6 +31,7 @@ export async function GET(
 ) {
     try {
         const { billNumber } = await context.params
+        const activeSessionCode = await getActiveSessionCode()
 
         const parsed = normalizeBillIdentifier(billNumber)
         if (!parsed) {
@@ -46,6 +48,7 @@ export async function GET(
         // 2) billType + billNumberNumeric
         const bill = await prisma.bill.findFirst({
             where: {
+                sessionCode: activeSessionCode,
                 OR: [
                     { billNumber: canonicalBillNumber },
                     { billNumber: billType + String(billNumberNumeric) }, // just in case it's stored "HB18" in billNumber

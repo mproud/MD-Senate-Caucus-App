@@ -2,14 +2,20 @@ import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@clerk/nextjs/server"
+import { getActiveSessionCode } from "@/lib/get-active-session"
 
 function json(data: unknown, status = 200) {
     return NextResponse.json(data, { status })
 }
 
 async function getBillIdByNumber(billNumber: string) {
+    const activeSessionCode = await getActiveSessionCode()
+
     const bill = await prisma.bill.findFirst({
-        where: { billNumber },
+        where: {
+            billNumber,
+            sessionCode: activeSessionCode,
+        },
         select: { id: true, billNumber: true },
     })
     return bill
@@ -43,7 +49,9 @@ export async function GET(
         if (!bill) return json({ error: "Bill not found" }, 404)
 
         const notes = await prisma.billNote.findMany({
-            where: { billId: bill.id },
+            where: {
+                billId: bill.id,
+            },
             orderBy: { updatedAt: "desc" },
             include: {
                 user: true,

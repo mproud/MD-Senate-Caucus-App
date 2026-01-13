@@ -33,7 +33,7 @@ export async function POST(request: Request) {
         const invitation = await clerk.invitations.createInvitation({
             emailAddress: body.email,
             publicMetadata: { role: body.role },
-            redirectUrl: `${process.env.NEXT_PUBLIC_APP_URL || ""}/sign-up`,
+            redirectUrl: `${process.env.NEXT_PUBLIC_APP_URL || ""}/register`,
         })
 
         return NextResponse.json({ invitation })

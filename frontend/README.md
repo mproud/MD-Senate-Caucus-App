@@ -30,7 +30,7 @@ Bill Number | Sponsor | Title | Committee | Vote | Action | Notes
 
 ### Authentication
 
-- [ ] Implement Clerk Authentication
+- [x] Implement Clerk Authentication
 - [ ] Image on /login page
 
 ### Data
@@ -40,8 +40,6 @@ Bill Number | Sponsor | Title | Committee | Vote | Action | Notes
 
 ### Feature Requests/Changes
 
-Report builder?
-
 ** Report to PDF and Excel
 
 Reports - How did House vote on the crossfile? 000-000-00
@@ -49,7 +47,7 @@ Reports - How did House vote on the crossfile? 000-000-00
 Search - Dropdown for split votes (Party line, mostly party, mixed vote, Dem split)
 
 User Permissions
-	- Floor reports can only be run by Caucus Staff permission
+	[x] Floor reports can only be run by Caucus Staff permission
 	- Users can be attached to a committee only to edit bills/reports
 
 Alert bills - send email alert
@@ -76,7 +74,7 @@ Alerts - Track specific bills, notification of changes
 	-> Email alert. Digest?
 
 
-Re-Referred to Committee
+[x] Re-Referred to Committee
 Assigned to another committee
 - Bills can be assigned to multiple committees - Primary (main/overrides other), Secondary Committee
 
@@ -108,16 +106,16 @@ Cost? MX and support + Development
 
 -- Completed --
 [x] Print Alert/Icon/Yellow backgorund on alert bills
-- Add Consent Calndar #___ with bills
-Report # By Committee -> Report Sheet
-Floor votes - add notes to floor vote
-Consent Calendars!
-Dashboard - show alert bills, not the today calendar
+[x] - Add Consent Calndar #___ with bills
+[x] Report # By Committee -> Report Sheet
+[x] Floor votes - add notes to floor vote
+[x] Consent Calendars!
+[x] Dashboard - show alert bills, not the today calendar
 During session, data should reload QUICKLY during normal hours
 	- Refresh data button - show 'Data last fetched at ...'
 Committee votes popup - remove House Committees from Popup and filter/search
 	- Add excused to choices
-Special Order + Layovers!
-- Reports - 2nd, 3rd, Consent, Layover, Special Order, Exec Noms
+[x] Special Order + Layovers!
+[x] - Reports - 2nd, 3rd, Consent, Layover, Special Order, Exec Noms
 	- Exec noms & Rules = Exec noms reports are separate. Add line for manually writing noms
 Include Joint Resolutions

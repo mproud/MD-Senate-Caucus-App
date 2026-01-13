@@ -34,7 +34,6 @@ type FlagApiResponse = {
 }
 
 export const DashboardContent = () => {
-    const currentSession = process.env.NEXT_PUBLIC_SESSION || "2025RS"
     const today = new Date().toISOString().split("T")[0]
 
     const [senateData, setSenateData] = useState<CalendarDay | null>(null)

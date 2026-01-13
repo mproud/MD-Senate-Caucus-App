@@ -238,6 +238,7 @@ function parseSponsorName(
  * @TODO handle which chamber the legislator is in - there's smith in two chambers, etc
  */
 function resolvePrimarySponsorId(
+    billNumber: string,
     sponsorPrimary: string | null | undefined,
     index: LegislatorIndex
 ): number | null {
@@ -254,7 +255,7 @@ function resolvePrimarySponsorId(
 
     if (lastNameMatches.length === 0) {
         console.warn(
-            `No Legislator match for "${sponsorPrimary}" (lastName: "${lastName}")`
+            `No Legislator match for "${sponsorPrimary}" (lastName: "${lastName}") (Bill: ${billNumber})`
         )
         return null
     }
@@ -635,7 +636,7 @@ export async function runBillsFromJsonScrape( event: any, context: Context ) {
                 : null
 
             // Map primary sponsor to Legislator.id
-            const primarySponsorId = resolvePrimarySponsorId( item.SponsorPrimary, legislatorIndex )
+            const primarySponsorId = resolvePrimarySponsorId( billNumber, item.SponsorPrimary, legislatorIndex )
 
             // Store the raw SponsorPrimary as display text too
             const sponsorDisplay = item.SponsorPrimary || null

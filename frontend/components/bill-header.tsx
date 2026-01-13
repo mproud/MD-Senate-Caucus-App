@@ -7,6 +7,7 @@ import type { Bill } from "@prisma/client"
 import { Button } from "./ui/button"
 import { AlertTriangle, Bell, BellOff, ExternalLink } from "lucide-react"
 import { useEffect, useState } from "react"
+import { useUser } from "@clerk/nextjs"
 
 // @TODO fix the type at some point
 interface BillHeaderProps {
@@ -35,6 +36,11 @@ export function BillHeader({ bill }: BillHeaderProps) {
     const [isFlag, setIsFlag] = useState(false)
     const [isLoadingFollow, setIsLoadingFollow] = useState(false)
     const [isLoadingFlag, setIsLoadingFlag] = useState(false)
+
+    const { user, isLoaded } = useUser()
+
+    const userRole = isLoaded && user ? (user.publicMetadata as { role?: string })?.role : null
+    const isAdmin = userRole === "admin" || userRole === "super_admin"
 
     useEffect(() => {
         const fetchStatus = async () => {
@@ -195,15 +201,17 @@ export function BillHeader({ bill }: BillHeaderProps) {
                             )}
                         </Button>
 
-                        <Button
-                            variant={isFlag ? "destructive" : "outline"}
-                            size="sm"
-                            onClick={handleFlagToggle}
-                            disabled={isLoadingFlag}
-                        >
-                            <AlertTriangle className="mr-2 h-4 w-4" />
-                            {isFlag ? "Flag Set" : "Set Flag"}
-                        </Button>
+                        { isAdmin && (
+                            <Button
+                                variant={isFlag ? "destructive" : "outline"}
+                                size="sm"
+                                onClick={handleFlagToggle}
+                                disabled={isLoadingFlag}
+                            >
+                                <AlertTriangle className="mr-2 h-4 w-4" />
+                                {isFlag ? "Flag Set" : "Set Flag"}
+                            </Button>
+                        )}
 
                         <Button variant="outline" size="sm" asChild>
                             <a href={mgaUrl} target="_blank" rel="noopener noreferrer">

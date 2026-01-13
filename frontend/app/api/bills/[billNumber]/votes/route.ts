@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { ActionSource, BillEventType, Chamber, Prisma } from "@prisma/client"
+import { getActiveSessionCode } from "@/lib/get-active-session"
 
 interface CommitteeVoteRequest {
     type: "committee"
@@ -49,12 +50,17 @@ export async function POST(
         const { billNumber } = await params
         const body = (await request.json()) as VoteRequest
 
+        const activeSessionCode = await getActiveSessionCode()
+
         if (!billNumber) {
             return NextResponse.json({ error: "Missing billNumber" }, { status: 400 })
         }
 
         const bill = await prisma.bill.findFirst({
-            where: { billNumber },
+            where: {
+                billNumber,
+                sessionCode: activeSessionCode,
+            },
             select: { id: true, billNumber: true },
         })
 

@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { UserPlus, Trash2, Mail, Shield, Clock, Users, ShieldAlert, Settings, RotateCcw, Save } from "lucide-react"
+import { UserPlus, Trash2, Mail, Shield, Clock, Users, ShieldAlert, Settings, RotateCcw, Save, ListTodo, UserCheck } from "lucide-react"
 import { useUser } from "@clerk/nextjs"
 import { useRouter } from "next/navigation"
 import clsx from "clsx"
@@ -56,6 +56,13 @@ interface Invitation {
     publicMetadata: { role?: string }
 }
 
+interface WaitlistEntry {
+    id: string
+    emailAddress: string
+    status: string
+    createdAt: number
+}
+
 interface UsersResponse {
     users: User[]
     isSuperAdmin: boolean
@@ -63,6 +70,10 @@ interface UsersResponse {
 
 interface InvitationsResponse {
     invitations: Invitation[]
+}
+
+interface WaitlistResponse {
+    entries: WaitlistEntry[]
 }
 
 export interface GlobalSettings {
@@ -80,12 +91,19 @@ export const AdminContent = () => {
     const router = useRouter()
     const [users, setUsers] = useState<User[]>([])
     const [invitations, setInvitations] = useState<Invitation[]>([])
+    const [waitlistEntries, setWaitlistEntries] = useState<WaitlistEntry[]>([])
     const [isLoading, setIsLoading] = useState(true)
+    const [waitlistLoading, setWaitlistLoading] = useState(true)
     const [inviteEmail, setInviteEmail] = useState("")
     const [inviteRole, setInviteRole] = useState("member")
     const [isInviting, setIsInviting] = useState(false)
     const [inviteDialogOpen, setInviteDialogOpen] = useState(false)
     const [isSuperAdmin, setIsSuperAdmin] = useState(false)
+
+   	const [approveDialogOpen, setApproveDialogOpen] = useState(false)
+	const [selectedWaitlistEntry, setSelectedWaitlistEntry] = useState<WaitlistEntry | null>(null)
+	const [approveRole, setApproveRole] = useState("member")
+	const [isApproving, setIsApproving] = useState(false)
 
     const [settings, setSettings] = useState<GlobalSettings | null>(null)
     const [settingsLoading, setSettingsLoading] = useState(true)
@@ -105,6 +123,7 @@ export const AdminContent = () => {
         if (isLoaded && user && isAdmin) {
             fetchUsers()
             fetchInvitations()
+            fetchWaitlist()
             fetchSettings()
         }
     }, [isLoaded, user, isAdmin])
@@ -133,6 +152,20 @@ export const AdminContent = () => {
             }
         } catch (error) {
             console.error("Failed to fetch invitations:", error)
+        }
+    }
+
+    const fetchWaitlist = async () => {
+        try {
+            const response = await fetch("/api/admin/waitlist")
+            if (response.ok) {
+                const data: WaitlistResponse = await response.json()
+                setWaitlistEntries(data.entries || [])
+            }
+        } catch (error) {
+            console.error("Failed to fetch waitlist:", error)
+        } finally {
+            setWaitlistLoading(false)
         }
     }
 
@@ -189,6 +222,7 @@ export const AdminContent = () => {
         }
     }
 
+    // This isn't used
     const handleResetSettings = async () => {
         setSettingsSaving(true)
         try {
@@ -259,6 +293,45 @@ export const AdminContent = () => {
         }
     }
 
+    const handleApproveWaitlistEntry = async () => {
+        if (!selectedWaitlistEntry) return
+
+        setIsApproving(true)
+        try {
+            const response = await fetch(`/api/admin/waitlist/${selectedWaitlistEntry.id}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ role: approveRole }),
+            })
+
+            if (response.ok) {
+                setApproveDialogOpen(false)
+                setSelectedWaitlistEntry(null)
+                setApproveRole("member")
+                fetchWaitlist()
+                fetchInvitations()
+            }
+        } catch (error) {
+            console.error("Failed to approve waitlist entry:", error)
+        } finally {
+            setIsApproving(false)
+        }
+    }
+
+    const handleRemoveWaitlistEntry = async (entryId: string) => {
+        try {
+            const response = await fetch(`/api/admin/waitlist/${entryId}`, {
+                method: "DELETE",
+            })
+
+            if (response.ok) {
+                fetchWaitlist()
+            }
+        } catch (error) {
+            console.error("Failed to remove waitlist entry:", error)
+        }
+    }
+
     const handleUpdateRole = async (userId: string, newRole: string) => {
         try {
             const response = await fetch(`/api/admin/users/${userId}`, {
@@ -283,6 +356,7 @@ export const AdminContent = () => {
         })
     }
 
+    // Kept this in here, but it's not used. Use to return color class for role badge
     const getRoleBadgeVariant = (role: string | undefined) => {
         switch (role) {
             case "super_admin":
@@ -296,6 +370,19 @@ export const AdminContent = () => {
         }
     }
 
+    const getWaitlistStatusVariant = (status: string) => {
+        switch (status) {
+            case "pending":
+                return "outline"
+            case "invited":
+                return "secondary"
+            case "completed":
+                return "default"
+            default:
+                return "outline"
+        }
+    }
+
     if (!isLoaded || !user || !isAdmin) {
         return (
             <div className="flex items-center justify-center h-64">
@@ -304,6 +391,8 @@ export const AdminContent = () => {
         )
     }
 
+    const pendingWaitlistCount = waitlistEntries.filter((e) => e.status === "pending").length
+
     return (
         <>
             <div className="flex items-center justify-between mb-6">
@@ -311,54 +400,6 @@ export const AdminContent = () => {
                     <h1 className="text-3xl font-bold tracking-tight">Admin</h1>
                     <p className="text-muted-foreground">Manage users, invitations, and global settings</p>
                 </div>
-                {/* <Dialog open={inviteDialogOpen} onOpenChange={setInviteDialogOpen}>
-                    <DialogTrigger asChild>
-                        <Button>
-                            <UserPlus className="h-4 w-4 mr-2" />
-                            Invite User
-                        </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                        <DialogHeader>
-                            <DialogTitle>Invite New User</DialogTitle>
-                            <DialogDescription>Send an invitation email to add a new user to your organization.</DialogDescription>
-                        </DialogHeader>
-                        <div className="space-y-4 py-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="email">Email Address</Label>
-                                <Input
-                                    id="email"
-                                    type="email"
-                                    placeholder="user@example.com"
-                                    value={inviteEmail}
-                                    onChange={(e) => setInviteEmail(e.target.value)}
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="role">Role</Label>
-                                <Select value={inviteRole} onValueChange={setInviteRole}>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Select a role" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="member">Member</SelectItem>
-                                        --- <SelectItem value="editor">Editor</SelectItem> ---
-                                        <SelectItem value="admin">Admin</SelectItem>
-                                        {isSuperAdmin && <SelectItem value="super_admin">Super Admin</SelectItem>}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        </div>
-                        <DialogFooter>
-                            <Button variant="outline" onClick={() => setInviteDialogOpen(false)}>
-                                Cancel
-                            </Button>
-                            <Button onClick={handleInviteUser} disabled={isInviting || !inviteEmail}>
-                                {isInviting ? "Sending..." : "Send Invitation"}
-                            </Button>
-                        </DialogFooter>
-                    </DialogContent>
-                </Dialog> */}
             </div>
 
             <Tabs defaultValue="users" className="space-y-6">
@@ -366,6 +407,15 @@ export const AdminContent = () => {
                     <TabsTrigger value="users" className="flex items-center gap-2">
                         <Users className="h-4 w-4" />
                         Users
+                    </TabsTrigger>
+                    <TabsTrigger value="waitlist" className="flex items-center gap-2">
+                        <ListTodo className="h-4 w-4" />
+                        Waitlist
+                        {pendingWaitlistCount > 0 && (
+                            <Badge variant="destructive" className="ml-1 h-5 w-5 p-0 flex items-center justify-center text-xs">
+                                {pendingWaitlistCount}
+                            </Badge>
+                        )}
                     </TabsTrigger>
                     <TabsTrigger value="settings" className="flex items-center gap-2">
                         <Settings className="h-4 w-4" />
@@ -428,7 +478,12 @@ export const AdminContent = () => {
                         </Dialog>
                     </div>
 
-                    <div className="grid gap-6 md:grid-cols-4">
+                    <div
+                        className={clsx(
+                            "grid gap-6",
+                            isSuperAdmin ? "md:grid-cols-4" : "md:grid-cols-3"
+                        )}
+                    >
                         <Card>
                             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                                 <CardTitle className="text-sm font-medium">Total Users</CardTitle>
@@ -615,6 +670,164 @@ export const AdminContent = () => {
                             )}
                         </CardContent>
                     </Card>
+                </TabsContent>
+
+                {/* Waitlist Tab */}
+                <TabsContent value="waitlist" className="space-y-6">
+                    <div className="grid gap-6 md:grid-cols-3">
+                        <Card>
+                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                <CardTitle className="text-sm font-medium">Pending Requests</CardTitle>
+                                <Clock className="h-4 w-4 text-muted-foreground" />
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-2xl font-bold">
+                                    {waitlistEntries.filter((e) => e.status === "pending").length}
+                                </div>
+                                <p className="text-xs text-muted-foreground">Awaiting approval</p>
+                            </CardContent>
+                        </Card>
+                        <Card>
+                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                <CardTitle className="text-sm font-medium">Invited</CardTitle>
+                                <Mail className="h-4 w-4 text-muted-foreground" />
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-2xl font-bold">
+                                    {waitlistEntries.filter((e) => e.status === "invited").length}
+                                </div>
+                                <p className="text-xs text-muted-foreground">Invitation sent</p>
+                            </CardContent>
+                        </Card>
+                        <Card>
+                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                <CardTitle className="text-sm font-medium">Total on Waitlist</CardTitle>
+                                <ListTodo className="h-4 w-4 text-muted-foreground" />
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-2xl font-bold">{waitlistEntries.length}</div>
+                                <p className="text-xs text-muted-foreground">All time</p>
+                            </CardContent>
+                        </Card>
+                    </div>
+
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Waitlist Entries</CardTitle>
+                            <CardDescription>Review and manage users who have requested access to the application</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            {waitlistLoading ? (
+                                <div className="text-center py-8 text-muted-foreground">Loading waitlist...</div>
+                            ) : waitlistEntries.length === 0 ? (
+                                <div className="text-center py-8 text-muted-foreground">No waitlist entries</div>
+                            ) : (
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Email</TableHead>
+                                            <TableHead>Requested</TableHead>
+                                            <TableHead>Status</TableHead>
+                                            <TableHead className="text-right">Actions</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {waitlistEntries.map((entry) => (
+                                            <TableRow key={entry.id}>
+                                                <TableCell className="font-medium">{entry.emailAddress}</TableCell>
+                                                <TableCell>{formatDate(entry.createdAt)}</TableCell>
+                                                <TableCell>
+                                                    <Badge variant={getWaitlistStatusVariant(entry.status)} className="capitalize">
+                                                        {entry.status}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    <div className="flex items-center justify-end gap-2">
+                                                        {entry.status === "pending" && (
+                                                            <>
+                                                                <Button
+                                                                    variant="outline"
+                                                                    size="sm"
+                                                                    onClick={() => {
+                                                                        setSelectedWaitlistEntry(entry)
+                                                                        setApproveDialogOpen(true)
+                                                                    }}
+                                                                >
+                                                                    <UserCheck className="h-4 w-4 mr-1" />
+                                                                    Grant Access
+                                                                </Button>
+                                                                <AlertDialog>
+                                                                    <AlertDialogTrigger asChild>
+                                                                        <Button variant="ghost" size="sm" className="text-destructive">
+                                                                            <Trash2 className="h-4 w-4" />
+                                                                        </Button>
+                                                                    </AlertDialogTrigger>
+                                                                    <AlertDialogContent>
+                                                                        <AlertDialogHeader>
+                                                                            <AlertDialogTitle>Remove from Waitlist</AlertDialogTitle>
+                                                                            <AlertDialogDescription>
+                                                                                Are you sure you want to remove {entry.emailAddress} from the waitlist? They
+                                                                                will need to sign up again to request access.
+                                                                            </AlertDialogDescription>
+                                                                        </AlertDialogHeader>
+                                                                        <AlertDialogFooter>
+                                                                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                                            <AlertDialogAction
+                                                                                onClick={() => handleRemoveWaitlistEntry(entry.id)}
+                                                                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                                                            >
+                                                                                Remove
+                                                                            </AlertDialogAction>
+                                                                        </AlertDialogFooter>
+                                                                    </AlertDialogContent>
+                                                                </AlertDialog>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            )}
+                        </CardContent>
+                    </Card>
+
+                    {/* Approve Dialog */}
+                    <Dialog open={approveDialogOpen} onOpenChange={setApproveDialogOpen}>
+                        <DialogContent>
+                            <DialogHeader>
+                                <DialogTitle>Grant Access</DialogTitle>
+                                <DialogDescription>
+                                    Send an invitation to {selectedWaitlistEntry?.emailAddress} to join the application.
+                                </DialogDescription>
+                            </DialogHeader>
+                            <div className="space-y-4 py-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="approveRole">Assign Role</Label>
+                                    <Select value={approveRole} onValueChange={setApproveRole}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Select a role" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="member">Member</SelectItem>
+                                            {/* <SelectItem value="editor">Editor</SelectItem> */}
+                                            <SelectItem value="admin">Admin</SelectItem>
+                                            {isSuperAdmin && <SelectItem value="super_admin">Super Admin</SelectItem>}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+                            <DialogFooter>
+                                <Button variant="outline" onClick={() => setApproveDialogOpen(false)}>
+                                    Cancel
+                                </Button>
+                                <Button onClick={handleApproveWaitlistEntry} disabled={isApproving}>
+                                    {isApproving ? "Sending..." : "Send Invitation"}
+                                </Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
                 </TabsContent>
 
                 {/* Settings Tab */}
