@@ -4,7 +4,6 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Switch } from "@/components/ui/switch"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
@@ -29,13 +28,15 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { UserPlus, Trash2, Mail, Shield, Clock, Users, ShieldAlert, Settings, RotateCcw, Save, ListTodo, UserCheck } from "lucide-react"
+import {
+    UserPlus, Trash2, Mail, Shield, Clock, Users, ShieldAlert, Settings, Save, ListTodo,
+    UserCheck, Database, XCircle, Loader2, CheckCircle2, Play, AlertTriangle, RotateCw, CloudSync } from "lucide-react"
 import { useUser } from "@clerk/nextjs"
 import { useRouter } from "next/navigation"
 import clsx from "clsx"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Textarea } from "@/components/ui/textarea"
 import { sessionCodeOptions } from "@/lib/config"
+import { type ScrapeRun, scraperKinds } from "@/lib/scraper-client"
 
 interface User {
     id: string
@@ -86,6 +87,20 @@ interface SettingsResponse {
     settings: GlobalSettings
 }
 
+interface ScraperSummary {
+    kind: string
+    name: string
+    description: string
+    latestRun: ScrapeRun | null
+    totalRuns: number
+    successRate: number
+}
+
+interface ScrapersResponse {
+    scrapers: ScraperSummary[]
+    recentRuns: ScrapeRun[]
+}
+
 export const AdminContent = () => {
     const { user, isLoaded } = useUser()
     const router = useRouter()
@@ -110,6 +125,12 @@ export const AdminContent = () => {
     const [settingsSaving, setSettingsSaving] = useState(false)
     const [settingsChanged, setSettingsChanged] = useState(false)
 
+    const [scrapers, setScrapers] = useState<ScraperSummary[]>([])
+    const [recentRuns, setRecentRuns] = useState<ScrapeRun[]>([])
+    const [scrapersLoading, setScrapersLoading] = useState(true)
+    const [scrapersRefresh, setScrapersRefresh] = useState(true)
+    const [triggeringScrapers, setTriggeringScrapers] = useState<Set<string>>(new Set())
+
     const userRole = (user?.publicMetadata as { role?: string })?.role
     const isAdmin = userRole === "admin" || userRole === "super_admin"
 
@@ -125,6 +146,7 @@ export const AdminContent = () => {
             fetchInvitations()
             fetchWaitlist()
             fetchSettings()
+            fetchScrapers()
         }
     }, [isLoaded, user, isAdmin])
 
@@ -184,6 +206,110 @@ export const AdminContent = () => {
         }
     }
 
+     const fetchScrapers = async () => {
+        try {
+            setScrapersRefresh(true)
+            const response = await fetch("/api/admin/scrapers")
+            if (response.ok) {
+                const data: ScrapersResponse = await response.json()
+                setScrapers(data.scrapers || [])
+                setRecentRuns(data.recentRuns || [])
+            }
+        } catch (error) {
+            console.error("Failed to fetch scrapers:", error)
+        } finally {
+            setScrapersLoading(false)
+            setScrapersRefresh(false)
+        }
+    }
+
+    const handleTriggerScraper = async (kind: string) => {
+        setTriggeringScrapers((prev) => new Set(prev).add(kind))
+        try {
+            const response = await fetch("/api/admin/scrapers", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ kind }),
+            })
+            if (response.ok) {
+                // Refresh scrapers after triggering
+                setTimeout(() => fetchScrapers(), 1000)
+            }
+        } catch (error) {
+            console.error("Failed to trigger scraper:", error)
+        } finally {
+            setTriggeringScrapers((prev) => {
+                const next = new Set(prev)
+                next.delete(kind)
+                return next
+            })
+        }
+    }
+
+    const formatDuration = (startedAt: string, finishedAt: string | null): string => {
+        const start = new Date(startedAt).getTime()
+        const end = finishedAt ? new Date(finishedAt).getTime() : Date.now()
+        const durationMs = end - start
+
+        if (durationMs < 1000) return `${durationMs}ms`
+        if (durationMs < 60000) return `${Math.round(durationMs / 1000)}s`
+        if (durationMs < 3600000) return `${Math.round(durationMs / 60000)}m ${Math.round((durationMs % 60000) / 1000)}s`
+        return `${Math.round(durationMs / 3600000)}h ${Math.round((durationMs % 3600000) / 60000)}m`
+    }
+
+    const formatRelativeTime = (dateStr: string): string => {
+        const date = new Date(dateStr)
+        const now = new Date()
+        const diffMs = now.getTime() - date.getTime()
+
+        if (diffMs < 60000) return "just now"
+        if (diffMs < 3600000) return `${Math.round(diffMs / 60000)} min ago`
+        if (diffMs < 86400000) return `${Math.round(diffMs / 3600000)} hours ago`
+        return `${Math.round(diffMs / 86400000)} days ago`
+    }
+
+    const getRunStatusBadge = (run: ScrapeRun | null) => {
+        if (!run) {
+            return (
+                <Badge variant="outline" className="text-muted-foreground">
+                    Never run
+                </Badge>
+            )
+        }
+        if (!run.finishedAt) {
+            return (
+                <Badge className="bg-blue-500 text-white">
+                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                    Running
+                </Badge>
+            )
+        }
+        if (run.success) {
+            return (
+                <Badge className="bg-green-500 text-white">
+                    <CheckCircle2 className="h-3 w-3 mr-1" />
+                    Success
+                </Badge>
+            )
+        }
+        return (
+            <Badge variant="destructive">
+                <XCircle className="h-3 w-3 mr-1" />
+                Failed
+            </Badge>
+        )
+    }
+
+    const getRunCounts = (run: ScrapeRun): string[] => {
+        const counts: string[] = []
+        if (run.legislatorsCount) counts.push(`${run.legislatorsCount} legislators`)
+        if (run.committeesCount) counts.push(`${run.committeesCount} committees`)
+        if (run.membershipsCount) counts.push(`${run.membershipsCount} memberships`)
+        if (run.calendarsCount) counts.push(`${run.calendarsCount} calendars`)
+        return counts
+    }
+
+    // This isn't used yet
     const handleSettingsChange = (key: keyof GlobalSettings, value: string | number | boolean) => {
         if (!settings) return
         setSettings({ ...settings, [key]: value })
@@ -392,6 +518,7 @@ export const AdminContent = () => {
     }
 
     const pendingWaitlistCount = waitlistEntries.filter((e) => e.status === "pending").length
+    const runningScrapers = scrapers.filter((s) => s.latestRun && !s.latestRun.finishedAt).length
 
     return (
         <>
@@ -414,6 +541,15 @@ export const AdminContent = () => {
                         {pendingWaitlistCount > 0 && (
                             <Badge variant="destructive" className="ml-1 h-5 w-5 p-0 flex items-center justify-center text-xs">
                                 {pendingWaitlistCount}
+                            </Badge>
+                        )}
+                    </TabsTrigger>
+                    <TabsTrigger value="scrapers" className="flex items-center gap-2">
+                        <Database className="h-4 w-4" />
+                        Scrapers
+                        {runningScrapers > 0 && (
+                            <Badge className="ml-1 h-5 w-5 p-0 flex items-center justify-center text-xs bg-blue-500">
+                                {runningScrapers}
                             </Badge>
                         )}
                     </TabsTrigger>
@@ -828,6 +964,209 @@ export const AdminContent = () => {
                             </DialogFooter>
                         </DialogContent>
                     </Dialog>
+                </TabsContent>
+
+                {/* Scrapers Tab */}
+                <TabsContent value="scrapers" className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <Card>
+                            <CardHeader className="flex flex-row items-center justify-between pb-2">
+                                <CardTitle className="text-sm font-medium">Total Scrapers</CardTitle>
+                                <Database className="h-4 w-4 text-muted-foreground" />
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-2xl font-bold">{scrapers.length}</div>
+                            </CardContent>
+                        </Card>
+                        <Card>
+                            <CardHeader className="flex flex-row items-center justify-between pb-2">
+                                <CardTitle className="text-sm font-medium">Running</CardTitle>
+                                <CloudSync className="h-4 w-4 text-blue-500" />
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-2xl font-bold">{runningScrapers}</div>
+                            </CardContent>
+                        </Card>
+                        <Card>
+                            <CardHeader className="flex flex-row items-center justify-between pb-2">
+                                <CardTitle className="text-sm font-medium">Successful</CardTitle>
+                                <CheckCircle2 className="h-4 w-4 text-green-500" />
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-2xl font-bold">{scrapers.filter((s) => s.latestRun?.success).length}</div>
+                            </CardContent>
+                        </Card>
+                        <Card>
+                            <CardHeader className="flex flex-row items-center justify-between pb-2">
+                                <CardTitle className="text-sm font-medium">Failed</CardTitle>
+                                <XCircle className="h-4 w-4 text-destructive" />
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-2xl font-bold">
+                                    {scrapers.filter((s) => s.latestRun && s.latestRun.finishedAt && !s.latestRun.success).length}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </div>
+
+                    <Card>
+                        <CardHeader className="flex flex-row items-center justify-between">
+                            <div>
+                                <CardTitle>Scraper Status</CardTitle>
+                                <CardDescription>Monitor and trigger data scrapers</CardDescription>
+                            </div>
+                            <Button
+                                variant="outline"
+                                onClick={fetchScrapers}
+                                disabled={scrapersRefresh}
+                            >
+                                <RotateCw
+                                    className={`h-4 w-4 mr-2 ${scrapersRefresh ? "animate-spin" : ""}`}
+                                />
+                                Refresh
+                            </Button>
+                        </CardHeader>
+                        <CardContent>
+                            {scrapersLoading ? (
+                                <p className="text-muted-foreground">Loading scrapers...</p>
+                            ) : (
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Scraper</TableHead>
+                                            <TableHead>Status</TableHead>
+                                            <TableHead>Last Run</TableHead>
+                                            <TableHead>Duration</TableHead>
+                                            <TableHead>Success Rate</TableHead>
+                                            <TableHead className="text-right">Actions</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {scrapers.map((scraper) => (
+                                            <TableRow key={scraper.kind}>
+                                                <TableCell>
+                                                    <div>
+                                                        <div className="font-medium">{scraper.name}</div>
+                                                        <div className="text-xs text-muted-foreground">{scraper.description}</div>
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell>{getRunStatusBadge(scraper.latestRun)}</TableCell>
+                                                <TableCell>
+                                                    {scraper.latestRun ? (
+                                                        <div className="text-sm">
+                                                            <div>{formatRelativeTime(scraper.latestRun.startedAt)}</div>
+                                                            <div className="text-xs text-muted-foreground">
+                                                                {scraper.latestRun.source === "ARCHIVE" && (
+                                                                    <Badge variant="outline" className="text-xs">
+                                                                        Archive
+                                                                    </Badge>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-muted-foreground">-</span>
+                                                    )}
+                                                </TableCell>
+                                                <TableCell>
+                                                    {scraper.latestRun ? (
+                                                        formatDuration(scraper.latestRun.startedAt, scraper.latestRun.finishedAt)
+                                                    ) : (
+                                                        <span className="text-muted-foreground">-</span>
+                                                    )}
+                                                </TableCell>
+                                                <TableCell>
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
+                                                            <div
+                                                                className={`h-full ${scraper.successRate >= 80 ? "bg-green-500" : scraper.successRate >= 50 ? "bg-yellow-500" : "bg-red-500"}`}
+                                                                style={{ width: `${scraper.successRate}%` }}
+                                                            />
+                                                        </div>
+                                                        <span className="text-xs text-muted-foreground">{scraper.successRate}%</span>
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => handleTriggerScraper(scraper.kind)}
+                                                        disabled={
+                                                            triggeringScrapers.has(scraper.kind) ||
+                                                            Boolean(scraper.latestRun && !scraper.latestRun.finishedAt)
+                                                        }
+                                                    >
+                                                        {triggeringScrapers.has(scraper.kind) ? (
+                                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                                        ) : (
+                                                            <Play className="h-4 w-4" />
+                                                        )}
+                                                    </Button>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            )}
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Recent Runs</CardTitle>
+                            <CardDescription>History of recent scraper executions</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            {scrapersLoading ? (
+                                <p className="text-muted-foreground">Loading...</p>
+                            ) : recentRuns.length === 0 ? (
+                                <p className="text-muted-foreground">No recent runs</p>
+                            ) : (
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Scraper</TableHead>
+                                            <TableHead>Source</TableHead>
+                                            <TableHead>Started</TableHead>
+                                            <TableHead>Duration</TableHead>
+                                            <TableHead>Status</TableHead>
+                                            <TableHead>Error</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {recentRuns.map((run) => {
+                                            const scraperInfo = scraperKinds.find((s) => s.kind === run.kind)
+                                            return (
+                                                <TableRow key={run.id}>
+                                                    <TableCell className="font-medium">{scraperInfo?.name || run.kind}</TableCell>
+                                                    <TableCell>
+                                                        <Badge variant={run.source === "ARCHIVE" ? "outline" : "default"}>{run.source}</Badge>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <div className="text-sm">{new Date(run.startedAt).toLocaleString()}</div>
+                                                    </TableCell>
+                                                    <TableCell>{formatDuration(run.startedAt, run.finishedAt)}</TableCell>
+                                                    <TableCell>{getRunStatusBadge(run)}</TableCell>
+                                                    <TableCell>
+                                                        {run.error ? (
+                                                            <div
+                                                                className="flex items-center gap-1 text-destructive text-xs max-w-48 truncate"
+                                                                title={run.error}
+                                                            >
+                                                                <AlertTriangle className="h-3 w-3 flex-shrink-0" />
+                                                                {run.error}
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-muted-foreground">-</span>
+                                                        )}
+                                                    </TableCell>
+                                                </TableRow>
+                                            )
+                                        })}
+                                    </TableBody>
+                                </Table>
+                            )}
+                        </CardContent>
+                    </Card>
                 </TabsContent>
 
                 {/* Settings Tab */}

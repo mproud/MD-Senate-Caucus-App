@@ -1,11 +1,12 @@
 "use client"
 
+import { useEffect, useMemo, useRef, useState } from "react"
 import useSWR from "swr"
 import type { BareFetcher } from "swr"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { getScraperKindLabel } from "@/lib/scraper-client"
 
 type LastRunResponse = {
     run: null | {
@@ -19,58 +20,18 @@ type LastRunResponse = {
     }
 }
 
-// Scraper kind definitions
-export const scraperKinds = [
-    {
-        kind: "MGA_BILLS_JSON",
-        name: "Bills from MGA's JSON feed",
-        description: "",
-    },
-    {
-        kind: "MGA_SENATE_AGENDA",
-        name: "Senate agenda",
-        description: "",
-    },
-    {
-        kind: "MGA_HOUSE_AGENDA",
-        name: "House agenda",
-        description: "",
-    },
-    {
-        kind: "MGA_LEGISLATOR_COMMITTEES",
-        name: "Update legislators & committees",
-        description: "",
-    },
-] as const
-
 const fetcher: BareFetcher<LastRunResponse> = async (url: string) => {
     const r = await fetch(url)
     if (!r.ok) throw new Error(`Request failed: ${r.status}`)
     return (await r.json()) as LastRunResponse
 }
 
-function getScraperKindLabel(kind: string): string {
-    const scraper = scraperKinds.find((s) => s.kind === kind);
-
-    return (
-        scraper?.name ??
-        kind
-            .replaceAll("_", " ")
-            .toLowerCase()
-            .replace(/(^|\s)\S/g, (c) => c.toUpperCase())
-    );
-}
-
 export function ScrapeRunStatus({ kind }: { kind?: string }) {
     const url =
         kind
-            ? `/api/scrape-runs/last?kind=${encodeURIComponent(kind)}`
-            : "/api/scrape-runs/last"
+            ? `/api/scrapers/last?kind=${encodeURIComponent(kind)}`
+            : "/api/scrapers/last"
 
-    // const { data, isLoading } = useSWR<LastRunResponse, Error, string>(url, fetcher, {
-    //     refreshInterval: 60_000,
-    //     revalidateOnFocus: true,
-    // })
     // Refresh every 60 seconds, but if the scraper is running, refresh every five
     const { data, isLoading } = useSWR<LastRunResponse, Error>(url, fetcher, {
         refreshInterval: (latestData) =>
@@ -92,6 +53,20 @@ export function ScrapeRunStatus({ kind }: { kind?: string }) {
             )}
         </div>
     )
+}
+
+function formatRelativeTime(from: Date, to: Date = new Date()): string {
+    const ms = to.getTime() - from.getTime()
+    const seconds = Math.floor(ms / 1000)
+    const minutes = Math.floor(seconds / 60)
+    const hours = Math.floor(minutes / 60)
+    const days = Math.floor(hours / 24)
+
+    if (seconds < 5) return "just now"
+    if (seconds < 60) return `${seconds} second${seconds === 1 ? "" : "s"} ago`
+    if (minutes < 60) return `${minutes} minute${minutes === 1 ? "" : "s"} ago`
+    if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`
+    return `${days} day${days === 1 ? "" : "s"} ago`
 }
 
 function StatusRow({ run }: { run: NonNullable<LastRunResponse["run"]> }) {
@@ -139,18 +114,14 @@ function StatusRow({ run }: { run: NonNullable<LastRunResponse["run"]> }) {
     const seconds = totalSeconds % 60
 
     let timeLabel: string
-
+    
     if (isRunning) {
         timeLabel =
             minutes > 0
                 ? `running for ${minutes}m ${seconds}s`
                 : `running for ${seconds}s`
-    } else if (totalSeconds < 5) {
-        timeLabel = "just now"
-    } else if (totalSeconds < 60) {
-        timeLabel = `${totalSeconds} second${totalSeconds === 1 ? "" : "s"} ago`
     } else {
-        timeLabel = `${minutes} minute${minutes === 1 ? "" : "s"} ago`
+        timeLabel = formatRelativeTime(started, new Date(now))
     }
 
     // Animate on change

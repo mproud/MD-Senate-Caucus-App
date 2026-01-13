@@ -5,14 +5,27 @@ export async function getLatestScrapeRun( kind?: string ) {
     return prisma.scrapeRun.findFirst({
         where: kind ? { kind } : undefined,
         orderBy: [{ startedAt: "desc" }],
-        select: {
-            id: true,
-            kind: true,
-            source: true,
-            startedAt: true,
-            finishedAt: true,
-            success: true,
-            error: true,
-        },
+        // select: {
+        //     id: true,
+        //     kind: true,
+        //     source: true,
+        //     startedAt: true,
+        //     finishedAt: true,
+        //     success: true,
+        //     error: true,
+        // },
+    })
+}
+
+export async function getAllScrapeRuns() {
+    return prisma.scrapeRun.findMany({
+        orderBy: [{ startedAt: "desc" }],
+    })
+}
+
+export async function getScrapeRunsByKind( kind?: string ) {
+    return prisma.scrapeRun.findMany({
+        where: kind ? { kind } : undefined,
+        orderBy: [{ startedAt: "desc" }],
     })
 }
