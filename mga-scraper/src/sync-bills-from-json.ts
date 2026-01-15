@@ -92,7 +92,7 @@ function oppositeChamber(ch: Chamber): Chamber {
 }
 
 function deriveSessionYearAndCode(item: RawBill): { sessionYear: number; sessionCode: string } {
-    // "2025 Regular Session" → 2025
+    // "2025 Regular Session" -> 2025
     const yearPart = item.YearAndSession?.slice(0, 4)
     const sessionYear = Number.parseInt(yearPart || '2025', 10) || 2025
     const sessionCode = `${sessionYear}RS`
@@ -649,7 +649,7 @@ export async function runBillsFromJsonScrape( event: any, context: Context ) {
                     statusDesc: true,
                 },
             })
-                
+            
             const bill = await prisma.bill.upsert({
                 where: { externalId },
                 update: {
@@ -692,6 +692,219 @@ export async function runBillsFromJsonScrape( event: any, context: Context ) {
                     dataSource: item,
                 },
             })
+
+            // Match committee fields in the JSON to actual Committee records,
+            // then populate BillCurrentCommittee and BillCommitteeHistory.
+            const safeCommitteeName = (s: any): string | null => {
+                if (!s) return null
+                const t = String(s).trim()
+                return t.length ? t : null
+            }
+
+            const originPrimaryName = safeCommitteeName(item.CommitteePrimaryOrigin)
+            const originSecondaryName = safeCommitteeName(item.CommitteeSecondaryOrigin)
+
+            const oppPrimaryName = safeCommitteeName(item.CommitteePrimaryOpposite)
+            const oppSecondaryName = safeCommitteeName(item.CommitteeSecondaryOpposite)
+
+            const oppChamber = oppositeChamber(originChamber)
+
+            // Resolve committee IDs (respect chamber)
+            const originPrimaryId = await resolveCommitteeIdByName(originPrimaryName, originChamber)
+            const originSecondaryId = await resolveCommitteeIdByName(originSecondaryName, originChamber)
+
+            const oppPrimaryId = await resolveCommitteeIdByName(oppPrimaryName, oppChamber)
+            const oppSecondaryId = await resolveCommitteeIdByName(oppSecondaryName, oppChamber)
+
+            // Build assignments (include referred date by side)
+            const assignments: Array<{
+                side: 'ORIGIN' | 'OPPOSITE'
+                chamber: Chamber
+                role: 'PRIMARY' | 'SECONDARY'
+                name: string | null
+                committeeId: number | null
+                referredDateStr: string | null
+                reportedOutDateStr: string | null
+                reportAction: string | null
+            }> = [
+                {
+                    side: 'ORIGIN',
+                    chamber: originChamber,
+                    role: 'PRIMARY',
+                    name: originPrimaryName,
+                    committeeId: originPrimaryId,
+                    referredDateStr: item.FirstReadingDateHouseOfOrigin ?? null,
+                    // Report info applies to the primary committee on that side (best available from JSON)
+                    reportedOutDateStr: item.ReportDateHouseOfOrigin ?? null,
+                    reportAction: (item.ReportActionHouseOfOrigin || '').trim() || null,
+                },
+                {
+                    side: 'ORIGIN',
+                    chamber: originChamber,
+                    role: 'SECONDARY',
+                    name: originSecondaryName,
+                    committeeId: originSecondaryId,
+                    referredDateStr: item.FirstReadingDateHouseOfOrigin ?? null,
+                    reportedOutDateStr: null,
+                    reportAction: null,
+                },
+                {
+                    side: 'OPPOSITE',
+                    chamber: oppChamber,
+                    role: 'PRIMARY',
+                    name: oppPrimaryName,
+                    committeeId: oppPrimaryId,
+                    referredDateStr: item.FirstReadingDateOppositeHouse ?? null,
+                    reportedOutDateStr: item.ReportDateOppositeHouse ?? null,
+                    reportAction: (item.ReportActionOppositeHouse || '').trim() || null,
+                },
+                {
+                    side: 'OPPOSITE',
+                    chamber: oppChamber,
+                    role: 'SECONDARY',
+                    name: oppSecondaryName,
+                    committeeId: oppSecondaryId,
+                    referredDateStr: item.FirstReadingDateOppositeHouse ?? null,
+                    reportedOutDateStr: null,
+                    reportAction: null,
+                },
+            ]
+
+            // Decide the "current" committee:
+            // Prefer opposite-side assignments only if the bill has actually crossed (FirstReadingDateOppositeHouse exists).
+            // Otherwise use origin-side. Within a side, prefer PRIMARY over SECONDARY.
+            const currentCandidate =
+                (item.FirstReadingDateOppositeHouse
+                    ? assignments.find((a) => a.side === 'OPPOSITE' && a.role === 'PRIMARY' && a.committeeId) ||
+                      assignments.find((a) => a.side === 'OPPOSITE' && a.role === 'SECONDARY' && a.committeeId)
+                    : null) ||
+                assignments.find((a) => a.side === 'ORIGIN' && a.role === 'PRIMARY' && a.committeeId) ||
+                assignments.find((a) => a.side === 'ORIGIN' && a.role === 'SECONDARY' && a.committeeId) ||
+                null
+
+            // Look up existing current committee (if any) so we can update/clear it safely
+            const existingCurrent = await prisma.billCurrentCommittee.findUnique({
+                where: { billId: bill.id },
+                select: {
+                    billId: true,
+                    committeeId: true,
+                },
+            })
+
+            if (currentCandidate && currentCandidate.committeeId) {
+                const referredDate =
+                    currentCandidate.referredDateStr ? new Date(currentCandidate.referredDateStr) : null
+
+                // Upsert current committee assignment
+                await prisma.billCurrentCommittee.upsert({
+                    where: { billId: bill.id },
+                    update: {
+                        committeeId: currentCandidate.committeeId,
+                        referredDate: referredDate ?? undefined,
+                        dataSource: {
+                            source: 'legislation.json',
+                            matchedFrom: currentCandidate,
+                            rawCommittees: {
+                                CommitteePrimaryOrigin: item.CommitteePrimaryOrigin,
+                                CommitteeSecondaryOrigin: item.CommitteeSecondaryOrigin,
+                                CommitteePrimaryOpposite: item.CommitteePrimaryOpposite,
+                                CommitteeSecondaryOpposite: item.CommitteeSecondaryOpposite,
+                            },
+                        },
+                    },
+                    create: {
+                        billId: bill.id,
+                        committeeId: currentCandidate.committeeId,
+                        referredDate: referredDate ?? undefined,
+                        dataSource: {
+                            source: 'legislation.json',
+                            matchedFrom: currentCandidate,
+                            rawCommittees: {
+                                CommitteePrimaryOrigin: item.CommitteePrimaryOrigin,
+                                CommitteeSecondaryOrigin: item.CommitteeSecondaryOrigin,
+                                CommitteePrimaryOpposite: item.CommitteePrimaryOpposite,
+                                CommitteeSecondaryOpposite: item.CommitteeSecondaryOpposite,
+                            },
+                        },
+                    },
+                })
+
+                // Optional: emit a COMMITTEE_REFERRAL event if it changed
+                if (!existingCurrent || existingCurrent.committeeId !== currentCandidate.committeeId) {
+                    await prisma.billEvent.create({
+                        data: {
+                            billId: bill.id,
+                            eventType: BillEventType.COMMITTEE_REFERRAL,
+                            chamber: currentCandidate.chamber,
+                            committeeId: currentCandidate.committeeId,
+                            eventTime: referredDate ?? new Date(),
+                            summary: `${billNumber}: Referred to ${currentCandidate.name ?? 'committee'}`,
+                            payload: {
+                                fromCommitteeId: existingCurrent?.committeeId ?? null,
+                                toCommitteeId: currentCandidate.committeeId,
+                                matchedFrom: currentCandidate,
+                            },
+                        },
+                    })
+                }
+            } else {
+                // No committee in JSON; if we previously had a current committee, clear it
+                if (existingCurrent) {
+                    await prisma.billCurrentCommittee.delete({
+                        where: { billId: bill.id },
+                    })
+                }
+            }
+
+            // Populate committee history for any matched committees (primary/secondary, origin/opposite)
+            for (const a of assignments) {
+                if (!a.committeeId) continue
+
+                const referredDate = a.referredDateStr ? new Date(a.referredDateStr) : null
+                const reportedOutDate = a.reportedOutDateStr ? new Date(a.reportedOutDateStr) : null
+
+                // Find an existing history row for this committee referral (best-effort match)
+                const existingHistory = await prisma.billCommitteeHistory.findFirst({
+                    where: {
+                        billId: bill.id,
+                        committeeId: a.committeeId,
+                        referredDate: referredDate ?? undefined,
+                    },
+                    select: { id: true },
+                })
+
+                if (!existingHistory) {
+                    await prisma.billCommitteeHistory.create({
+                        data: {
+                            billId: bill.id,
+                            committeeId: a.committeeId,
+                            referredDate: referredDate ?? undefined,
+                            reportedOutDate: reportedOutDate ?? undefined,
+                            reportAction: a.reportAction ?? undefined,
+                            dataSource: {
+                                source: 'legislation.json',
+                                matchedFrom: a,
+                            },
+                        },
+                    })
+                } else {
+                    // Update report fields if they later become available
+                    await prisma.billCommitteeHistory.update({
+                        where: { id: existingHistory.id },
+                        data: {
+                            reportedOutDate: reportedOutDate ?? undefined,
+                            reportAction: a.reportAction ?? undefined,
+                            dataSource: {
+                                source: 'legislation.json',
+                                matchedFrom: a,
+                            },
+                        },
+                    })
+                }
+            }
+
+
+            // @HERE
 
             // If there's been a change in status, create a BillEvent
             // @TODO compare other things here, not just the straight status (the scraper may have faster info too)

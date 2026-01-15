@@ -2,7 +2,9 @@
 
 - When a user joins the waitlist, send an email to all admins (BCC super admins). Deep link to invite page?
 - When deleting a user, remove their alerts
-- Scraper isn't attaching a bill to a committee automatically
+- Scraper isn't attaching a bill to a committee automatically - I think this is fixed?
+- Add chamber to calendar options/filter
+- Bills - filter by committee doesn't work
 
 # Known issues/gotchas
 

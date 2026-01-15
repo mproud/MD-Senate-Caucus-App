@@ -96,6 +96,7 @@ export async function GET(request: NextRequest) {
 
         const where: Prisma.FloorCalendarWhereInput = {
             calendarDate: { gte: start, lte: end },
+            chamber: 'SENATE',
         }
 
         const calendars = await prisma.floorCalendar.findMany({
@@ -117,6 +118,12 @@ export async function GET(request: NextRequest) {
                                 crossFileExternalId: true,
 
                                 isFlagged: true,
+
+                                currentCommittee: {
+                                    include: {
+                                        committee: true,
+                                    },
+                                },
 
                                 actions: {
                                     // where: { isVote: true },

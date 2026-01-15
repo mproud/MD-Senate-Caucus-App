@@ -69,7 +69,11 @@ export async function GET(
                 crossFileBill: true,
                 crossFileOf: true,
                 committeeHistory: true,
-                currentCommittee: true,
+                currentCommittee: {
+                    include: {
+                        committee: true,
+                    }
+                },
                 actions: {
                     include: {
                         committee: true,

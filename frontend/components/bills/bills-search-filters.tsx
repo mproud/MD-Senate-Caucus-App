@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Search, ChevronDown, RotateCcw } from "lucide-react"
 import { getUniqueSponsors, getUniqueCommittees, getUniqueSubjects } from "@/lib/mock-data"
+import { Committee } from "@prisma/client"
 
 interface BillsSearchFiltersProps {
     initialQuery: string
@@ -19,6 +20,7 @@ interface BillsSearchFiltersProps {
     initialSponsor: string
     initialSubject: string
     initialStatus: string
+    committees: Committee[]
 }
 
 export function BillsSearchFilters({
@@ -28,6 +30,7 @@ export function BillsSearchFilters({
     initialSponsor,
     initialSubject,
     initialStatus,
+    committees,
 }: BillsSearchFiltersProps) {
     const router = useRouter()
 
@@ -42,11 +45,35 @@ export function BillsSearchFilters({
     const [sponsorSearch, setSponsorSearch] = useState("")
     const [subjectSearch, setSubjectSearch] = useState("")
 
-    const availableCommittees = getUniqueCommittees()
-    const availableSponsors = getUniqueSponsors()
-    const availableSubjects = getUniqueSubjects()
+    // const availableCommittees = getUniqueCommittees()
+    // const filteredCommittees = availableCommittees.filter((c) => c.toLowerCase().includes(committeeSearch.toLowerCase()))
 
-    const filteredCommittees = availableCommittees.filter((c) => c.toLowerCase().includes(committeeSearch.toLowerCase()))
+    const availableSponsors: any[] = []
+    const availableSubjects: any[] = []
+
+    const filteredCommittees = committees
+        .filter((c) => {
+            const search = committeeSearch.toLowerCase()
+            return (
+                (c.name || "").toLowerCase().includes(search) ||
+                (c.abbreviation || "").toLowerCase().includes(search)
+            )
+        })
+        .map((c) => ({
+            id: c.id,
+            abbreviation: c.abbreviation ?? "",
+            name: c.name ?? "",
+            label: `${c.abbreviation ?? ""} - ${c.name ?? ""}`,
+        }))
+
+    const selectedCommitteeLabel =
+        committee
+            ? (() => {
+                const found = committees.find((c) => (c.abbreviation ?? "") === committee)
+                return found ? `${found.abbreviation ?? ""} - ${found.name ?? ""}` : committee
+            })()
+            : ""
+
     const filteredSponsors = availableSponsors.filter((s) => s.toLowerCase().includes(sponsorSearch.toLowerCase()))
     const filteredSubjects = availableSubjects.filter((s) => s.toLowerCase().includes(subjectSearch.toLowerCase()))
 
@@ -74,7 +101,7 @@ export function BillsSearchFilters({
         router.push("/bills")
     }
 
-    const chambers = ["House", "Senate"]
+    const chambers = ["Senate", "House"]
     const statuses = [
         "First Reading",
         "Second Reading",
@@ -142,8 +169,8 @@ export function BillsSearchFilters({
                         {/* Committee Filter */}
                         <Popover>
                             <PopoverTrigger asChild>
-                                <Button variant="outline" className="min-w-[140px] justify-between bg-transparent">
-                                    <span className="truncate max-w-[100px]">{committee || "Committee"}</span>
+                                <Button variant="outline" className="min-w-[180px] justify-between bg-transparent">
+                                    <span className="truncate max-w-[100px]">{selectedCommitteeLabel || "Committee"}</span>
                                     <ChevronDown className="ml-2 h-4 w-4 flex-shrink-0" />
                                 </Button>
                             </PopoverTrigger>
@@ -166,12 +193,12 @@ export function BillsSearchFilters({
                                     </Button>
                                     {filteredCommittees.map((c) => (
                                         <Button
-                                            key={c}
-                                            variant={committee === c ? "secondary" : "ghost"}
+                                            key={c.id}
+                                            variant={committee === c.abbreviation ? "secondary" : "ghost"}
                                             className="w-full justify-start text-sm truncate"
-                                            onClick={() => setCommittee(c)}
+                                            onClick={() => setCommittee(c.abbreviation)}
                                         >
-                                            {c}
+                                            {c.label}
                                         </Button>
                                     ))}
                                 </div>

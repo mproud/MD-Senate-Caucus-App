@@ -733,23 +733,33 @@ async function createBillAddedToCalendarEvent(opts: {
     })
 }
 
+function deriveChamberFromUrl(url: string): Chamber | null {
+    const lower = url.toLowerCase()
+
+    if (lower.includes("/senate-")) return Chamber.SENATE
+    if (lower.includes("/house-")) return Chamber.HOUSE
+
+    return null
+}
+
+
 // --- the handler! --
 export const handler = async ( event: any, context: Context ) => {
     // Allow overriding the URL via event, otherwise use a default
     const urlFromEvent = event?.url as string | undefined
 
-    // @TODO override this temporarily, but when called, need to grab the latest agenda URL (house + senate!)
-    // const url =
-    //     urlFromEvent ??
-    //     `${MGA_BASE}/FloorActions/Agenda/senate-03272025-1`
-
-    // const url = 'http://localhost:8000/20250327131337-senate-agenda.html' // ugh I lost the archive.
-    // const url = 'https://mgaleg.maryland.gov/mgawebsite/FloorActions/Agenda/senate-12162025-1'
+    // const url = 'http://localhost:8000/20250327131337-senate-agenda.html' // local archive
 
     // @TODO this needs to be found automatically!!
     const url = 'https://mgaleg.maryland.gov/mgawebsite/FloorActions/Agenda/senate-01152026-1'
+    // const url = 'https://mgaleg.maryland.gov/mgawebsite/FloorActions/Agenda/house-01152026-1'
 
-    const chamber: Chamber = 'SENATE' // for now. This should be specified when calling the scraper
+    const chamber: Chamber | null = deriveChamberFromUrl(url)
+
+    if ( ! chamber ) {
+        console.error('Invalid Chamber')
+        return false
+    }
 
     // log the scrape start
     const run = await startScrapeRun(`MGA_${chamber}_AGENDA`)

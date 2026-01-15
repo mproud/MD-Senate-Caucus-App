@@ -1,6 +1,6 @@
 "use client"
 
-import * as React from "react"
+import { useEffect, useState, useMemo, useTransition } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { addDays, format, isValid, parseISO } from "date-fns"
 
@@ -37,12 +37,20 @@ export function ReportFilters({
     const router = useRouter()
     const pathname = usePathname()
     const sp = useSearchParams()
-    const [isPending, startTransition] = React.useTransition()
+    const [isPending, startTransition] = useTransition()
 
-    const [open, setOpen] = React.useState(false)
+    const [open, setOpen] = useState(false)
 
-    const from = React.useMemo(() => safeParse(startDate), [startDate])
-    const to = React.useMemo(() => safeParse(endDate), [endDate])
+    const from = useMemo(() => safeParse(startDate), [startDate])
+    const to = useMemo(() => safeParse(endDate), [endDate])
+
+    const [draftFrom, setDraftFrom] = useState<Date>(from)
+    const [draftTo, setDraftTo] = useState<Date>(to)
+
+    useEffect(() => {
+        setDraftFrom(from)
+        setDraftTo(to)
+    }, [from, to])
 
     function setParams(next: Record<string, string | boolean | undefined>) {
         const params = new URLSearchParams(sp.toString())
@@ -53,9 +61,12 @@ export function ReportFilters({
         startTransition(() => router.push(`${pathname}?${params.toString()}`))
     }
 
-    function setRange(start: Date, end: Date) {
+    function setRange(start: Date, end: Date, close?: Boolean) {
         // close the popover when a full range is selected
-        setOpen(false)
+        if ( close ) {
+            setOpen(false)
+        }
+
         setParams({
             startDate: format(start, "yyyy-MM-dd"),
             endDate: format(end, "yyyy-MM-dd"),
@@ -91,11 +102,20 @@ export function ReportFilters({
                 <div className="flex items-center gap-3">
                     <Label className="whitespace-nowrap">Date range</Label>
 
-                    <Popover open={open} onOpenChange={setOpen}>
+                    <Popover
+                        open={open}
+                        onOpenChange={(nextOpen) => {
+                            setOpen(nextOpen)
+                            if (nextOpen) {
+                                setDraftFrom(from)
+                                setDraftTo(to)
+                            }
+                        }}
+                    >
                         <PopoverTrigger asChild>
                             <Button
                                 variant="outline"
-                                className="w-[280px] justify-start text-left font-normal"
+                                className="w-[300px] justify-start text-left font-normal"
                             >
                                 {rangeLabel}
                             </Button>
@@ -108,7 +128,10 @@ export function ReportFilters({
                                     type="button"
                                     size="sm"
                                     variant="secondary"
-                                    onClick={() => setRange(today, today)}
+                                    onClick={() => {
+                                        setDraftFrom(today)
+                                        setDraftTo(today)
+                                    }}
                                 >
                                     Today
                                 </Button>
@@ -117,7 +140,10 @@ export function ReportFilters({
                                     type="button"
                                     size="sm"
                                     variant="outline"
-                                    onClick={() => setRange(addDays(today, -6), today)}
+                                    onClick={() => {
+                                        setDraftFrom(addDays(today, -6))
+                                        setDraftTo(today)
+                                    }}
                                 >
                                     Last 7 days
                                 </Button>
@@ -126,12 +152,15 @@ export function ReportFilters({
                                     type="button"
                                     size="sm"
                                     variant="outline"
-                                    onClick={() => setRange(addDays(today, -29), today)}
+                                    onClick={() => {
+                                        setDraftFrom(addDays(today, -29))
+                                        setDraftTo(today)
+                                    }}
                                 >
                                     Last 30 days
                                 </Button>
 
-                                {TEMP_RANGE_SHORTCUTS.map((s) => (
+                                {/* {TEMP_RANGE_SHORTCUTS.map((s) => (
                                     <Button
                                         key={`${s.start}-${s.end}`}
                                         type="button"
@@ -144,7 +173,7 @@ export function ReportFilters({
                                     >
                                         {s.label}
                                     </Button>
-                                ))}
+                                ))} */}
                             </div>
 
                             {/* Range calendar */}
@@ -152,29 +181,50 @@ export function ReportFilters({
                                 <Calendar
                                     mode="range"
                                     numberOfMonths={2}
-                                    selected={{ from, to }}
+                                    selected={{ from: draftFrom, to: draftTo }}
                                     onSelect={(range) => {
-                                        // range can be: undefined, {from}, {from,to}
                                         if (!range?.from) return
 
-                                        // if user picked only the first day, keep popover open
-                                        if (!range.to) {
-                                            setParams({
-                                                startDate: format(range.from, "yyyy-MM-dd"),
-                                                endDate: format(range.from, "yyyy-MM-dd"),
-                                            })
-                                            return
-                                        }
-
-                                        // full range chosen -> close and apply
-                                        setRange(range.from, range.to)
+                                        setDraftFrom(range.from)
+                                        setDraftTo(range.to ?? range.from)
                                     }}
                                     initialFocus
                                 />
                             </div>
 
-                            <div className="mt-2 text-xs text-muted-foreground">
-                                Tip: pick a start date, then an end date.
+                            <div className="mt-2 flex items-center justify-between gap-3">
+                                <div className="text-xs text-muted-foreground">
+                                    Tip: pick a start date, then an end date.
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => {
+                                            setDraftFrom(from)
+                                            setDraftTo(to)
+                                            setOpen(false)
+                                        }}
+                                    >
+                                        Cancel
+                                    </Button>
+
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        onClick={() => {
+                                            setParams({
+                                                startDate: format(draftFrom, "yyyy-MM-dd"),
+                                                endDate: format(draftTo, "yyyy-MM-dd"),
+                                            })
+                                            setOpen(false)
+                                        }}
+                                    >
+                                        Apply
+                                    </Button>
+                                </div>
                             </div>
                         </PopoverContent>
                     </Popover>

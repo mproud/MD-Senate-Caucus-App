@@ -66532,8 +66532,18 @@ async function createBillAddedToCalendarEvent(opts) {
 }
 var handler = async (event, context) => {
   const urlFromEvent = event?.url;
-  const url2 = "https://mgaleg.maryland.gov/mgawebsite/FloorActions/Agenda/senate-01152026-1";
-  const chamber = "SENATE";
+  const url2 = "https://mgaleg.maryland.gov/mgawebsite/FloorActions/Agenda/house-01152026-1";
+  function deriveChamberFromUrl(url3) {
+    const lower = url3.toLowerCase();
+    if (lower.includes("/senate-")) return import_client2.Chamber.SENATE;
+    if (lower.includes("/house-")) return import_client2.Chamber.HOUSE;
+    return null;
+  }
+  const chamber = deriveChamberFromUrl(url2);
+  if (!chamber) {
+    console.error("Invalid Chamber");
+    return false;
+  }
   const run = await startScrapeRun(`MGA_${chamber}_AGENDA`);
   let agendaCount = 1;
   try {

@@ -3,6 +3,7 @@ import { z } from "zod"
 import { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@clerk/nextjs/server"
+import { getActiveSessionCode } from "@/lib/get-active-session"
 
 // ---------- helpers ----------
 async function getClerkUserId() {
@@ -199,6 +200,8 @@ export async function GET(req: NextRequest) {
     const activeParam = url.searchParams.get("active")
     const viewParam = url.searchParams.get("view")
 
+    const activeSessionCode = await getActiveSessionCode()
+
     // If id provided, fetch that single alert (must belong to user)
     if (idParam) {
         const id = Number(idParam)
@@ -221,7 +224,10 @@ export async function GET(req: NextRequest) {
         const alerts = await prisma.alert.findMany({
             where: {
                 clerkUserId,
-                active: true
+                active: true,
+                bill: {
+                    sessionCode: activeSessionCode,
+                },
             },
             include: {
                 // @TODO whatever else needs to be returned here too!

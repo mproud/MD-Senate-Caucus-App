@@ -20,7 +20,9 @@ interface BillPageProps {
 type BillExtended = Bill & {
     notes?: any
     currentCommittee: {
-        name: string
+        committee: {
+            name: string
+        }
     }
     events?: any[]
     committeeVotes: []
@@ -91,7 +93,7 @@ async function BillContent({ billNumber }: { billNumber: string }) {
                                     {bill.currentCommittee && (
                                         <div>
                                             <dt className="text-sm font-medium text-muted-foreground">Current Committee</dt>
-                                            <dd className="mt-1 text-sm">{bill.currentCommittee.name}</dd>
+                                            <dd className="mt-1 text-sm">{bill.currentCommittee.committee.name.replace("Committee", "").trim()}</dd>
                                         </div>
                                     )}
                                     {bill.dataSource?.CommitteePrimaryOrigin && (

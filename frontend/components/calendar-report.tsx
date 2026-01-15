@@ -556,7 +556,12 @@ export async function CalendarReport({ calendarData }: { calendarData: CalendarD
                                                         </TableCell>
 
                                                         <TableCell className={`${cellBase} hidden md:table-cell print:!table-cell ${COLS.committee}`}>
-                                                            { item.committee?.abbreviation && item.committee.abbreviation }
+                                                            {/* { item.committee?.abbreviation && item.committee.abbreviation } */}
+                                                            { item.bill.currentCommittee ? (
+                                                                <>{item.bill.currentCommittee.committee.abbreviation}</>
+                                                            ): (
+                                                                <>---</>
+                                                            )}
                                                         </TableCell>
 
                                                         {/* <TableCell className={`${cellBase} hidden lg:table-cell print:!table-cell ${COLS.vote}`}>

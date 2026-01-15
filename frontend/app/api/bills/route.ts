@@ -120,7 +120,14 @@ export async function GET(request: NextRequest) {
             skip,
             take,
             orderBy: [{ billNumberNumeric: "asc" }, { billNumber: "asc" }],
-            include: { currentCommittee: true, primarySponsor: true }
+            include: {
+                currentCommittee: {
+                    include: {
+                        committee: true,
+                    },
+                },
+                primarySponsor: true
+            }
         }),
     ])
 

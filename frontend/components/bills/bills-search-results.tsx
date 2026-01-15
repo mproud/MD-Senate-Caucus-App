@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ChevronLeft, ChevronRight, FileText } from "lucide-react"
 import { fetchApi } from "@/lib/api"
+import { Committee } from "@prisma/client"
 
 interface BillsSearchResultsProps {
     activeSessionCode: string
@@ -26,7 +27,9 @@ interface SearchResult {
     shortTitle: string
     chamber: string
     sponsorDisplay: string
-    committee: string
+    currentCommittee: {
+        committee: Committee
+    }
     status?: string //
     statusDesc: string
     synopsis?: string
@@ -153,10 +156,10 @@ export async function BillsSearchResults({
                                     {bill.synopsis && <p className="mt-1 text-sm text-muted-foreground line-clamp-2">{bill.synopsis}</p>}
                                     <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
                                         <span>
-                                            <span className="font-medium">Sponsor:</span> {bill.sponsorDisplay}
+                                            <span className="font-medium">Primary Sponsor:</span> {bill.sponsorDisplay}
                                         </span>
                                         <span>
-                                            <span className="font-medium">Committee:</span> {bill.committee}
+                                            <span className="font-medium">Committee:</span> {bill.currentCommittee.committee.name.replace("Committee", "").trim()}
                                         </span>
                                     </div>
                                     {bill.dataSource.BroadSubjects && bill.dataSource.BroadSubjects.length > 0 && (
