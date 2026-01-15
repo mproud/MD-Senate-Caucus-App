@@ -20,6 +20,7 @@ export async function getLatestScrapeRun( kind?: string ) {
 export async function getAllScrapeRuns() {
     return prisma.scrapeRun.findMany({
         orderBy: [{ startedAt: "desc" }],
+        take: 25,
     })
 }
 
@@ -27,5 +28,6 @@ export async function getScrapeRunsByKind( kind?: string ) {
     return prisma.scrapeRun.findMany({
         where: kind ? { kind } : undefined,
         orderBy: [{ startedAt: "desc" }],
+        take: 25,
     })
 }

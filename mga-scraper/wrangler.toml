@@ -1,0 +1,16 @@
+name = "mga-scraper"
+main = "src/index.ts"
+compatibility_date = "2026-01-14"
+
+# If your scraper code uses Node-ish libs (cheerio, etc), you may need this:
+compatibility_flags = ["nodejs_compat"]
+
+[triggers]
+# Every minute (run sync-bills-from-json + scrape-agenda)
+crons = ["* * * * *", "0 11 * * *", "0 23 * * *"]
+# ^ example: committees twice/day at 11:00 UTC and 23:00 UTC (adjust for ET)
+
+# Optional: if you need a bit more CPU for the cron jobs
+# Scheduled Workers under 1 hour interval can run up to ~30s CPU by default. :contentReference[oaicite:1]{index=1}
+[limits]
+cpu_ms = 30_000

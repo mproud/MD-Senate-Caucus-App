@@ -7,7 +7,7 @@ import { MGA_BASE } from "./shared/mga-base"
 import { fetchHtml } from './shared/http'
 import { normalizeDate } from './shared/helpers'
 import { finishScrapeRun, startScrapeRun } from './shared/logging'
-import { BillEventType, CalendarType, Chamber } from '@prisma/client'
+import { BillEventType, CalendarType, Chamber, type FloorCalendar } from '@prisma/client'
 
 // temporary -- this is the lambda context
 interface Context {}
@@ -33,6 +33,7 @@ interface ParsedAgendaItem {
 }
 
 interface ParsedSection {
+    headerId?: string | null
     header: ParsedHeader | null
     items: ParsedAgendaItem[]
 }
@@ -40,28 +41,62 @@ interface ParsedSection {
 // Parse the header for things like Second Reading, Third Reading, Consent Calendar, Special Order Calendar, etc
 // some bills can be second reading x consent y
 // @TODO handle laid over bills, etc (what others??)
-function parseAgendaHeader( header: string, headerId: string | null ): ParsedHeader | null {
+function parseAgendaHeader( header: string, headerId: string ): ParsedHeader | null {
     const primaryPatterns = [
         { type: 'committee_report', regex: /Committee Report No\.\s*(\d+)/i },
         { type: 'third_reading_calendar', regex: /Third Reading Calendar No\.\s*(\d+)/i },
         { type: 'special_order_calendar', regex: /Special Order Calendar No\.\s*(\d+)/i },
         { type: "vetoed_bills_calendar", regex: /Calendar of Vetoed(?:\s+(Senate|House))?\s+Bills?\s+No\.\s*(\d+)/i },
-    ]
+        { type: 'first_reading_calendar', regex: /Introductory\s+(House|Senate)\s+Bills?\s+No\.\s*(\d+)/i },
+    ] as const
 
     const consentRegex = /Consent(?: Calendar)? No\.\s*(\d+)/i
 
-    const heading = header.replace(/\s+/g, ' ').trim()
+    // old code to make the heading one line
+    // const heading = header.replace(/\s+/g, ' ').trim()
 
-    // Extract dates
-    const distributionMatch = heading.match(/Distribution Date:\s*([A-Za-z]+\s+\d{1,2},\s*\d{4})/i)
-    const readingMatch = heading.match(/(First|Second|Third|Fourth|Fifth)?\s*Reading Date:\s*([A-Za-z]+\s+\d{1,2},\s*\d{4})/i)
+    const rawHeading = header.replace(/\r\n/g, "\n").trim()
+    const headingLines = rawHeading.split("\n").map(l => l.trim()).filter(Boolean)
+    const heading = headingLines.join(" ")
 
-    const distributionDate = normalizeDate(distributionMatch?.[1])
-    const readingDate = normalizeDate(readingMatch?.[2])
+    // Prefer dates from the full multi-line heading, not the condensed one\
+    const dateSourceText = headingLines.join("\n")
+
+    // Extract leading header date from the first non-empty line (e.g. "January 14, 2026")
+    const leadingDateLine = headingLines[0] ?? ""
+    const leadingDateMatch = leadingDateLine.match(/^([A-Za-z]+)\s+(\d{1,2}),\s*(\d{4})\b/)
+    const headerDate = normalizeDate(
+        leadingDateMatch ? `${leadingDateMatch[1]} ${leadingDateMatch[2]}, ${leadingDateMatch[3]}` : undefined
+    )
+
+    // Extract Distribution/Reading dates
+    const distributionMatch = dateSourceText.match(/Distribution Date:\s*([A-Za-z]+\s+\d{1,2},\s*\d{4})/i)
+    const readingMatch = dateSourceText.match(/(First|Second|Third|Fourth|Fifth)?\s*Reading Date:\s*([A-Za-z]+\s+\d{1,2},\s*\d{4})/i)
+
+    // Prefer explicit fields, but fall back to headerDate
+    const distributionDate = normalizeDate(distributionMatch?.[1]) ?? headerDate ?? null
+    const readingDate = normalizeDate(readingMatch?.[2]) ?? headerDate ?? null
 
     // Extract consent calendar number
     const consentMatch = heading.match(consentRegex)
     const consentCalendar = consentMatch ? parseInt(consentMatch[1], 10) : false
+
+    // Derive a clean displayed heading (e.g. "Introductory Senate Bills No. 1")
+    let displayHeading = heading
+    for (const { regex } of primaryPatterns) {
+        const m = heading.match(regex)
+        if (m) {
+            displayHeading = m[0].replace(/\s+/g, " ").trim()
+            break
+        }
+    }
+
+    if (displayHeading === heading) {
+        const consentOnly = heading.match(consentRegex)
+        if (consentOnly) {
+            displayHeading = consentOnly[0].replace(/\s+/g, " ").trim()
+        }
+    }
 
     // Find primary calendar
     for (const { type, regex } of primaryPatterns) {
@@ -69,16 +104,18 @@ function parseAgendaHeader( header: string, headerId: string | null ): ParsedHea
         if (match) {
             const number =
                 type === "vetoed_bills_calendar"
-                    ? parseInt(match[2], 10)
-                    : parseInt(match[1], 10)
-                
+                ? parseInt(match[2], 10) // vetoed has optional chamber group
+                : type === "first_reading_calendar"
+                    ? parseInt(match[2], 10) // intro has chamber group then number
+                    : parseInt(match[1], 10);
+            
             return {
                 calendarType: type,
                 calendarNumber: number,
                 consentCalendar,
                 distributionDate,
                 readingDate,
-                heading,
+                heading: displayHeading,
                 headerId,
             }
         }
@@ -92,7 +129,7 @@ function parseAgendaHeader( header: string, headerId: string | null ): ParsedHea
             consentCalendar,
             distributionDate,
             readingDate,
-            heading,
+            heading: displayHeading,
             headerId,
         }
     }
@@ -110,17 +147,24 @@ async function scrapeAgendaUrl( url: string ) {
     $('table').each(( _, el ) => {
         const $table = $(el)
 
-        const headerText = $table.find('thead th').text().replace(/\s+/g, ' ').trim()
+        // const headerText = $table.find('thead th').text().replace(/\s+/g, ' ').trim()
+        const headerText = $table.find('thead th').text().trim()
 
         // Bail on tables without a header
         if ( ! headerText ) return
 
-        // Get the ID from the agenda table
-        const headerId = $table.find('thead a[id]').attr('id') || null
+        const rawHeaderText = $table.find('thead th').text().trim()
+
+        const headerId =
+            $table.find('thead a[id]').attr('id') ??
+            rawHeaderText
+                .toLowerCase()
+                .replace(/\s+/g, '-')
+                .replace(/[^a-z0-9-]/g, '')
 
         const parsedHeader = parseAgendaHeader( headerText, headerId )
 
-        console.log('>>> Parsed Header', { parsedHeader })
+        if ( ! parsedHeader ) return
 
         const items: ParsedAgendaItem[] = []
 
@@ -207,7 +251,9 @@ async function scrapeAgendaUrl( url: string ) {
                 description = descText || null
             }
 
-            // Some of these may not be needed since technically we only need to know that the bills are on the agenda, teh rest we already ahve
+            // @TODO there's a committee in some of these. Is this needed or should it just be pulled from the JSON?
+
+            // Some of these may not be needed since technically we only need to know that the bills are on the agenda, teh rest we already have
             items.push({
                 headerId,
                 billNumber,
@@ -220,7 +266,7 @@ async function scrapeAgendaUrl( url: string ) {
         })
 
         sections.push({
-            headerId,
+            headerId: parsedHeader.headerId,
             header: parsedHeader,
             items,
         })
@@ -259,6 +305,8 @@ function mapCalendarType(type: string | undefined | null): CalendarType | null {
     if (!type) return null
     const t = type.toLowerCase()
     if (t === 'committee_report') return 'COMMITTEE_REPORT'
+    if (t === 'first_reading_calendar') return 'FIRST_READING'
+    if (t === 'second_reading_calendar') return 'SECOND_READING'
     if (t === 'third_reading_calendar') return 'THIRD_READING'
     if (t === 'special_order_calendar') return 'SPECIAL_ORDER'
     if (t === 'consent_calendar') return 'CONSENT'
@@ -498,7 +546,7 @@ async function upsertFloorCalendar(opts: {
     agendaUrl: string
     sessionYear: number
     sessionCode: string
-}) {
+}): Promise<{ calendar: FloorCalendar; wasNew: boolean } | null> {
     const { chamber, header, agendaUrl, sessionYear, sessionCode } = opts
     if ( ! header) return null
 
@@ -697,10 +745,11 @@ export const handler = async ( event: any, context: Context ) => {
 
     // const url = 'http://localhost:8000/20250327131337-senate-agenda.html' // ugh I lost the archive.
     // const url = 'https://mgaleg.maryland.gov/mgawebsite/FloorActions/Agenda/senate-12162025-1'
-    // @TODO this needs to be found automatically!!
-    const url = 'https://mgaleg.maryland.gov/mgawebsite/FloorActions/Agenda/senate-01092026-1'
 
-    const chamber: Chamber = 'SENATE' // for now
+    // @TODO this needs to be found automatically!!
+    const url = 'https://mgaleg.maryland.gov/mgawebsite/FloorActions/Agenda/senate-01152026-1'
+
+    const chamber: Chamber = 'SENATE' // for now. This should be specified when calling the scraper
 
     // log the scrape start
     const run = await startScrapeRun(`MGA_${chamber}_AGENDA`)
@@ -730,7 +779,7 @@ export const handler = async ( event: any, context: Context ) => {
                 sessionCode,
             })
 
-            const { calendar: floorCalendar, wasNew } = result
+            const { calendar: floorCalendar, wasNew } = result // @TODO this is causing a type error
 
             if ( ! floorCalendar ) {
                 console.warn('Agenda scraper: no floorCalendar returned for header', header)

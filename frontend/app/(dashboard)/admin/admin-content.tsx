@@ -196,7 +196,6 @@ export const AdminContent = () => {
             const response = await fetch("/api/admin/settings")
             if (response.ok) {
                 const data: SettingsResponse = await response.json()
-                console.log('Settings', { data })
                 setSettings(data.settings)
             }
         } catch (error) {

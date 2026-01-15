@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge"
 import Link from "next/link"
 
 type CalendarType =
+    | "FIRST_READING"
     | "COMMITTEE_REPORT"
     | "THIRD_READING"
     | "SPECIAL_ORDER"
@@ -292,6 +293,7 @@ function organizeFloorCalendars(raw: FloorCalendar[] | undefined | null): { sect
     const safeRaw: FloorCalendar[] = Array.isArray(raw) ? raw : []
 
     const sectionDefs: Array<{ title: string; match: (t: CalendarType) => boolean }> = [
+        { title: "First Reading Calendar", match: (t) => t === "FIRST_READING" },
         { title: "Second Reading Calendar", match: (t) => t === "COMMITTEE_REPORT" },
         { title: "Third Reading Calendar", match: (t) => t === "THIRD_READING" },
         { title: "Special Order Calendar", match: (t) => t === "SPECIAL_ORDER" },
@@ -444,6 +446,7 @@ export async function CalendarReport({ calendarData }: { calendarData: CalendarD
                             {(() => {
                                 // map section title -> calendarType used in your organizer defs
                                 const typeByTitle: Record<string, CalendarType> = {
+                                    "First Reading Calendar": "FIRST_READING",
                                     "Second Reading Calendar": "COMMITTEE_REPORT",
                                     "Third Reading Calendar": "THIRD_READING",
                                     "Special Order Calendar": "SPECIAL_ORDER",
@@ -514,6 +517,8 @@ export async function CalendarReport({ calendarData }: { calendarData: CalendarD
                                                 })
 
                                                 const isFlagged = Boolean(item.bill?.isFlagged)
+
+                                                if ( ! item.bill ) return
 
                                                 return (
                                                     <TableRow key={item.id} className={isFlagged ? "bg-yellow-100 hover:bg-yellow-200" : ""}>

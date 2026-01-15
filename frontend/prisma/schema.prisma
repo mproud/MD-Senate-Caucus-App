@@ -30,6 +30,7 @@ enum ActionSource {
 /// Type of floor or committee calendar
 /// Adjust as any edge cases are discovered
 enum CalendarType {
+  FIRST_READING
   SECOND_READING
   THIRD_READING
   CONSENT

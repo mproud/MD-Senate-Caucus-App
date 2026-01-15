@@ -167,10 +167,7 @@ function StatusRow({ run }: { run: NonNullable<LastRunResponse["run"]> }) {
             </Tooltip>
 
             <span
-                className={cn(
-                    "truncate whitespace-nowrap transition-all duration-200",
-                    animate && "opacity-0 translate-y-0.5"
-                )}
+                className="truncate whitespace-nowrap transition-all duration-200"
                 key={timeLabel}
             >
                 {timeLabel}
