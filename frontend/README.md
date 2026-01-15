@@ -87,16 +87,16 @@ Bonus #1 - Input House Votes
 Bonus #2 - Pull committee voting report & auto ingest
 
 
--- GENERAL/BACKEND --
+## -- GENERAL/BACKEND --
 
 Analytics & Admin visibility; Logging/Tracking
 
 
--- TESTING --
+## -- TESTING --
 
-- Choose archive date for testing
-- Fetch data from archive automatically
--> Sample Reports
+- [x] - Choose archive date for testing
+- [x] - Fetch data from archive automatically
+- [x] -> Sample Reports
 
 Cost? MX and support + Development
 	- Hands-on training and testing first week(s) of Session

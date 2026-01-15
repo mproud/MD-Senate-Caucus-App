@@ -66,8 +66,7 @@ export async function GET(req: NextRequest) {
                 })
             : await prisma.bill.findFirst({
                     where: {
-                        billNumber: billNumber ?? "",
-                        sessionCode: activeSessionCode,
+                        billNumber: billNumber ?? ""
                     },
                     select: { id: true, billNumber: true, isFlagged: true },
                 })

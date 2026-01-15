@@ -39,6 +39,11 @@ export const scraperKinds = [
         name: "Update legislators & committees",
         description: "",
     },
+    {
+        kind: "ALERT_SENDER",
+        name: "Send Updates & Alerts",
+        description: "",
+    },
 ] as const
 
 export type ScraperKind = typeof scraperKinds[number]["kind"]

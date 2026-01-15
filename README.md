@@ -6,15 +6,24 @@
 - Add chamber to calendar options/filter
 - Bills - filter by committee doesn't work
 - EVENT ALERTS!!!
+- Alerts page!
 - Automatic cron
+- Dashboard - /api/flag is triggering a 500 randomly
+- Constitutional Amendment status
+- Search bills by status?
 
 # Known issues/gotchas
 
-- Users - invite/add/remove user functionality!
+- [ ] User Menu - Accoumt, Settings, etc
 - Figure out prod user - maybe shortcut and use Clerk components for now?
 - Single bill page - display votes numbers! this needs to be grabbed from the scraper
 - Single bill page - when manually recording a vote, trigger the status update/notification
 - Single bill page - after recording a vote, it needs to show up in the dashboard
+
+# Completed To Do
+
+- [x] Users - invite/add/remove user functionality!
+
 
 
 # Database Tables Explained

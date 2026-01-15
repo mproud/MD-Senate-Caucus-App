@@ -262,7 +262,9 @@ export async function GET(req: NextRequest) {
         }
 
         const where = buildNaturalWhere(clerkUserId, parsed.data)
-        const alert = await prisma.alert.findFirst({ where })
+        const alert = await prisma.alert.findFirst({
+            where
+        })
 
         return json({ exists: !!alert, active: alert?.active ?? false, alert })
     }

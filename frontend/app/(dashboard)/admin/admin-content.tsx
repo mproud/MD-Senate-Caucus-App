@@ -545,7 +545,7 @@ export const AdminContent = () => {
                     </TabsTrigger>
                     <TabsTrigger value="scrapers" className="flex items-center gap-2">
                         <Database className="h-4 w-4" />
-                        Scrapers
+                        Scrapers & Tasks
                         {runningScrapers > 0 && (
                             <Badge className="ml-1 h-5 w-5 p-0 flex items-center justify-center text-xs bg-blue-500">
                                 {runningScrapers}
@@ -1011,8 +1011,8 @@ export const AdminContent = () => {
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between">
                             <div>
-                                <CardTitle>Scraper Status</CardTitle>
-                                <CardDescription>Monitor and trigger data scrapers</CardDescription>
+                                <CardTitle>Scraper & Task Status</CardTitle>
+                                <CardDescription>Monitor and trigger data scrapers and other tasks</CardDescription>
                             </div>
                             <Button
                                 variant="outline"
