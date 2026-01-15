@@ -66530,15 +66530,15 @@ async function createBillAddedToCalendarEvent(opts) {
     }
   });
 }
+function deriveChamberFromUrl(url2) {
+  const lower = url2.toLowerCase();
+  if (lower.includes("/senate-")) return import_client2.Chamber.SENATE;
+  if (lower.includes("/house-")) return import_client2.Chamber.HOUSE;
+  return null;
+}
 var handler = async (event, context) => {
   const urlFromEvent = event?.url;
-  const url2 = "https://mgaleg.maryland.gov/mgawebsite/FloorActions/Agenda/house-01152026-1";
-  function deriveChamberFromUrl(url3) {
-    const lower = url3.toLowerCase();
-    if (lower.includes("/senate-")) return import_client2.Chamber.SENATE;
-    if (lower.includes("/house-")) return import_client2.Chamber.HOUSE;
-    return null;
-  }
+  const url2 = "https://mgaleg.maryland.gov/mgawebsite/FloorActions/Agenda/senate-01152026-1";
   const chamber = deriveChamberFromUrl(url2);
   if (!chamber) {
     console.error("Invalid Chamber");

@@ -482,9 +482,9 @@ export async function CalendarReport({ calendarData }: { calendarData: CalendarD
                                             <TableRow>
                                                 <TableHead
                                                     colSpan={8}
-                                                    className="text-md text-left font-semibold border-0 border-t-2 border-b-2 border-black"
+                                                    className="text-md text-left border-0 border-t-2 border-b-2 border-black"
                                                 >
-                                                    {group.heading}
+                                                    <span className="font-semibold">{group.heading}</span>
                                                 </TableHead>
                                             </TableRow>
 

@@ -119,7 +119,11 @@ export async function GET(request: NextRequest) {
             where,
             skip,
             take,
-            orderBy: [{ billNumberNumeric: "asc" }, { billNumber: "asc" }],
+            orderBy: [
+                { chamber: "asc" },
+                { billType: "asc" },
+                { billNumberNumeric: "asc" },
+            ],
             include: {
                 currentCommittee: {
                     include: {

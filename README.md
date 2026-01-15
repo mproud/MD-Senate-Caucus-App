@@ -5,6 +5,8 @@
 - Scraper isn't attaching a bill to a committee automatically - I think this is fixed?
 - Add chamber to calendar options/filter
 - Bills - filter by committee doesn't work
+- EVENT ALERTS!!!
+- Automatic cron
 
 # Known issues/gotchas
 
