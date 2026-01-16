@@ -746,13 +746,19 @@ function deriveChamberFromUrl(url: string): Chamber | null {
 // --- the handler! --
 export const handler = async ( event: any, context: Context ) => {
     // Allow overriding the URL via event, otherwise use a default
-    const urlFromEvent = event?.url as string | undefined
+    // const urlFromEvent = event?.url as string | undefined
 
     // const url = 'http://localhost:8000/20250327131337-senate-agenda.html' // local archive
 
     // @TODO this needs to be found automatically!!
-    const url = 'https://mgaleg.maryland.gov/mgawebsite/FloorActions/Agenda/senate-01152026-1'
+    const url = event?.url as string
+    // const url = 'https://mgaleg.maryland.gov/mgawebsite/FloorActions/Agenda/senate-01152026-1'
     // const url = 'https://mgaleg.maryland.gov/mgawebsite/FloorActions/Agenda/house-01152026-1'
+
+    if ( ! url ) {
+        console.error('No URL')
+        return false
+    }
 
     const chamber: Chamber | null = deriveChamberFromUrl(url)
 

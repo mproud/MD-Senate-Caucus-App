@@ -38622,7 +38622,7 @@ var require_date = __commonJS({
     var IMF_COLONS = [19, 22];
     var ASCTIME_SPACES = [3, 7, 10, 19];
     var RFC850_DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
-    function parseHttpDate(date, now) {
+    function parseHttpDate(date, now2) {
       date = date.toLowerCase();
       switch (date[3]) {
         case ",":
@@ -38630,7 +38630,7 @@ var require_date = __commonJS({
         case " ":
           return parseAscTimeDate(date);
         default:
-          return parseRfc850Date(date, now);
+          return parseRfc850Date(date, now2);
       }
     }
     function parseImfDate(date) {
@@ -38729,7 +38729,7 @@ var require_date = __commonJS({
       }
       return new Date(Date.UTC(year, monthIdx, day, hour, minute, second));
     }
-    function parseRfc850Date(date, now = /* @__PURE__ */ new Date()) {
+    function parseRfc850Date(date, now2 = /* @__PURE__ */ new Date()) {
       if (!date.endsWith("gmt")) {
         return void 0;
       }
@@ -38761,7 +38761,7 @@ var require_date = __commonJS({
       if (isNaN(year)) {
         return void 0;
       }
-      const currentYear = now.getUTCFullYear();
+      const currentYear = now2.getUTCFullYear();
       const currentDecade = currentYear % 100;
       const currentCentury = Math.floor(currentYear / 100);
       if (year > currentDecade && year - currentDecade >= 50) {
@@ -38898,19 +38898,19 @@ var require_cache_handler = __commonJS({
         if (!canCacheResponse(this.#cacheType, statusCode, resHeaders, cacheControlDirectives)) {
           return downstreamOnHeaders();
         }
-        const now = Date.now();
+        const now2 = Date.now();
         const resAge = resHeaders.age ? getAge(resHeaders.age) : void 0;
         if (resAge && resAge >= MAX_RESPONSE_AGE) {
           return downstreamOnHeaders();
         }
         const resDate = typeof resHeaders.date === "string" ? parseHttpDate(resHeaders.date) : void 0;
-        const staleAt = determineStaleAt(this.#cacheType, now, resAge, resHeaders, resDate, cacheControlDirectives) ?? this.#cacheByDefault;
+        const staleAt = determineStaleAt(this.#cacheType, now2, resAge, resHeaders, resDate, cacheControlDirectives) ?? this.#cacheByDefault;
         if (staleAt === void 0 || resAge && resAge > staleAt) {
           return downstreamOnHeaders();
         }
-        const baseTime = resDate ? resDate.getTime() : now;
+        const baseTime = resDate ? resDate.getTime() : now2;
         const absoluteStaleAt = staleAt + baseTime;
-        if (now >= absoluteStaleAt) {
+        if (now2 >= absoluteStaleAt) {
           return downstreamOnHeaders();
         }
         let varyDirectives;
@@ -38928,7 +38928,7 @@ var require_cache_handler = __commonJS({
           headers: strippedHeaders,
           vary: varyDirectives,
           cacheControlDirectives,
-          cachedAt: resAge ? now - resAge : now,
+          cachedAt: resAge ? now2 - resAge : now2,
           staleAt: absoluteStaleAt,
           deleteAt
         };
@@ -39001,7 +39001,7 @@ var require_cache_handler = __commonJS({
       const age = parseInt(Array.isArray(ageHeader) ? ageHeader[0] : ageHeader);
       return isNaN(age) ? void 0 : age * 1e3;
     }
-    function determineStaleAt(cacheType, now, age, resHeaders, responseDate, cacheControlDirectives) {
+    function determineStaleAt(cacheType, now2, age, resHeaders, responseDate, cacheControlDirectives) {
       if (cacheType === "shared") {
         const sMaxAge = cacheControlDirectives["s-maxage"];
         if (sMaxAge !== void 0) {
@@ -39015,7 +39015,7 @@ var require_cache_handler = __commonJS({
       if (typeof resHeaders.expires === "string") {
         const expiresDate = parseHttpDate(resHeaders.expires);
         if (expiresDate) {
-          if (now >= expiresDate.getTime()) {
+          if (now2 >= expiresDate.getTime()) {
             return void 0;
           }
           if (responseDate) {
@@ -39026,16 +39026,16 @@ var require_cache_handler = __commonJS({
               return void 0;
             }
           }
-          return expiresDate.getTime() - now;
+          return expiresDate.getTime() - now2;
         }
       }
       if (typeof resHeaders["last-modified"] === "string") {
         const lastModified = new Date(resHeaders["last-modified"]);
         if (isValidDate(lastModified)) {
-          if (lastModified.getTime() >= now) {
+          if (lastModified.getTime() >= now2) {
             return void 0;
           }
-          const responseAge = now - lastModified.getTime();
+          const responseAge = now2 - lastModified.getTime();
           return responseAge * 0.1;
         }
       }
@@ -39044,7 +39044,7 @@ var require_cache_handler = __commonJS({
       }
       return void 0;
     }
-    function determineDeleteAt(now, cacheControlDirectives, staleAt) {
+    function determineDeleteAt(now2, cacheControlDirectives, staleAt) {
       let staleWhileRevalidate = -Infinity;
       let staleIfError = -Infinity;
       let immutable = -Infinity;
@@ -39055,7 +39055,7 @@ var require_cache_handler = __commonJS({
         staleIfError = staleAt + cacheControlDirectives["stale-if-error"] * 1e3;
       }
       if (staleWhileRevalidate === -Infinity && staleIfError === -Infinity) {
-        immutable = now + 31536e6;
+        immutable = now2 + 31536e6;
       }
       return Math.max(staleAt, staleWhileRevalidate, staleIfError, immutable);
     }
@@ -39168,9 +39168,9 @@ var require_memory_cache_store = __commonJS({
       get(key) {
         assertCacheKey(key);
         const topLevelKey = `${key.origin}:${key.path}`;
-        const now = Date.now();
+        const now2 = Date.now();
         const entries = this.#entries.get(topLevelKey);
-        const entry = entries ? findEntry(key, entries, now) : null;
+        const entry = entries ? findEntry(key, entries, now2) : null;
         return entry == null ? void 0 : {
           statusMessage: entry.statusMessage,
           statusCode: entry.statusCode,
@@ -39266,8 +39266,8 @@ var require_memory_cache_store = __commonJS({
         this.#entries.delete(topLevelKey);
       }
     };
-    function findEntry(key, entries, now) {
-      return entries.find((entry) => entry.deleteAt > now && entry.method === key.method && (entry.vary == null || Object.keys(entry.vary).every((headerName) => {
+    function findEntry(key, entries, now2) {
+      return entries.find((entry) => entry.deleteAt > now2 && entry.method === key.method && (entry.vary == null || Object.keys(entry.vary).every((headerName) => {
         if (entry.vary[headerName] === null) {
           return key.headers[headerName] === void 0;
         }
@@ -39384,16 +39384,16 @@ var require_cache2 = __commonJS({
       if (result.cacheControlDirectives?.["no-cache"] && !Array.isArray(result.cacheControlDirectives["no-cache"])) {
         return true;
       }
-      const now = Date.now();
-      if (now > result.staleAt) {
+      const now2 = Date.now();
+      if (now2 > result.staleAt) {
         if (cacheControlDirectives?.["max-stale"]) {
           const gracePeriod = result.staleAt + cacheControlDirectives["max-stale"] * 1e3;
-          return now > gracePeriod;
+          return now2 > gracePeriod;
         }
         return true;
       }
       if (cacheControlDirectives?.["min-fresh"]) {
-        const timeLeftTillStale = result.staleAt - now;
+        const timeLeftTillStale = result.staleAt - now2;
         const threshold = cacheControlDirectives["min-fresh"] * 1e3;
         return timeLeftTillStale <= threshold;
       }
@@ -39488,11 +39488,11 @@ var require_cache2 = __commonJS({
       if (!result) {
         return handleUncachedResponse(dispatch, globalOpts, cacheKey, handler2, opts, reqCacheControl);
       }
-      const now = Date.now();
-      if (now > result.deleteAt) {
+      const now2 = Date.now();
+      if (now2 > result.deleteAt) {
         return dispatch(opts, new CacheHandler(globalOpts, cacheKey, handler2));
       }
-      const age = Math.round((now - result.cachedAt) / 1e3);
+      const age = Math.round((now2 - result.cachedAt) / 1e3);
       if (reqCacheControl?.["max-age"] && age >= reqCacheControl["max-age"]) {
         return dispatch(opts, handler2);
       }
@@ -39503,7 +39503,7 @@ var require_cache2 = __commonJS({
         let withinStaleIfErrorThreshold = false;
         const staleIfErrorExpiry = result.cacheControlDirectives["stale-if-error"] ?? reqCacheControl?.["stale-if-error"];
         if (staleIfErrorExpiry) {
-          withinStaleIfErrorThreshold = now < result.staleAt + staleIfErrorExpiry * 1e3;
+          withinStaleIfErrorThreshold = now2 < result.staleAt + staleIfErrorExpiry * 1e3;
         }
         let headers = {
           ...opts.headers,
@@ -39932,9 +39932,9 @@ var require_sqlite_cache_store = __commonJS({
         if (values.length === 0) {
           return void 0;
         }
-        const now = Date.now();
+        const now2 = Date.now();
         for (const value of values) {
-          if (now >= value.deleteAt && !canBeExpired) {
+          if (now2 >= value.deleteAt && !canBeExpired) {
             return void 0;
           }
           let matches = true;
@@ -49433,9 +49433,9 @@ var AxiosTransformStream = class extends import_stream.default.Transform {
       let bytesLeft;
       let passed = 0;
       if (maxRate) {
-        const now = Date.now();
-        if (!internals.ts || (passed = now - internals.ts) >= timeWindow) {
-          internals.ts = now;
+        const now2 = Date.now();
+        if (!internals.ts || (passed = now2 - internals.ts) >= timeWindow) {
+          internals.ts = now2;
           bytesLeft = bytesThreshold - internals.bytes;
           internals.bytes = bytesLeft < 0 ? -bytesLeft : 0;
           passed = 0;
@@ -49622,13 +49622,13 @@ function speedometer(samplesCount, min) {
   let firstSampleTS;
   min = min !== void 0 ? min : 1e3;
   return function push(chunkLength) {
-    const now = Date.now();
+    const now2 = Date.now();
     const startedAt = timestamps[tail];
     if (!firstSampleTS) {
-      firstSampleTS = now;
+      firstSampleTS = now2;
     }
     bytes[head] = chunkLength;
-    timestamps[head] = now;
+    timestamps[head] = now2;
     let i = tail;
     let bytesCount = 0;
     while (i !== head) {
@@ -49639,10 +49639,10 @@ function speedometer(samplesCount, min) {
     if (head === tail) {
       tail = (tail + 1) % samplesCount;
     }
-    if (now - firstSampleTS < min) {
+    if (now2 - firstSampleTS < min) {
       return;
     }
-    const passed = startedAt && now - startedAt;
+    const passed = startedAt && now2 - startedAt;
     return passed ? Math.round(bytesCount * 1e3 / passed) : void 0;
   };
 }
@@ -49654,8 +49654,8 @@ function throttle(fn, freq) {
   let threshold = 1e3 / freq;
   let lastArgs;
   let timer;
-  const invoke = (args, now = Date.now()) => {
-    timestamp = now;
+  const invoke = (args, now2 = Date.now()) => {
+    timestamp = now2;
     lastArgs = null;
     if (timer) {
       clearTimeout(timer);
@@ -49664,10 +49664,10 @@ function throttle(fn, freq) {
     fn(...args);
   };
   const throttled = (...args) => {
-    const now = Date.now();
-    const passed = now - timestamp;
+    const now2 = Date.now();
+    const passed = now2 - timestamp;
     if (passed >= threshold) {
-      invoke(args, now);
+      invoke(args, now2);
     } else {
       lastArgs = args;
       if (!timer) {
@@ -65993,6 +65993,16 @@ async function fetchHtml(url2) {
   });
   return load(res.data);
 }
+async function fetchJson(url2) {
+  const res = await axios_default.get(url2, {
+    // if we ever have to include a user agent string or something for scraping
+    // headers: {
+    //     'User-Agent':
+    //         'the-custom-user-agent-string',
+    // },
+  });
+  return res.data;
+}
 
 // src/shared/helpers.ts
 function normalizeDate(raw) {
@@ -66537,8 +66547,11 @@ function deriveChamberFromUrl(url2) {
   return null;
 }
 var handler = async (event, context) => {
-  const urlFromEvent = event?.url;
-  const url2 = "https://mgaleg.maryland.gov/mgawebsite/FloorActions/Agenda/senate-01152026-1";
+  const url2 = event?.url;
+  if (!url2) {
+    console.error("No URL");
+    return false;
+  }
   const chamber = deriveChamberFromUrl(url2);
   if (!chamber) {
     console.error("Invalid Chamber");
@@ -66703,10 +66716,678 @@ var handler = async (event, context) => {
   }
 };
 
+// src/sync-bills-from-json.ts
+var import_client3 = require("@prisma/client");
+var LEGISLATION_JSON_URL = "https://mgaleg.maryland.gov/2026rs/misc/billsmasterlist/legislation.json";
+function mapChamber(billNumber) {
+  const prefix = billNumber.trim().toUpperCase();
+  if (prefix.startsWith("S")) return "SENATE";
+  return "HOUSE";
+}
+function oppositeChamber(ch) {
+  return ch === "SENATE" ? "HOUSE" : "SENATE";
+}
+function deriveSessionYearAndCode(item) {
+  const yearPart = item.YearAndSession?.slice(0, 4);
+  const sessionYear = Number.parseInt(yearPart || "2025", 10) || 2025;
+  const sessionCode = `${sessionYear}RS`;
+  return { sessionYear, sessionCode };
+}
+function deriveIsLocal(item) {
+  const broadSubjects = item.BroadSubjects ?? [];
+  return broadSubjects.some((s) => s?.Name?.includes("Local Bills"));
+}
+async function buildLegislatorIndex() {
+  const legislators = await prisma.legislator.findMany({
+    where: {
+      isActive: true
+    },
+    select: {
+      id: true,
+      fullName: true,
+      firstName: true,
+      lastName: true,
+      terms: {
+        select: {
+          chamber: true
+        }
+      }
+    }
+  });
+  const index2 = {};
+  for (const leg of legislators) {
+    const key = (leg.lastName || "").trim().toLowerCase();
+    if (!key) continue;
+    if (!index2[key]) index2[key] = [];
+    index2[key].push(leg);
+  }
+  return index2;
+}
+function parseSponsorName(sponsorPrimary) {
+  if (!sponsorPrimary) return null;
+  let s = sponsorPrimary.trim();
+  let chamber;
+  if (s.startsWith("Delegate ")) {
+    chamber = "HOUSE";
+    s = s.slice("Delegate ".length);
+  } else if (s.startsWith("Senator ")) {
+    chamber = "SENATE";
+    s = s.slice("Senator ".length);
+  } else {
+    return null;
+  }
+  const commaInitialMatch = s.match(/^(.+?),\s*([A-Z])\.?$/);
+  if (commaInitialMatch) {
+    const lastName2 = commaInitialMatch[1].trim();
+    const initial2 = commaInitialMatch[2].trim();
+    if (!lastName2) return null;
+    return { chamber, initial: initial2, lastName: lastName2 };
+  }
+  s = s.replace(/,$/, "").trim();
+  const parts = s.split(/\s+/);
+  let initial = null;
+  let lastName;
+  if (parts.length >= 2 && /^[A-Z]\.?$/.test(parts[0])) {
+    initial = parts[0][0];
+    lastName = parts.slice(1).join(" ");
+  } else {
+    lastName = s;
+  }
+  lastName = lastName.trim();
+  if (!lastName) return null;
+  return { chamber, initial, lastName };
+}
+function resolvePrimarySponsorId(billNumber, sponsorPrimary, index2) {
+  if (!sponsorPrimary) return null;
+  const parsed = parseSponsorName(sponsorPrimary);
+  if (!parsed) return null;
+  const { chamber, initial, lastName } = parsed;
+  const key = lastName.toLowerCase();
+  const lastNameMatches = index2[key] || [];
+  if (lastNameMatches.length === 0) {
+    console.warn(
+      `No Legislator match for "${sponsorPrimary}" (lastName: "${lastName}") (Bill: ${billNumber})`
+    );
+    return null;
+  }
+  const chamberMatches = lastNameMatches.filter(
+    (leg) => leg.terms?.some((t) => t.chamber === chamber)
+  );
+  if (chamberMatches.length === 1) {
+    return chamberMatches[0].id;
+  }
+  if (chamberMatches.length > 1 && initial) {
+    const withInitial = chamberMatches.filter((leg) => {
+      const first2 = (leg.firstName || "").trim();
+      return first2.toUpperCase().startsWith(initial.toUpperCase());
+    });
+    if (withInitial.length === 1) {
+      return withInitial[0].id;
+    }
+    if (withInitial.length > 1) {
+      console.warn(
+        `Ambiguous match for "${sponsorPrimary}". Multiple legislators share last name + initial.`
+      );
+      return null;
+    }
+  }
+  if (chamberMatches.length > 1) {
+    console.warn(
+      `Ambiguous match for "${sponsorPrimary}" - multiple legislators in same chamber with last name "${lastName}".`
+    );
+    return null;
+  }
+  if (chamberMatches.length === 0) {
+    if (lastNameMatches.length === 1) {
+      return lastNameMatches[0].id;
+    }
+    console.warn(
+      `Ambiguous match for "${sponsorPrimary}" - cannot resolve chamber. Candidates: ${lastNameMatches.map((m) => m.fullName).join(", ")}`
+    );
+    return null;
+  }
+  return null;
+}
+function createStatusChangedSummary(billNumber, oldStatus, newStatus) {
+  if (!oldStatus) {
+    return `${billNumber}: status set to ${newStatus ?? "Unknown"}`;
+  }
+  if (!newStatus) {
+    return `${billNumber}: status cleared (was ${oldStatus})`;
+  }
+  return `${billNumber}: status changed from "${oldStatus}" to "${newStatus}"`;
+}
+function normalizeCommitteeName(name2) {
+  return name2.replace(/\bcommittee\b/i, "").replace(/\s+/g, " ").trim();
+}
+async function resolveCommitteeIdByName(name2, chamber) {
+  if (!name2) return null;
+  const raw = name2.trim();
+  if (!raw) return null;
+  const normalized = normalizeCommitteeName(raw);
+  const withCommittee = `${normalized} Committee`;
+  const found = await prisma.committee.findFirst({
+    where: {
+      chamber,
+      OR: [
+        { name: raw },
+        { name: normalized },
+        { name: withCommittee },
+        { name: { contains: normalized, mode: "insensitive" } }
+      ]
+    },
+    select: { id: true }
+  });
+  return found?.id ?? null;
+}
+function parseVoteCounts(text3) {
+  const t = text3.replace(/\s+/g, " ").trim();
+  console.log("Parse Vote Counts", { text: text3 });
+  const yeas = t.match(/Yeas?\s*(\d+)/i);
+  const nays = t.match(/Nays?\s*(\d+)/i);
+  if (yeas || nays) {
+    return { yes: yeas ? Number(yeas[1]) : null, no: nays ? Number(nays[1]) : null };
+  }
+  const dash = t.match(/\b(\d+)\s*-\s*(\d+)\b/);
+  if (dash) {
+    return { yes: Number(dash[1]), no: Number(dash[2]) };
+  }
+  return { yes: null, no: null };
+}
+function classifyVote(actionText, kind) {
+  const t = actionText.toLowerCase();
+  if (kind === "REPORT") {
+    const m = actionText.match(/Favorable(?:\s+with\s+Amendments.*)?|Unfavorable|Adverse/i);
+    return { isVote: true, voteResult: m ? m[0] : actionText };
+  }
+  if (/\bpassed\b|\bpassage\b|\badopted\b/i.test(actionText)) return { isVote: true, voteResult: "Passed" };
+  if (/\bfailed\b|\brejected\b/i.test(actionText)) return { isVote: true, voteResult: "Failed" };
+  return { isVote: false, voteResult: null };
+}
+async function upsertBillAction(opts) {
+  const { billId, chamber, actionDate, description, committeeId: committeeId2, sequence, kind, raw } = opts;
+  const existing = await prisma.billAction.findFirst({
+    where: {
+      billId,
+      chamber,
+      actionDate,
+      sequence,
+      description
+    },
+    select: {
+      id: true,
+      isVote: true,
+      voteResult: true,
+      yesVotes: true,
+      noVotes: true
+    }
+  });
+  const { isVote, voteResult } = classifyVote(description, kind);
+  console.log("Bill Action", { opts });
+  const counts = isVote ? parseVoteCounts(description) : { yes: null, no: null };
+  if (!existing) {
+    const created = await prisma.billAction.create({
+      data: {
+        billId,
+        chamber,
+        actionDate,
+        description,
+        committeeId: committeeId2 ?? void 0,
+        sequence,
+        isVote,
+        voteResult,
+        yesVotes: counts.yes,
+        noVotes: counts.no,
+        source: import_client3.ActionSource.MGA_JSON,
+        dataSource: raw
+      },
+      select: { id: true, isVote: true }
+    });
+    return { actionId: created.id, wasNew: true, isVote: created.isVote };
+  }
+  const voteChanged = existing.isVote !== isVote || existing.voteResult !== voteResult || existing.yesVotes !== counts.yes || existing.noVotes !== counts.no;
+  if (voteChanged) {
+    await prisma.billAction.update({
+      where: { id: existing.id },
+      data: {
+        committeeId: committeeId2 ?? void 0,
+        isVote,
+        voteResult,
+        yesVotes: counts.yes,
+        noVotes: counts.no,
+        dataSource: raw
+      }
+    });
+  }
+  return { actionId: existing.id, wasNew: false, isVote };
+}
+async function maybeCreateCommitteeVoteEvent(opts) {
+  const { billId, chamber, committeeId: committeeId2, actionDate, description, actionId } = opts;
+  if (!committeeId2) return;
+  const exists = await prisma.billEvent.findFirst({
+    where: {
+      billId,
+      eventType: import_client3.BillEventType.COMMITTEE_VOTE_RECORDED,
+      committeeId: committeeId2,
+      eventTime: actionDate,
+      summary: { contains: description }
+    },
+    select: { id: true }
+  });
+  if (exists) return;
+  await prisma.billEvent.create({
+    data: {
+      billId,
+      eventType: import_client3.BillEventType.COMMITTEE_VOTE_RECORDED,
+      chamber,
+      committeeId: committeeId2,
+      eventTime: actionDate,
+      summary: `${description}`,
+      // keep it simple, can be formatted nicer
+      payload: { actionId }
+      // link to BillAction for UI
+    }
+  });
+}
+function buildActionCandidates(item, origin2) {
+  const opp = oppositeChamber(origin2);
+  const safe = (s) => s && String(s).trim().length ? String(s).trim() : null;
+  return [
+    // House of origin
+    {
+      chamber: origin2,
+      dateStr: item.ReportDateHouseOfOrigin,
+      actionText: safe(item.ReportActionHouseOfOrigin),
+      committeeName: safe(item.CommitteePrimaryOrigin),
+      sequence: 10,
+      kind: "REPORT",
+      side: "ORIGIN"
+    },
+    {
+      chamber: origin2,
+      dateStr: item.SecondReadingDateHouseOfOrigin,
+      actionText: safe(item.SecondReadingActionHouseOfOrigin),
+      committeeName: null,
+      sequence: 20,
+      kind: "SECOND",
+      side: "ORIGIN"
+    },
+    {
+      chamber: origin2,
+      dateStr: item.ThirdReadingDateHouseOfOrigin,
+      actionText: safe(item.ThirdReadingActionHouseOfOrigin),
+      committeeName: null,
+      sequence: 30,
+      kind: "THIRD",
+      side: "ORIGIN"
+    },
+    // Opposite chamber (only becomes meaningful once the bill crosses)
+    {
+      chamber: opp,
+      dateStr: item.ReportDateOppositeHouse,
+      actionText: safe(item.ReportActionOppositeHouse),
+      committeeName: safe(item.CommitteePrimaryOpposite),
+      sequence: 110,
+      kind: "REPORT",
+      side: "OPPOSITE"
+    },
+    {
+      chamber: opp,
+      dateStr: item.SecondReadingDateOppositeHouse,
+      actionText: safe(item.SecondReadingActionOppositeHouse),
+      committeeName: null,
+      sequence: 120,
+      kind: "SECOND",
+      side: "OPPOSITE"
+    },
+    {
+      chamber: opp,
+      dateStr: item.ThirdReadingDateOppositeHouse,
+      actionText: safe(item.ThirdReadingActionOppositeHouse),
+      committeeName: null,
+      sequence: 130,
+      kind: "THIRD",
+      side: "OPPOSITE"
+    }
+  ];
+}
+async function runBillsFromJsonScrape(event, context) {
+  const run = await startScrapeRun("MGA_BILLS_JSON");
+  try {
+    console.log("Fetching legislation.json...");
+    const raw = await fetchJson(LEGISLATION_JSON_URL);
+    console.log("Building legislator index...");
+    const legislatorIndex = await buildLegislatorIndex();
+    let billsCount = 0;
+    for (const item of raw) {
+      if (!item.BillNumber) {
+        console.warn("Skipping bill with no BillNumber", item);
+        continue;
+      }
+      const billNumber = String(item.BillNumber).trim();
+      const { sessionYear, sessionCode } = deriveSessionYearAndCode(item);
+      const externalId = `${sessionCode}-${billNumber}`;
+      const originChamber = mapChamber(billNumber);
+      const shortTitle = (item.Title || billNumber).trim();
+      const longTitle = null;
+      const synopsis = item.Synopsis ? String(item.Synopsis).trim() : null;
+      const billTypeMatch = billNumber.match(/^[A-Z]+/);
+      const billType = billTypeMatch ? billTypeMatch[0] : null;
+      const numericMatch = billNumber.match(/(\d+)/);
+      const billNumberNumeric = numericMatch ? Number(numericMatch[1]) : null;
+      const statusDesc = item.Status || null;
+      const statusCode = null;
+      const isEmergency = !!item.EmergencyBill;
+      const isLocal = deriveIsLocal(item);
+      const crossFileExternalId = item.CrossfileBillNumber ? String(item.CrossfileBillNumber).trim() : null;
+      const primarySponsorId = resolvePrimarySponsorId(billNumber, item.SponsorPrimary, legislatorIndex);
+      const sponsorDisplay = item.SponsorPrimary || null;
+      const existingBill = await prisma.bill.findUnique({
+        where: { externalId },
+        select: {
+          id: true,
+          statusDesc: true
+        }
+      });
+      const bill = await prisma.bill.upsert({
+        where: { externalId },
+        update: {
+          sessionYear,
+          sessionCode,
+          chamber: originChamber,
+          billNumber,
+          billNumberNumeric,
+          billType,
+          shortTitle,
+          longTitle,
+          synopsis,
+          statusCode,
+          statusDesc,
+          isEmergency,
+          isLocal,
+          crossFileExternalId,
+          primarySponsorId,
+          sponsorDisplay,
+          dataSource: item
+        },
+        create: {
+          externalId,
+          sessionYear,
+          sessionCode,
+          chamber: originChamber,
+          billNumber,
+          billNumberNumeric,
+          billType,
+          shortTitle,
+          longTitle,
+          synopsis,
+          statusCode,
+          statusDesc,
+          isEmergency,
+          isLocal,
+          crossFileExternalId,
+          primarySponsorId,
+          sponsorDisplay,
+          dataSource: item
+        }
+      });
+      const safeCommitteeName = (s) => {
+        if (!s) return null;
+        const t = String(s).trim();
+        return t.length ? t : null;
+      };
+      const originPrimaryName = safeCommitteeName(item.CommitteePrimaryOrigin);
+      const originSecondaryName = safeCommitteeName(item.CommitteeSecondaryOrigin);
+      const oppPrimaryName = safeCommitteeName(item.CommitteePrimaryOpposite);
+      const oppSecondaryName = safeCommitteeName(item.CommitteeSecondaryOpposite);
+      const oppChamber = oppositeChamber(originChamber);
+      const originPrimaryId = await resolveCommitteeIdByName(originPrimaryName, originChamber);
+      const originSecondaryId = await resolveCommitteeIdByName(originSecondaryName, originChamber);
+      const oppPrimaryId = await resolveCommitteeIdByName(oppPrimaryName, oppChamber);
+      const oppSecondaryId = await resolveCommitteeIdByName(oppSecondaryName, oppChamber);
+      const assignments = [
+        {
+          side: "ORIGIN",
+          chamber: originChamber,
+          role: "PRIMARY",
+          name: originPrimaryName,
+          committeeId: originPrimaryId,
+          referredDateStr: item.FirstReadingDateHouseOfOrigin ?? null,
+          // Report info applies to the primary committee on that side (best available from JSON)
+          reportedOutDateStr: item.ReportDateHouseOfOrigin ?? null,
+          reportAction: (item.ReportActionHouseOfOrigin || "").trim() || null
+        },
+        {
+          side: "ORIGIN",
+          chamber: originChamber,
+          role: "SECONDARY",
+          name: originSecondaryName,
+          committeeId: originSecondaryId,
+          referredDateStr: item.FirstReadingDateHouseOfOrigin ?? null,
+          reportedOutDateStr: null,
+          reportAction: null
+        },
+        {
+          side: "OPPOSITE",
+          chamber: oppChamber,
+          role: "PRIMARY",
+          name: oppPrimaryName,
+          committeeId: oppPrimaryId,
+          referredDateStr: item.FirstReadingDateOppositeHouse ?? null,
+          reportedOutDateStr: item.ReportDateOppositeHouse ?? null,
+          reportAction: (item.ReportActionOppositeHouse || "").trim() || null
+        },
+        {
+          side: "OPPOSITE",
+          chamber: oppChamber,
+          role: "SECONDARY",
+          name: oppSecondaryName,
+          committeeId: oppSecondaryId,
+          referredDateStr: item.FirstReadingDateOppositeHouse ?? null,
+          reportedOutDateStr: null,
+          reportAction: null
+        }
+      ];
+      const currentCandidate = (item.FirstReadingDateOppositeHouse ? assignments.find((a) => a.side === "OPPOSITE" && a.role === "PRIMARY" && a.committeeId) || assignments.find((a) => a.side === "OPPOSITE" && a.role === "SECONDARY" && a.committeeId) : null) || assignments.find((a) => a.side === "ORIGIN" && a.role === "PRIMARY" && a.committeeId) || assignments.find((a) => a.side === "ORIGIN" && a.role === "SECONDARY" && a.committeeId) || null;
+      const existingCurrent = await prisma.billCurrentCommittee.findUnique({
+        where: { billId: bill.id },
+        select: {
+          billId: true,
+          committeeId: true
+        }
+      });
+      if (currentCandidate && currentCandidate.committeeId) {
+        const referredDate = currentCandidate.referredDateStr ? new Date(currentCandidate.referredDateStr) : null;
+        await prisma.billCurrentCommittee.upsert({
+          where: { billId: bill.id },
+          update: {
+            committeeId: currentCandidate.committeeId,
+            referredDate: referredDate ?? void 0,
+            dataSource: {
+              source: "legislation.json",
+              matchedFrom: currentCandidate,
+              rawCommittees: {
+                CommitteePrimaryOrigin: item.CommitteePrimaryOrigin,
+                CommitteeSecondaryOrigin: item.CommitteeSecondaryOrigin,
+                CommitteePrimaryOpposite: item.CommitteePrimaryOpposite,
+                CommitteeSecondaryOpposite: item.CommitteeSecondaryOpposite
+              }
+            }
+          },
+          create: {
+            billId: bill.id,
+            committeeId: currentCandidate.committeeId,
+            referredDate: referredDate ?? void 0,
+            dataSource: {
+              source: "legislation.json",
+              matchedFrom: currentCandidate,
+              rawCommittees: {
+                CommitteePrimaryOrigin: item.CommitteePrimaryOrigin,
+                CommitteeSecondaryOrigin: item.CommitteeSecondaryOrigin,
+                CommitteePrimaryOpposite: item.CommitteePrimaryOpposite,
+                CommitteeSecondaryOpposite: item.CommitteeSecondaryOpposite
+              }
+            }
+          }
+        });
+        if (!existingCurrent || existingCurrent.committeeId !== currentCandidate.committeeId) {
+          await prisma.billEvent.create({
+            data: {
+              billId: bill.id,
+              eventType: import_client3.BillEventType.COMMITTEE_REFERRAL,
+              chamber: currentCandidate.chamber,
+              committeeId: currentCandidate.committeeId,
+              eventTime: referredDate ?? /* @__PURE__ */ new Date(),
+              summary: `${billNumber}: Referred to ${currentCandidate.name ?? "committee"}`,
+              payload: {
+                fromCommitteeId: existingCurrent?.committeeId ?? null,
+                toCommitteeId: currentCandidate.committeeId,
+                matchedFrom: currentCandidate
+              }
+            }
+          });
+        }
+      } else {
+        if (existingCurrent) {
+          await prisma.billCurrentCommittee.delete({
+            where: { billId: bill.id }
+          });
+        }
+      }
+      for (const a of assignments) {
+        if (!a.committeeId) continue;
+        const referredDate = a.referredDateStr ? new Date(a.referredDateStr) : null;
+        const reportedOutDate = a.reportedOutDateStr ? new Date(a.reportedOutDateStr) : null;
+        const existingHistory = await prisma.billCommitteeHistory.findFirst({
+          where: {
+            billId: bill.id,
+            committeeId: a.committeeId,
+            referredDate: referredDate ?? void 0
+          },
+          select: { id: true }
+        });
+        if (!existingHistory) {
+          await prisma.billCommitteeHistory.create({
+            data: {
+              billId: bill.id,
+              committeeId: a.committeeId,
+              referredDate: referredDate ?? void 0,
+              reportedOutDate: reportedOutDate ?? void 0,
+              reportAction: a.reportAction ?? void 0,
+              dataSource: {
+                source: "legislation.json",
+                matchedFrom: a
+              }
+            }
+          });
+        } else {
+          await prisma.billCommitteeHistory.update({
+            where: { id: existingHistory.id },
+            data: {
+              reportedOutDate: reportedOutDate ?? void 0,
+              reportAction: a.reportAction ?? void 0,
+              dataSource: {
+                source: "legislation.json",
+                matchedFrom: a
+              }
+            }
+          });
+        }
+      }
+      if (!existingBill) {
+        await prisma.billEvent.create({
+          data: {
+            billId: bill.id,
+            eventType: import_client3.BillEventType.BILL_INTRODUCED,
+            chamber: originChamber,
+            summary: `${billNumber}: Bill created`,
+            payload: {
+              sessionYear,
+              sessionCode,
+              statusDesc
+            }
+          }
+        });
+      } else if (existingBill.statusDesc !== statusDesc) {
+        await prisma.billEvent.create({
+          data: {
+            billId: bill.id,
+            eventType: import_client3.BillEventType.BILL_STATUS_CHANGED,
+            chamber: originChamber,
+            summary: createStatusChangedSummary(
+              billNumber,
+              existingBill?.statusDesc ?? null,
+              statusDesc
+            ),
+            payload: {
+              oldStatus: existingBill?.statusDesc ?? null,
+              newStatus: statusDesc,
+              sessionYear,
+              sessionCode
+            }
+            // processedForAlerts defaults to false
+          }
+        });
+      }
+      const candidates = buildActionCandidates(item, originChamber);
+      for (const c of candidates) {
+        if (!c.dateStr || !c.actionText) continue;
+        const actionDate = new Date(c.dateStr);
+        const committeeId2 = c.kind === "REPORT" ? await resolveCommitteeIdByName(c.committeeName, c.chamber) : null;
+        const up = await upsertBillAction({
+          billId: bill.id,
+          chamber: c.chamber,
+          actionDate,
+          description: c.actionText,
+          committeeId: committeeId2,
+          sequence: c.sequence,
+          kind: c.kind,
+          raw: { source: "legislation.json", side: c.side, ...c }
+        });
+        if (c.kind === "REPORT" && up.isVote) {
+          await maybeCreateCommitteeVoteEvent({
+            billId: bill.id,
+            chamber: c.chamber,
+            committeeId: committeeId2,
+            actionDate,
+            description: c.actionText,
+            actionId: up.actionId
+          });
+        }
+      }
+      billsCount++;
+    }
+    await finishScrapeRun(run.id, {
+      success: true,
+      billsCount
+    });
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ ok: true, bills: billsCount })
+    };
+  } catch (err) {
+    console.error("MGA bills JSON scraper error", err);
+    await finishScrapeRun(run.id, {
+      success: false,
+      error: err
+    });
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ ok: false, error: String(err) })
+    };
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
 // src/local-run.ts
-async function main() {
+var now = /* @__PURE__ */ new Date();
+var agendaDate = String(now.getMonth() + 1).padStart(2, "0") + String(now.getDate()).padStart(2, "0") + now.getFullYear();
+async function mainScrapeSenate() {
+  console.log("Fetch Senate Agenda", agendaDate);
   const event = {
-    source: "local-test"
+    source: "local-test",
+    url: `https://mgaleg.maryland.gov/mgawebsite/FloorActions/Agenda/senate-${agendaDate}-1`
   };
   const context = {
     awsRequestId: "local-test-req-123",
@@ -66734,7 +67415,71 @@ async function main() {
     process.exit(1);
   }
 }
-main();
+async function mainScrapeHouse() {
+  console.log("Fetch House Agenda", agendaDate);
+  const event = {
+    source: "local-test",
+    url: `https://mgaleg.maryland.gov/mgawebsite/FloorActions/Agenda/house-${agendaDate}-1`
+  };
+  const context = {
+    awsRequestId: "local-test-req-123",
+    functionName: "mga-scraper-local",
+    functionVersion: "$LATEST",
+    memoryLimitInMB: "1024",
+    invokedFunctionArn: "arn:aws:lambda:local:123456789012:function:mga-scraper-local",
+    getRemainingTimeInMillis: () => 3e4,
+    // no-ops for the rest
+    callbackWaitsForEmptyEventLoop: true,
+    done: () => {
+    },
+    fail: () => {
+    },
+    succeed: () => {
+    },
+    logGroupName: "/aws/lambda/mga-scraper-local",
+    logStreamName: "local"
+  };
+  try {
+    const res = await handler(event, context);
+    console.log("Lambda-like response:", res);
+  } catch (err) {
+    console.error("Error running handler locally:", err);
+    process.exit(1);
+  }
+}
+async function mainScrapeJson() {
+  const event = {
+    source: "local-test"
+  };
+  const context = {
+    awsRequestId: "local-test-req-123",
+    functionName: "mga-scraper-local",
+    functionVersion: "$LATEST",
+    memoryLimitInMB: "1024",
+    invokedFunctionArn: "arn:aws:lambda:local:123456789012:function:mga-scraper-local",
+    getRemainingTimeInMillis: () => 3e4,
+    // no-ops for the rest
+    callbackWaitsForEmptyEventLoop: true,
+    done: () => {
+    },
+    fail: () => {
+    },
+    succeed: () => {
+    },
+    logGroupName: "/aws/lambda/mga-scraper-local",
+    logStreamName: "local"
+  };
+  try {
+    const res = await runBillsFromJsonScrape(event, context);
+    console.log("Lambda-like response:", res);
+  } catch (err) {
+    console.error("Error running handler locally:", err);
+    process.exit(1);
+  }
+}
+mainScrapeSenate();
+mainScrapeHouse();
+mainScrapeJson();
 /*! Bundled license information:
 
 mime-db/index.js:

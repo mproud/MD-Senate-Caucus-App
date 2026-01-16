@@ -11,6 +11,7 @@
 - Dashboard - /api/flag is triggering a 500 randomly
 - Constitutional Amendment status
 - Search bills by status?
+- Legislator scraper - Palakovich Carr and Lewis Young
 
 # Known issues/gotchas
 
