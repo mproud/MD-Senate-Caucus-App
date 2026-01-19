@@ -69,8 +69,8 @@ type RawBill = {
 type LegislatorLookup = {
     id: number
     fullName: string
-    firstName: string
-    lastName: string
+    firstName: string | null
+    lastName: string | null
     // chamber: 'HOUSE' | 'SENATE'
     terms: { chamber: Chamber }[]
 }
@@ -970,7 +970,8 @@ export async function GET( request: Request ) {
                     committeeId,
                     sequence: c.sequence,
                     kind: c.kind,
-                    raw: { source: 'legislation.json', side: c.side, ...c },
+                    raw: { source: 'legislation.json', ...c },
+                    // raw: { source: 'legislation.json', side: c.side, ...c },
                 })
 
                 // If this action represents a committee vote, emit COMMITTEE_VOTE_RECORDED
