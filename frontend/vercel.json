@@ -2,8 +2,7 @@
   "crons": [
     {
       "path": "/api/cron/sync-bills-from-json",
-      "schedule": "5,20,35,50 5-22 * * *",
-      "timezone": "America/New_York"
+      "schedule": "5,20,35,50 5-22 * * *"
     }
   ]
 }
