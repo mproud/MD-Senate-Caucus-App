@@ -6,6 +6,7 @@ const isPublicRoute = createRouteMatcher([
     '/register',
     '/waitlist',
     '/api/webhooks/clerk',
+    '/api/cron/(.*)',
 ])
 
 const isRedirectIfAuthedRoute = createRouteMatcher([
