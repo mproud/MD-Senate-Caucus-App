@@ -18,3 +18,11 @@ export function normalizeDate( raw: string | null | undefined ): string | null {
     if (isNaN(d.getTime())) return null
     return d.toISOString().slice(0, 10) // YYYY-MM-DD
 }
+
+export function isValidCronSecret( request: Request ) {
+    const authHeader = request .headers.get("authorization") // case-insensitive in fetch, but normalize anyway
+    const expected = process.env.CRON_SECRET
+
+    if ( ! expected ) return false
+    return authHeader === `Bearer ${expected}`
+}
