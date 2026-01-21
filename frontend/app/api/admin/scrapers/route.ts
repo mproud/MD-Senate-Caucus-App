@@ -90,7 +90,7 @@ export async function POST(request: Request) {
             message: `Scraper ${kind} triggered successfully`,
             run: {
                 id: Date.now(),
-                kind: `${kind} -- ${body}`,
+                kind: `${kind} -- ${JSON.stringify(body)}`,
                 source: "LIVE",
                 startedAt: new Date().toISOString(),
                 finishedAt: null,
