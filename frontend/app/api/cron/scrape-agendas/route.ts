@@ -567,7 +567,7 @@ async function upsertFloorCalendar(opts: {
     const calendarDate = calendarDateStr ? new Date(calendarDateStr) : null
     const calendarName = header.heading ?? null
 
-    let committee = null as { id: number } | null
+    let committee = null as { id: number; name: string } | null
     const committeeName = extractCommitteeNameFromHeader(header)
 
     if (committeeName) {
