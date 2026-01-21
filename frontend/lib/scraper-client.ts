@@ -51,6 +51,11 @@ export const scraperKinds = [
     },
 ] as const
 
+// Return the scraper object
+export function getScraperByKind( kind: string ) {
+    return scraperKinds.find((s) => s.kind === kind )
+}
+
 export type ScraperKind = typeof scraperKinds[number]["kind"]
 
 export function getScraperKindLabel(kind: string): string {

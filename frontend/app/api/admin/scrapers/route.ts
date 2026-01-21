@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server"
 import { auth, clerkClient } from "@clerk/nextjs/server"
 import { getAllScrapeRuns, getLatestScrapeRun, getScrapeRunsByKind } from "@/lib/scraper"
-import { type ScrapeRun, scraperKinds } from "@/lib/scraper-client"
+import { type ScrapeRun, getScraperByKind, scraperKinds } from "@/lib/scraper-client"
 import { prisma } from "@/lib/prisma"
+import { fetchApi } from "@/lib/api"
 
 export async function GET() {
     try {
@@ -82,7 +83,18 @@ export async function POST(request: Request) {
         }
 
         // Map the kind of scraper to the endpoint
+        const scraper = getScraperByKind( kind )
+
+        if ( ! scraper ) {
+            return NextResponse.json({ error: 'Scraper not found' }, { status: 400 })
+        }
+
         // Trigger the endpoint
+        const scraperResponse = await fetchApi(`/api/cron/${scraper.endpoint}`)
+
+        if ( ! scraperResponse ) {
+            return NextResponse.json({ error: 'Scraper failed' }, { status: 500 })
+        }
 
         // In a real implementation, this would trigger the scraper
         // For now, we just return a mock response
@@ -90,7 +102,7 @@ export async function POST(request: Request) {
             message: `Scraper ${kind} triggered successfully`,
             run: {
                 id: Date.now(),
-                kind: `${kind} -- ${JSON.stringify(scraperKinds)}`,
+                kind: kind,
                 source: "LIVE",
                 startedAt: new Date().toISOString(),
                 finishedAt: null,
