@@ -7,6 +7,8 @@ import { prisma } from '@/lib/prisma'
 import { fetchJson } from '@/lib/scrapers/http'
 import { startScrapeRun, finishScrapeRun } from '@/lib/scrapers/logging'
 import { NextResponse } from 'next/server'
+import { auth } from '@clerk/nextjs/server'
+import { isValidCronSecret } from '@/lib/scrapers/helpers'
 
 // @TODO this needs to pull from the archive link optionally too
 const LEGISLATION_JSON_URL =
@@ -589,6 +591,15 @@ function buildActionCandidates(item: RawBill, origin: Chamber): Array<{
 
 // --- Scrape! ---
 export async function GET( request: Request ) {
+    // Either needs to be authorized via Clerk, or by the Auth header
+    const { userId } = await auth()
+    const hasClerkUser = !!userId
+    const hasCronSecret = isValidCronSecret( request )
+    
+    if ( ! hasClerkUser && ! hasCronSecret ) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+    
     const run = await startScrapeRun('MGA_BILLS_JSON')
 
     try {

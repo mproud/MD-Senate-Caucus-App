@@ -5,7 +5,8 @@ import { MGA_BASE } from "@/lib/scrapers/mga-base"
 import { fetchHtml } from "@/lib/scrapers/http"
 import { startScrapeRun, finishScrapeRun } from "@/lib/scrapers/logging"
 import { BillEventType, CalendarType, Chamber, FloorCalendar, Prisma } from "@prisma/client"
-import { normalizeDate } from "@/lib/scrapers/helpers"
+import { isValidCronSecret, normalizeDate } from "@/lib/scrapers/helpers"
+import { auth } from "@clerk/nextjs/server"
 
 
 const CHAMBERS = ['SENATE', 'HOUSE', 'JOINT'] as const
@@ -761,8 +762,18 @@ function deriveChamberFromUrl(url: string): Chamber | null {
 
 // --- the handler! --
 export const GET = async ( request: Request ) => {
-    const { searchParams } = new URL(request.url);
-    const rawChamber = searchParams.get('chamber');
+    // Either needs to be authorized via Clerk, or by the Auth header
+    const { userId } = await auth()
+    const hasClerkUser = !!userId
+    const hasCronSecret = isValidCronSecret( request )
+
+    if ( ! hasClerkUser && ! hasCronSecret ) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+
+    const { searchParams } = new URL(request.url)
+    const rawChamber = searchParams.get('chamber')
 
     let chamber: Chamber = 'SENATE' // default to senate
 
