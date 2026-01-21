@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma"
 import { MGA_BASE } from "@/lib/scrapers/mga-base"
 import { fetchHtml } from "@/lib/scrapers/http"
 import { startScrapeRun, finishScrapeRun } from "@/lib/scrapers/logging"
-import { BillEventType, CalendarType, Chamber, FloorCalendar } from "@prisma/client"
+import { BillEventType, CalendarType, Chamber, FloorCalendar, Prisma } from "@prisma/client"
 import { normalizeDate } from "@/lib/scrapers/helpers"
 
 
@@ -33,7 +33,7 @@ interface ParsedHeader {
     headerId?: string | null // the ID from the agenda table
 }
 
-interface ParsedAgendaItem {
+interface ParsedAgendaItem extends Prisma.JsonObject {
     headerId: string | null          // table / header anchor id (e.g. CommitteeReport20fin)
     billNumber: string               // e.g. SB0215
     billUrl: string | null           // absolute or relative URL
