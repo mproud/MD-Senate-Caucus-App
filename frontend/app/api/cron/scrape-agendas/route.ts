@@ -825,6 +825,11 @@ export const GET = async ( request: Request ) => {
                 sessionCode,
             })
 
+            if ( ! result ) {
+                console.warn("Agenda scraper: upsertFloorCalendar returned null for header", header)
+                continue
+            }
+
             const { calendar: floorCalendar, wasNew } = result // @TODO this is causing a type error
 
             if ( ! floorCalendar ) {
