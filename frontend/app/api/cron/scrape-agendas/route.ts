@@ -626,10 +626,10 @@ async function upsertFloorCalendar(opts: {
             sessionYear,
             sessionCode,
         },
-        select: {
-            id: true,
-            committeeId: true,
-        }
+        // select: {
+        //     id: true,
+        //     committeeId: true,
+        // }
     })
 
     // if it already exists but has no committee yet, backfill it ---
@@ -648,11 +648,11 @@ async function upsertFloorCalendar(opts: {
         }
 
         // already have it (and possibly already have committee), just return it
-        const existingCalendar = await prisma.floorCalendar.findUnique({
-            where: { id: existing.id },
-        })
+        // const existingCalendar = await prisma.floorCalendar.findUnique({
+        //     where: { id: existing.id },
+        // })
 
-        return { calendar: existingCalendar, wasNew: false }
+        return { calendar: existing, wasNew: false }
     }
 
     // create the calendar, then emit a CALENDAR_PUBLISHED event
@@ -661,8 +661,8 @@ async function upsertFloorCalendar(opts: {
             chamber,
             calendarType: calendarTypeEnum,
             calendarNumber,
-            calendarDate,
-            calendarName,
+            calendarDate: calendarDate ?? "",
+            calendarName: calendarName ?? "",
             sourceUrl: agendaUrl,
             sessionYear,
             sessionCode,
