@@ -394,7 +394,7 @@ async function createBillRemovedFromCalendarEvent(opts: {
     header: ParsedHeader | null
     agendaUrl: string
 }) {
-    const { billId, billNumber, chamber, floorCalendarId, header, agendaUrl } = opts
+    const { billId, billNumber, chamber, floorCalendarId, header, agendaUrl, committeeId } = opts
 
     const calendarTypeEnum = mapCalendarType(header?.calendarType ?? null)
     const calendarNumber = header?.calendarNumber ?? null
