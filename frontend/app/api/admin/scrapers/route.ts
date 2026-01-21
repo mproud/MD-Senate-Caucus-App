@@ -57,7 +57,7 @@ export async function GET() {
     }
 }
 
-// Trigger a scraper run (mock implementation @TODO)
+// Trigger a scraper run
 export async function POST(request: Request) {
     try {
         const { userId } = await auth()
@@ -90,7 +90,7 @@ export async function POST(request: Request) {
             message: `Scraper ${kind} triggered successfully`,
             run: {
                 id: Date.now(),
-                kind: `${kind} -- ${JSON.stringify(body)}`,
+                kind: `${kind} -- ${JSON.stringify(scraperKinds)}`,
                 source: "LIVE",
                 startedAt: new Date().toISOString(),
                 finishedAt: null,
