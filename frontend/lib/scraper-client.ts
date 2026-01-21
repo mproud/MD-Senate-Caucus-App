@@ -22,31 +22,31 @@ export const scraperKinds = [
     {
         kind: "MGA_BILLS_JSON",
         name: "Fetch bills from MGA's JSON feed",
-        description: "",
+        description: "Runs every 15 minutes between 9am and Midnight",
         endpoint: "sync-bills-from-json",
     },
     {
         kind: "MGA_SENATE_AGENDA",
         name: "Fetch Senate agenda",
-        description: "",
+        description: "Runs every minute from 6am to 10pm",
         endpoint: "scrape-agendas?chamber=senate",
     },
     {
         kind: "MGA_HOUSE_AGENDA",
         name: "Fetch House agenda",
-        description: "",
+        description: "Runs every minute from 6am to 10pm",
         endpoint: "scrape-agendas?chamber=house",
     },
     {
         kind: "MGA_LEGISLATOR_COMMITTEES",
         name: "Update legislators & committees",
-        description: "",
+        description: "Runs daily at 4am",
         endpoint: "legislators-committees",
     },
     {
         kind: "ALERT_SENDER",
         name: "Send Updates & Alerts",
-        description: "",
+        description: "Runs every minute from 6am to 10pm",
         endpoint: "alert-sender",
     },
 ] as const
