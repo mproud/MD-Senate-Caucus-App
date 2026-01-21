@@ -611,13 +611,18 @@ async function upsertFloorCalendar(opts: {
         }
     }
 
+    if (!calendarTypeEnum) {
+        console.warn("upsertFloorCalendar: unknown calendarType", header.calendarType)
+        return null
+    }
+
     const existing = await prisma.floorCalendar.findFirst({
         where: {
             chamber,
             calendarType: calendarTypeEnum,
             calendarNumber,
-            calendarDate,
-            calendarName,
+            calendarDate: calendarDate ?? undefined,
+            calendarName: calendarName ?? undefined,
             sessionYear,
             sessionCode,
         },
