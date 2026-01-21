@@ -4,6 +4,7 @@
       "path": "/api/cron/sync-bills-from-json",
       "schedule": "5,20,35,50 9-23 * * *"
     },
+
     {
       "path": "/api/cron/scrape-agendas?chamber=senate",
       "schedule": "* 8-23,0-2 1-31 1-3 *"
@@ -12,6 +13,7 @@
       "path": "/api/cron/scrape-agendas?chamber=senate",
       "schedule": "* 7-23,0-1 1-15 3-4 *"
     },
+
     {
       "path": "/api/cron/scrape-agendas?chamber=house",
       "schedule": "* 8-23,0-2 1-31 1-3 *"
@@ -19,6 +21,11 @@
     {
       "path": "/api/cron/scrape-agendas?chamber=house",
       "schedule": "* 7-23,0-1 1-15 3-4 *"
+    },
+
+    {
+      "path": "/api/cron/legislators-committees",
+      "schedule": "0 8 * * *"
     }
   ]
 }
