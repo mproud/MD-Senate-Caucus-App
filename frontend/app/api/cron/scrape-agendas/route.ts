@@ -23,7 +23,7 @@ const isChamber = (value: string): value is Chamber =>
 // Scrape today's agenda from the MGA site
 // v3 (v1 got messy, v2 was standalone)
 
-interface ParsedHeader {
+interface ParsedHeader extends Prisma.JsonObject {
     calendarType: string // This should be a structured calendar, but leave it a string for now
     calendarNumber?: number | null
     consentCalendar: number | boolean | null // this is the consent calendar if it is one
