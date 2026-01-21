@@ -77,9 +77,12 @@ export async function POST(request: Request) {
         const body: { kind?: string } = await request.json()
         const { kind } = body
 
-        if (!kind) {
+        if ( ! kind ) {
             return NextResponse.json({ error: "Scraper kind is required" }, { status: 400 })
         }
+
+        // Map the kind of scraper to the endpoint
+        // Trigger the endpoint
 
         // In a real implementation, this would trigger the scraper
         // For now, we just return a mock response
@@ -87,7 +90,7 @@ export async function POST(request: Request) {
             message: `Scraper ${kind} triggered successfully`,
             run: {
                 id: Date.now(),
-                kind,
+                kind: `${kind} -- ${body}`,
                 source: "LIVE",
                 startedAt: new Date().toISOString(),
                 finishedAt: null,
