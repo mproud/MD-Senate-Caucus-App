@@ -789,7 +789,7 @@ export const GET = async ( request: Request ) => {
 
     if ( ! url ) {
         console.error('No URL')
-        return false
+        return NextResponse.json({ error: 'No URL' }, { status: 500 })
     }
 
     // log the scrape start
@@ -988,13 +988,10 @@ export const GET = async ( request: Request ) => {
             calendarsCount: scrapeResult.length,
         })
 
-        return {
-            statusCode: 200,
-            body: JSON.stringify({
-                ok: true,
-                agendas: scrapeResult.length,
-            }),
-        }
+        return NextResponse.json({
+            ok: true,
+            agendas: scrapeResult.length,
+        })
     } catch ( error ) {
         console.error( `${chamber} agenda scraper error`, error )
 
@@ -1003,11 +1000,11 @@ export const GET = async ( request: Request ) => {
             error,
         })
 
-        return {
-            statusCode: 500,
-            body: JSON.stringify({ ok: false, error: String( error ) }),
-        }
+        return NextResponse.json({
+            ok: false,
+            error: String( error )
+        }, { status: 500 })
     } finally {
-        // await prisma.$disconnect()
+        await prisma.$disconnect()
     }
 }
