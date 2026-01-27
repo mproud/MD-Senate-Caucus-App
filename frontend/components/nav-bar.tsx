@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { Calendar, Home, Bell, Search, Shield } from "lucide-react"
+import { Calendar, Home, Bell, Search, Shield, Vote } from "lucide-react"
 import { UserDropdown } from "./user-dropdown"
 import { ScrapeRunStatus } from "./header/scrape-run-status"
 import { useUser } from "@clerk/nextjs"
@@ -81,6 +81,13 @@ export function Navbar() {
                         >
                             <Search className="h-4 w-4" />
                             Search Bills
+                        </Link>
+                        <Link
+                            href="/record-vote"
+                            className="flex items-center gap-2 text-muted-foreground transition-colors hover:text-foreground"
+                        >
+                            <Vote className="h-4 w-4" />
+                            Record Votes
                         </Link>
                         <Link
                             href="/alerts"
