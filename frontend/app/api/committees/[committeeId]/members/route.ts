@@ -13,6 +13,12 @@ export async function GET(
         },
         include: {
             members: {
+                where: {
+                    endDate: null,
+                    legislator: {
+                        isActive: true
+                    },
+                },
                 include: {
                     legislator: true,
                 },
