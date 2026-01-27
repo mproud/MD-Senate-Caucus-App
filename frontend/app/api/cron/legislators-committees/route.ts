@@ -401,7 +401,8 @@ async function scrapeCommitteeMembership(
         .filter((_, el) => $(el).text().includes("Last Updated:"))
         .first()
 
-    let rosterAnchors = $<cheerio.Element>([])
+    // let rosterAnchors = $<cheerio.Element>([])
+    let rosterAnchors = $()
 
     if (asOfEl.length) {
         rosterAnchors = asOfEl
