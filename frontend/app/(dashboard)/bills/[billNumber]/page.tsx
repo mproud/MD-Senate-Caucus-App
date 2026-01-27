@@ -8,6 +8,8 @@ import { fetchApi } from "@/lib/api"
 import { Bill } from "@prisma/client"
 import { Badge } from "@/components/ui/badge"
 import { VoteForm } from "@/components/vote-form"
+import { Button } from "@/components/ui/button"
+import Link from "next/link"
 
 interface BillPageProps {
     params: Promise<{
@@ -192,7 +194,12 @@ async function BillContent({ billNumber }: { billNumber: string }) {
                             <Card>
                                 <CardHeader className="flex flex-row items-center justify-between">
                                     <CardTitle>Committee Votes</CardTitle>
-                                    <VoteForm billNumber={billNumber} voteType="committee" />
+                                    {/* <VoteForm billNumber={billNumber} voteType="committee" /> */}
+                                    <Button asChild>
+                                        <Link href={`/record-vote?billNumber=${billNumber}`}>
+                                            Add Committee Vote
+                                        </Link>
+                                    </Button>
                                 </CardHeader>
                                 <CardContent>
                                     {bill.actions && bill.actions.length > 0 ? (
@@ -200,63 +207,77 @@ async function BillContent({ billNumber }: { billNumber: string }) {
                                             {bill.actions
                                                 .filter((action) => action.actionCode === "COMMITTEE_VOTE")
                                                 .sort((a, b) => new Date(b.actionDate).getTime() - new Date(a.actionDate).getTime())
-                                                .map((action) => (
-                                                    <div key={action.id} className="border-b last:border-0 pb-6 last:pb-0">
-                                                        <div className="flex items-start justify-between mb-3">
-                                                            <div>
-                                                                <p className="font-medium">{action?.committee?.name}</p>
-                                                                <p className="text-sm text-muted-foreground">
-                                                                    {new Date(action.actionDate).toLocaleDateString("en-US", {
-                                                                        year: "numeric",
-                                                                        month: "long",
-                                                                        day: "numeric",
-                                                                    })}
-                                                                </p>
-                                                            </div>
-                                                            <div>
-                                                                { action.source == "MANUAL" && (
-                                                                    <Badge variant="outline" className="mr-5">
-                                                                        MANUAL
+                                                .map((action) => {
+                                                    const date = new Date(action.actionDate)
+
+                                                    // Check if it's exactly midnight UTC
+                                                    const isMidnightUTC =
+                                                        date.getUTCHours() === 0 &&
+                                                        date.getUTCMinutes() === 0 &&
+                                                        date.getUTCSeconds() === 0 &&
+                                                        date.getUTCMilliseconds() === 0
+
+                                                    const formattedDate = date.toLocaleString("en-US", {
+                                                        timeZone: isMidnightUTC ? "UTC" : undefined,
+                                                        year: "numeric",
+                                                        month: "long",
+                                                        day: "numeric",
+                                                    })
+
+                                                    return (
+                                                        <div key={action.id} className="border-b last:border-0 pb-6 last:pb-0">
+                                                            <div className="flex items-start justify-between mb-3">
+                                                                <div>
+                                                                    <p className="font-medium">{action?.committee?.name}</p>
+                                                                    <p className="text-sm text-muted-foreground">
+                                                                        {formattedDate}
+                                                                    </p>
+                                                                </div>
+                                                                <div>
+                                                                    { action.source == "MANUAL" && (
+                                                                        <Badge variant="outline" className="mr-5">
+                                                                            MANUAL
+                                                                        </Badge>
+                                                                    )}
+                                                                    <Badge
+                                                                        variant={
+                                                                            action.voteResult === "Favorable" || action.voteResult === "Favorable with Amendments"
+                                                                                ? "default"
+                                                                                : "destructive"
+                                                                        }
+                                                                    >
+                                                                        {action.voteResult}
                                                                     </Badge>
-                                                                )}
-                                                                <Badge
-                                                                    variant={
-                                                                        action.voteResult === "Favorable" || action.voteResult === "Favorable with Amendments"
-                                                                            ? "default"
-                                                                            : "destructive"
-                                                                    }
-                                                                >
-                                                                    {action.voteResult}
-                                                                </Badge>
+                                                                </div>
                                                             </div>
-                                                        </div>
 
-                                                        <div className="flex gap-6 mb-3">
-                                                            <div>
-                                                                <span className="font-medium">Yes: </span>
-                                                                <span className="text-green-600 dark:text-green-400">{action.yesVotes || 0}</span>
+                                                            <div className="flex gap-6 mb-3">
+                                                                <div>
+                                                                    <span className="font-medium">Yes: </span>
+                                                                    <span className="text-green-600 dark:text-green-400">{action.yesVotes || 0}</span>
+                                                                </div>
+                                                                <div>
+                                                                    <span className="font-medium">No: </span>
+                                                                    <span className="text-red-600 dark:text-red-400">{action.noVotes || 0}</span>
+                                                                </div>
+                                                                <div>
+                                                                    <span className="text-sm font-medium">Not Voting: </span>
+                                                                    <span className="text-sm text-gray-600 dark:text-gray-400">{action.notVoting || 0}</span>
+                                                                </div>
+                                                                <div>
+                                                                    <span className="text-sm font-medium">Excused: </span>
+                                                                    <span className="text-sm text-gray-600 dark:text-gray-400">{action.excused || 0}</span>
+                                                                </div>
+                                                                <div>
+                                                                    <span className="text-sm font-medium">Absent: </span>
+                                                                    <span className="text-sm text-gray-600 dark:text-gray-400">{action.absent || 0}</span>
+                                                                </div>
                                                             </div>
-                                                            <div>
-                                                                <span className="font-medium">No: </span>
-                                                                <span className="text-red-600 dark:text-red-400">{action.noVotes || 0}</span>
-                                                            </div>
-                                                            <div>
-                                                                <span className="text-sm font-medium">Not Voting: </span>
-                                                                <span className="text-sm text-gray-600 dark:text-gray-400">{action.notVoting || 0}</span>
-                                                            </div>
-                                                            <div>
-                                                                <span className="text-sm font-medium">Excused: </span>
-                                                                <span className="text-sm text-gray-600 dark:text-gray-400">{action.excused || 0}</span>
-                                                            </div>
-                                                            <div>
-                                                                <span className="text-sm font-medium">Absent: </span>
-                                                                <span className="text-sm text-gray-600 dark:text-gray-400">{action.absent || 0}</span>
-                                                            </div>
-                                                        </div>
 
-                                                        {action.notes && <p className="text-sm leading-relaxed">{action.notes}</p>}
-                                                    </div>
-                                                )
+                                                            {action.notes && <p className="text-sm leading-relaxed">{action.notes}</p>}
+                                                        </div>
+                                                    )
+                                                }
                                             )}
                                         </div>
                                     ) : (
