@@ -15,6 +15,9 @@ interface BillPageProps {
     params: Promise<{
         billNumber: string
     }>
+    searchParams: Promise<{
+        activeTab?: string
+    }>
 }
 
 // This isnt' going to work... @TODO
@@ -34,7 +37,7 @@ type BillExtended = Bill & {
     actions?: any[]
 }
 
-async function BillContent({ billNumber }: { billNumber: string }) {
+async function BillContent({ billNumber, activeTab }: { billNumber: string, activeTab?: string }) {
     try {
         const bill = await fetchApi<BillExtended>(`/api/bills/${billNumber}`, {
             cache: "no-store",
@@ -49,7 +52,7 @@ async function BillContent({ billNumber }: { billNumber: string }) {
             <>
                 <BillHeader bill={bill} />
 
-                <Tabs defaultValue="overview" className="mt-6">
+                <Tabs defaultValue={activeTab ?? "overview"} className="mt-6">
                     <TabsList className="grid w-full max-w-2xl grid-cols-5">
                         <TabsTrigger value="overview">Overview</TabsTrigger>
                         <TabsTrigger value="history">History</TabsTrigger>
@@ -517,13 +520,14 @@ function BillSkeleton() {
     )
 }
 
-export default async function BillPage({ params }: BillPageProps) {
+export default async function BillPage({ params, searchParams }: BillPageProps) {
     const { billNumber } = await params
+    const { activeTab } = await searchParams
 
     return (
         <>
             <Suspense fallback={<BillSkeleton />}>
-                <BillContent billNumber={billNumber} />
+                <BillContent billNumber={billNumber} activeTab={activeTab} />
             </Suspense>
         </>
     )

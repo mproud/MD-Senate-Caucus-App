@@ -280,71 +280,166 @@ async function scrapeCommitteesFromIndex(
     return deduped;
 }
 
+// async function scrapeCommitteeMembership(
+//     committeeCode: string
+// ): Promise<ScrapedCommitteeMembership[]> {
+//     const url = `${MGA_BASE}/Committees/Details?cmte=${committeeCode}`;
+//     const $ = await fetchHtml(url);
+
+//     const memberships: ScrapedCommitteeMembership[] = [];
+
+//     // Chair
+//     const chairLink = $("a")
+//         .filter((_, el) => $(el).prevAll().text().includes("Chair"))
+//         .first();
+//     if (chairLink.length) {
+//         const href = chairLink.attr("href");
+//         if (href) {
+//             const extId = href.split("/").pop()!.split("?")[0];
+//             memberships.push({
+//                 committeeCode: committeeCode.toLowerCase(),
+//                 legislatorExternalId: extId,
+//                 role: "CHAIR",
+//             });
+//         }
+//     }
+
+//     // Vice Chair
+//     const viceLink = $("a")
+//         .filter((_, el) => $(el).prevAll().text().includes("Vice Chair"))
+//         .first();
+//     if (viceLink.length) {
+//         const href = viceLink.attr("href");
+//         if (href) {
+//             const extId = href.split("/").pop()!.split("?")[0];
+//             memberships.push({
+//                 committeeCode: committeeCode.toLowerCase(),
+//                 legislatorExternalId: extId,
+//                 role: "VICE_CHAIR",
+//             });
+//         }
+//     }
+
+//     // Regular members:
+//     $("a[href*='/Members/Details/']").each((_, el) => {
+//         const href = $(el).attr("href");
+//         if (!href) return;
+//         const extId = href.split("/").pop()!.split("?")[0];
+
+//         const already = memberships.find(
+//             (m) =>
+//                 m.legislatorExternalId === extId &&
+//                 (m.role === "CHAIR" || m.role === "VICE_CHAIR")
+//         );
+//         if (already) return;
+
+//         const exists = memberships.find((m) => m.legislatorExternalId === extId);
+//         if (!exists) {
+//             memberships.push({
+//                 committeeCode: committeeCode.toLowerCase(),
+//                 legislatorExternalId: extId,
+//                 role: "MEMBER",
+//             });
+//         }
+//     });
+
+//     return memberships;
+// }
+
 async function scrapeCommitteeMembership(
     committeeCode: string
 ): Promise<ScrapedCommitteeMembership[]> {
-    const url = `${MGA_BASE}/Committees/Details?cmte=${committeeCode}`;
-    const $ = await fetchHtml(url);
+    const url = `${MGA_BASE}/Committees/Details?cmte=${committeeCode}`
+    const $ = await fetchHtml(url)
 
-    const memberships: ScrapedCommitteeMembership[] = [];
+    const memberships: ScrapedCommitteeMembership[] = []
 
-    // Chair
-    const chairLink = $("a")
-        .filter((_, el) => $(el).prevAll().text().includes("Chair"))
-        .first();
-    if (chairLink.length) {
-        const href = chairLink.attr("href");
-        if (href) {
-            const extId = href.split("/").pop()!.split("?")[0];
-            memberships.push({
-                committeeCode: committeeCode.toLowerCase(),
-                legislatorExternalId: extId,
-                role: "CHAIR",
-            });
-        }
-    }
-
-    // Vice Chair
-    const viceLink = $("a")
-        .filter((_, el) => $(el).prevAll().text().includes("Vice Chair"))
-        .first();
-    if (viceLink.length) {
-        const href = viceLink.attr("href");
-        if (href) {
-            const extId = href.split("/").pop()!.split("?")[0];
-            memberships.push({
-                committeeCode: committeeCode.toLowerCase(),
-                legislatorExternalId: extId,
-                role: "VICE_CHAIR",
-            });
-        }
-    }
-
-    // Regular members:
-    $("a[href*='/Members/Details/']").each((_, el) => {
-        const href = $(el).attr("href");
-        if (!href) return;
-        const extId = href.split("/").pop()!.split("?")[0];
-
-        const already = memberships.find(
-            (m) =>
-                m.legislatorExternalId === extId &&
-                (m.role === "CHAIR" || m.role === "VICE_CHAIR")
-        );
-        if (already) return;
-
-        const exists = memberships.find((m) => m.legislatorExternalId === extId);
+    const addMember = (extId: string, role: string) => {
+        const exists = memberships.find(m => m.legislatorExternalId === extId)
         if (!exists) {
             memberships.push({
                 committeeCode: committeeCode.toLowerCase(),
                 legislatorExternalId: extId,
-                role: "MEMBER",
-            });
+                role
+            })
         }
-    });
+    }
 
-    return memberships;
+    // Chair
+    const chairLink = $("a[href*='/Members/Details/']")
+        .filter((_, el) => $(el).prevAll().text().includes("Chair"))
+        .first()
+
+    if (chairLink.length) {
+        const href = chairLink.attr("href")
+        if (href) {
+            const extId = href.split("/").pop()!.split("?")[0]
+            addMember(extId, "CHAIR")
+        }
+    }
+
+    // Vice Chair
+    const viceLink = $("a[href*='/Members/Details/']")
+        .filter((_, el) => $(el).prevAll().text().includes("Vice Chair"))
+        .first()
+
+    if (viceLink.length) {
+        const href = viceLink.attr("href")
+        if (href) {
+            const extId = href.split("/").pop()!.split("?")[0]
+            addMember(extId, "VICE_CHAIR")
+        }
+    }
+
+    // Only scrape regular members from the roster section
+    // Roster begins after "As of:" and ends before "Last Updated:"
+    const asOfEl = $("*")
+        .filter((_, el) => $(el).text().trim() === "As of:")
+        .first()
+
+    const lastUpdatedEl = $("*")
+        .filter((_, el) => $(el).text().includes("Last Updated:"))
+        .first()
+
+    let rosterAnchors = $<cheerio.Element>([])
+
+    if (asOfEl.length) {
+        rosterAnchors = asOfEl
+            .nextAll()
+            .find("a[href*='/Members/Details/']")
+
+        if (lastUpdatedEl.length) {
+            rosterAnchors = rosterAnchors.filter((_, el) => {
+                const elPos = $(el).index()
+                const lastPos = lastUpdatedEl.index()
+                return lastPos === -1 || elPos === -1 || elPos < lastPos
+            })
+        }
+    } else {
+        // Fallback if the marker ever changes
+        rosterAnchors = $("a[href*='/Members/Details/']")
+    }
+
+    rosterAnchors.each((_, el) => {
+        const href = $(el).attr("href")
+        if (!href) return
+
+        const extId = href.split("/").pop()!.split("?")[0]
+
+        // Don’t overwrite chair/vice chair
+        const already = memberships.find(
+            m =>
+                m.legislatorExternalId === extId &&
+                (m.role === "CHAIR" || m.role === "VICE_CHAIR")
+        )
+        if (already) return
+
+        addMember(extId, "MEMBER")
+    })
+
+    return memberships
 }
+
 
 async function scrapeAllCommitteesAndMemberships(): Promise<{
     committees: ScrapedCommittee[];
@@ -492,45 +587,172 @@ async function upsertCommittees(scraped: ScrapedCommittee[]) {
     }
 }
 
+
 async function upsertCommitteeMemberships(scraped: ScrapedCommitteeMembership[]) {
-    const byCommittee: Record<string, ScrapedCommitteeMembership[]> = {};
+    const now = new Date()
+
+    // Group scraped memberships by committee code
+    const byCommitteeCode: Record<string, ScrapedCommitteeMembership[]> = {}
     for (const m of scraped) {
-        (byCommittee[m.committeeCode] ??= []).push(m);
+        const code = m.committeeCode.toLowerCase()
+        if (!byCommitteeCode[code]) {
+            byCommitteeCode[code] = []
+        }
+        byCommitteeCode[code].push(m)
     }
 
-    for (const [committeeCode, memberships] of Object.entries(byCommittee)) {
-        const externalId = committeeCode.toLowerCase();
-        const committee = await prisma.committee.findUnique({
-            where: { externalId },
-        });
-        if (!committee) continue;
+    // IMPORTANT: Loop all committees in DB so we can end-date memberships
+    // even if a committee is missing from the scrape result
+    const committees = await prisma.committee.findMany({
+        select: { id: true, externalId: true }
+    })
 
-        // Clear existing memberships for this committee
-        await prisma.committeeMember.deleteMany({
-            where: { committeeId: committee.id },
-        });
+    for (const committee of committees) {
+        if (!committee.externalId) {
+            continue
+        }
 
-        for (const m of memberships) {
-            const legislator = await prisma.legislator.findUnique({
-                where: { externalId: m.legislatorExternalId },
-            });
-            if (!legislator) {
-                console.warn(
-                    `No legislator found for externalId=${m.legislatorExternalId} (committee ${committeeCode})`
-                );
-                continue;
+        const committeeCode = committee.externalId.toLowerCase()
+        const scrapedMemberships = byCommitteeCode[committeeCode] ?? []
+
+        // Load current ACTIVE memberships for this committee
+        const activeMembers = await prisma.committeeMember.findMany({
+            where: {
+                committeeId: committee.id,
+                endDate: null
+            },
+            select: {
+                id: true,
+                legislatorId: true,
+                role: true
+            }
+        })
+
+        // Build legislatorId set from scraped memberships (skip unknown legislators)
+        const scrapedLegExtIds = Array.from(
+            new Set(scrapedMemberships.map(m => m.legislatorExternalId))
+        )
+
+        const legislators = scrapedLegExtIds.length
+            ? await prisma.legislator.findMany({
+                  where: { externalId: { in: scrapedLegExtIds } },
+                  select: { id: true, externalId: true }
+              })
+            : []
+
+        const legislatorIdByExternalId = new Map<string, number>()
+        for (const l of legislators) {
+            if (l.externalId) {
+                legislatorIdByExternalId.set(l.externalId, l.id)
+            }
+        }
+
+        const scrapedLegislatorIds = new Set<number>()
+        for (const extId of scrapedLegExtIds) {
+            const legId = legislatorIdByExternalId.get(extId)
+            if (legId) {
+                scrapedLegislatorIds.add(legId)
+            } else {
+                console.warn(`No legislator found for externalId=${extId} (committee ${committeeCode})`)
+            }
+        }
+
+        const activeByLegislatorId = new Map<number, typeof activeMembers[number]>()
+        for (const m of activeMembers) {
+            activeByLegislatorId.set(m.legislatorId, m)
+        }
+
+        // End-date anything active in DB but missing from scrape
+        const toEndIds = activeMembers
+            .filter(m => !scrapedLegislatorIds.has(m.legislatorId))
+            .map(m => m.id)
+
+        await prisma.$transaction(async tx => {
+            if (toEndIds.length) {
+                await tx.committeeMember.updateMany({
+                    where: { id: { in: toEndIds } },
+                    data: { endDate: now }
+                })
             }
 
-            await prisma.committeeMember.create({
-                data: {
-                    committeeId: committee.id,
-                    legislatorId: legislator.id,
-                    role: m.role,
-                },
-            });
-        }
+            // Upsert "active" membership rows for scraped members
+            for (const scrapedM of scrapedMemberships) {
+                const legislatorId = legislatorIdByExternalId.get(scrapedM.legislatorExternalId)
+                if (!legislatorId) {
+                    continue
+                }
+
+                const existingActive = activeByLegislatorId.get(legislatorId)
+
+                console.log(
+                    `Committee ${committeeCode}: scraped=${scrapedLegislatorIds.size}, active=${activeMembers.length}, ending=${toEndIds.length}`
+                )
+
+                if (existingActive) {
+                    if ((existingActive.role ?? null) !== scrapedM.role) {
+                        await tx.committeeMember.update({
+                            where: { id: existingActive.id },
+                            data: { role: scrapedM.role }
+                        })
+                    }
+                } else {
+                    await tx.committeeMember.create({
+                        data: {
+                            committeeId: committee.id,
+                            legislatorId,
+                            role: scrapedM.role,
+                            startDate: now,
+                            endDate: null
+                        }
+                    })
+                }
+            }
+        })
     }
 }
+
+
+
+// Replaced to handle end dates
+// async function upsertCommitteeMemberships(scraped: ScrapedCommitteeMembership[]) {
+//     const byCommittee: Record<string, ScrapedCommitteeMembership[]> = {};
+//     for (const m of scraped) {
+//         (byCommittee[m.committeeCode] ??= []).push(m);
+//     }
+
+//     for (const [committeeCode, memberships] of Object.entries(byCommittee)) {
+//         const externalId = committeeCode.toLowerCase();
+//         const committee = await prisma.committee.findUnique({
+//             where: { externalId },
+//         });
+//         if (!committee) continue;
+
+//         // Clear existing memberships for this committee
+//         await prisma.committeeMember.deleteMany({
+//             where: { committeeId: committee.id },
+//         });
+
+//         for (const m of memberships) {
+//             const legislator = await prisma.legislator.findUnique({
+//                 where: { externalId: m.legislatorExternalId },
+//             });
+//             if (!legislator) {
+//                 console.warn(
+//                     `No legislator found for externalId=${m.legislatorExternalId} (committee ${committeeCode})`
+//                 );
+//                 continue;
+//             }
+
+//             await prisma.committeeMember.create({
+//                 data: {
+//                     committeeId: committee.id,
+//                     legislatorId: legislator.id,
+//                     role: m.role,
+//                 },
+//             });
+//         }
+//     }
+// }
 
 function getArchiveSnapshotIdentifier(waybackBase?: string | null): string | null {
     if (!waybackBase) return null;
@@ -563,26 +785,26 @@ export const GET = async ( request: Request ) => {
             source: "LIVE",
             baseUrl: MGA_BASE,
         },
-    });
+    })
 
-    let legislatorsCount = 0;
-    let committeesCount = 0;
-    let membershipsCount = 0;
+    let legislatorsCount = 0
+    let committeesCount = 0
+    let membershipsCount = 0
 
     try {
-        console.log("Scraping legislators...");
-        const legislators = await scrapeAllLegislators();
-        legislatorsCount = legislators.length;
-        console.log(`Scraped ${legislatorsCount} legislators. Persisting...`);
-        await upsertLegislators(legislators);
+        console.log("Scraping legislators...")
+        const legislators = await scrapeAllLegislators()
+        legislatorsCount = legislators.length
+        console.log(`Scraped ${legislatorsCount} legislators. Persisting...`)
+        await upsertLegislators(legislators)
 
         console.log("Scraping committees & memberships...");
-        const { committees, memberships } = await scrapeAllCommitteesAndMemberships();
-        committeesCount = committees.length;
-        membershipsCount = memberships.length;
-        console.log(`Scraped ${committeesCount} committees, ${membershipsCount} memberships.`);
-        await upsertCommittees(committees);
-        await upsertCommitteeMemberships(memberships);
+        const { committees, memberships } = await scrapeAllCommitteesAndMemberships()
+        committeesCount = committees.length
+        membershipsCount = memberships.length
+        console.log(`Scraped ${committeesCount} committees, ${membershipsCount} memberships.`)
+        await upsertCommittees(committees)
+        await upsertCommitteeMemberships(memberships)
 
         await prisma.scrapeRun.update({
             where: { id: run.id },
@@ -593,7 +815,7 @@ export const GET = async ( request: Request ) => {
                 committeesCount,
                 membershipsCount,
             },
-        });
+        })
 
         return NextResponse.json({
             ok: true,

@@ -194,7 +194,7 @@ export default function RecordVoteContent( props: RecordVoteContentProps ) {
             })
 
             if (response.ok) {
-                router.push(`/bills/${bill.billNumber}`)
+                router.push(`/bills/${bill.billNumber}?activeTab=votes`)
             }
         } catch (err) {
             setError("Failed to save vote")
