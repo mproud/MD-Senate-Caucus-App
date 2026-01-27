@@ -817,6 +817,8 @@ export const GET = async ( request: Request ) => {
         // Get the agenda items
         const scrapeResult = await scrapeAgendaUrl( url )
 
+        console.log(`>> ${chamber} Scrape Result`, { scrapeResult })
+
         // For each section + bill, find the Bill and create BILL_ADDED_TO_CALENDAR events
         for ( const section of scrapeResult ) {
             const header = section.header
