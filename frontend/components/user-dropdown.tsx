@@ -113,14 +113,7 @@ export const UserDropdown = () => {
                 <DropdownMenuItem asChild>
                     <Link href="/user">
                         <User className="mr-2 h-4 w-4" />
-                        Account
-                    </Link>
-                </DropdownMenuItem>
-
-                <DropdownMenuItem asChild>
-                    <Link href="/user#settings">
-                        <Settings className="mr-2 h-4 w-4" />
-                        Settings
+                        My Settings
                     </Link>
                 </DropdownMenuItem>
 

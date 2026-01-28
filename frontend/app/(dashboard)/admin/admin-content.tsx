@@ -30,13 +30,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import {
     UserPlus, Trash2, Mail, Shield, Clock, Users, ShieldAlert, Settings, Save, ListTodo,
-    UserCheck, Database, XCircle, Loader2, CheckCircle2, Play, AlertTriangle, RotateCw, CloudSync } from "lucide-react"
+    UserCheck, Database, XCircle, Loader2, CheckCircle2, Play, AlertTriangle, RotateCw, CloudSync, 
+    History} from "lucide-react"
 import { useUser } from "@clerk/nextjs"
 import { useRouter } from "next/navigation"
 import clsx from "clsx"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { sessionCodeOptions } from "@/lib/config"
 import { type ScrapeRun, scraperKinds } from "@/lib/scraper-client"
+import { TabEventHistory } from "./tab-event-history"
 
 interface User {
     id: string
@@ -555,6 +557,10 @@ export const AdminContent = () => {
                     <TabsTrigger value="settings" className="flex items-center gap-2">
                         <Settings className="h-4 w-4" />
                         Settings
+                    </TabsTrigger>
+                    <TabsTrigger value="event-history" className="flex items-center gap-2">
+                        <History className="h-4 w-4" />
+                        Event History
                     </TabsTrigger>
                 </TabsList>
 
@@ -1220,6 +1226,10 @@ export const AdminContent = () => {
                     ) : (
                         <div className="text-center py-8 text-muted-foreground">Failed to load settings</div>
                     )}
+                </TabsContent>
+
+                <TabsContent value="event-history" className="space-y-6">
+                    <TabEventHistory />
                 </TabsContent>
             </Tabs>
         </>
