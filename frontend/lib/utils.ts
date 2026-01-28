@@ -41,3 +41,22 @@ export function getCommitteeAbbreviation(committeeName: string): string {
     // If no match found, return the original name
     return committeeName
 }
+
+export const formatDate = (timestamp: number | Date) => {
+    return new Date(timestamp).toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+    })
+}
+
+export const formatLongDate = (timestamp: number | Date) => {
+    return new Date(timestamp).toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+    })
+}
