@@ -443,6 +443,7 @@ async function upsertBillAction(opts: {
                 voteResult,
                 yesVotes: counts.yes,
                 noVotes: counts.no,
+                ...(kind === 'REPORT' && isVote ? { actionCode: 'COMMITEE_VOTE' } : {}),
                 source: ActionSource.MGA_JSON,
                 dataSource: raw,
             },
