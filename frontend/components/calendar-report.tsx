@@ -2,6 +2,7 @@ import type { CalendarDay } from "@/lib/types"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import Link from "next/link"
+import { AlertCircle } from "lucide-react"
 
 type CalendarType =
     | "FIRST_READING"
@@ -521,6 +522,33 @@ function getCommitteePartyLineLabel( input: CommitteeActionWithVotes | ActionVot
     return "Party Split"
 }
 
+function renderPartyLineBadge(label: "Unanimous" | "Party Line" | "Party Split" | null) {
+    if (!label) return null
+
+    if (label === "Unanimous") {
+        return (
+            <Badge variant="secondary" className="mt-1 inline-flex items-center gap-1">
+                <span>Unanimous</span>
+            </Badge>
+        )
+    }
+
+    if (label === "Party Line") {
+        return (
+            <Badge variant="destructive" className="mt-1 inline-flex items-center gap-1">
+                <span className="font-bold">!!</span>
+                <span>Party line</span>
+            </Badge>
+        )
+    }
+
+    return (
+        <Badge variant="destructive" className="mt-1 inline-flex items-center gap-1">
+            <span className="font-bold">!!</span>
+            <span>Party split</span>
+        </Badge>
+    )
+}
 
 export async function CalendarReport({ calendarData }: { calendarData: CalendarDay }) {
     // Show the filter by date, checkbox to show all bills or split votes only, show alert bills
@@ -739,10 +767,11 @@ export async function CalendarReport({ calendarData }: { calendarData: CalendarD
 
                                                                 {partyLineLabel && (
                                                                     <>
-                                                                        <span className="text-xs">
+                                                                        {/* <span className="text-xs">
                                                                             {partyLineLabel}
                                                                         </span>
-                                                                        <br />
+                                                                        <br /> */}
+                                                                        {renderPartyLineBadge(partyLineLabel)}
                                                                     </>
                                                                 )}
                                                             </div>
