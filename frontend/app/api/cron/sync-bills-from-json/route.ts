@@ -396,6 +396,20 @@ function classifyVote(actionText: string, kind: 'REPORT' | 'SECOND' | 'THIRD'): 
     return { isVote: false, voteResult: null }
 }
 
+function isVoteActionLocked(existing: {
+    source: ActionSource
+    dataSource: any
+}) {
+    // If AI vote job or scraper job has taken ownership, JSON sync must not overwrite totals
+    if (existing.source === ActionSource.MGA_SCRAPE) return true
+
+    const voteAiStatus = existing.dataSource?.voteAi?.status
+    if (voteAiStatus === "DONE") return true
+
+    // If per-legislator Votes were written, treat as locked too (optional safeguard)
+    return false
+}
+
 // lightweight "upsert" for BillAction (schema has no unique; we findFirst and create)
 async function upsertBillAction(opts: {
     billId: number
@@ -423,6 +437,8 @@ async function upsertBillAction(opts: {
             voteResult: true,
             yesVotes: true,
             noVotes: true,
+            source: true,
+            dataSource: true,
         },
     })
 
@@ -454,6 +470,12 @@ async function upsertBillAction(opts: {
     }
 
     // Update if vote fields changed (counts/result show up later sometimes)
+    const locked = isVoteActionLocked({
+        source: existing.source,
+        dataSource: existing.dataSource,
+    })
+
+    // Only allow JSON to update vote totals/result if not locked
     const voteChanged =
         existing.isVote !== isVote ||
         existing.voteResult !== voteResult ||
@@ -461,16 +483,34 @@ async function upsertBillAction(opts: {
         existing.noVotes !== counts.no
 
     if (voteChanged) {
+        const data: any = {
+            committeeId: committeeId ?? undefined,
+
+            // Always allow JSON to correct the classification itself
+            isVote,
+            dataSource: raw,
+        }
+
+        // Only write vote totals/result if NOT locked
+        if (!locked) {
+            data.voteResult = voteResult
+            data.yesVotes = counts.yes
+            data.noVotes = counts.no
+            data.source = ActionSource.MGA_JSON
+        } else {
+            // Still let JSON improve committeeId if it was missing, but preserve authoritative values
+            // Also optionally merge raw data into dataSource without overwriting voteAi fields:
+            data.dataSource = {
+                ...(existing.dataSource ?? {}),
+                // preserve existing.voteAi + mga keys, but keep JSON info too
+                source: "legislation.json",
+                ...raw,
+            }
+        }
+
         await prisma.billAction.update({
             where: { id: existing.id },
-            data: {
-                committeeId: committeeId ?? undefined,
-                isVote,
-                voteResult,
-                yesVotes: counts.yes,
-                noVotes: counts.no,
-                dataSource: raw,
-            },
+            data,
         })
     }
 
@@ -495,8 +535,10 @@ async function maybeCreateCommitteeVoteEvent(opts: {
             billId,
             eventType: BillEventType.COMMITTEE_VOTE_RECORDED,
             committeeId,
-            eventTime: actionDate,
-            summary: { contains: description },
+            payload: {
+                path: ["actionId"],
+                equals: actionId,
+            },
         },
         select: { id: true },
     })
