@@ -216,9 +216,8 @@ export const DashboardContent = () => {
                                                         <p className="text-xs text-muted-foreground mt-1">Committee: {item.committee}</p>
                                                     )} */}
                                                     <p className="mt-4">
-                                                        Other fields to add -<br/>
-                                                        Last Updated: {item.updatedAt}<br/>
                                                         Current Status: {item.statusDesc}<br/>
+                                                        <small>Last Updated: {item.updatedAt}</small>
                                                     </p>
                                                 </div>
                                                 <ArrowRight className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-1" />
@@ -281,9 +280,8 @@ export const DashboardContent = () => {
                                                         <p className="text-xs text-muted-foreground mt-1">Committee: {item.committee}</p>
                                                     )} */}
                                                     <p className="mt-4">
-                                                        Other fields to add -<br/>
-                                                        Last Updated: {item.bill.updatedAt}<br/>
                                                         Current Status: {item.bill.statusDesc}<br/>
+                                                        <small>Last Updated: {item.bill.updatedAt}</small>
                                                     </p>
                                                 </div>
                                                 <ArrowRight className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-1" />
