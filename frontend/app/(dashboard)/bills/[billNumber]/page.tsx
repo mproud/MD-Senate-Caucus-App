@@ -10,6 +10,8 @@ import { Badge } from "@/components/ui/badge"
 import { VoteForm } from "@/components/vote-form"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
+import { ExternalLink } from "lucide-react"
+import { VoteBreakdownModal } from "@/components/vote-breakdown-modal"
 
 interface BillPageProps {
     params: Promise<{
@@ -35,6 +37,148 @@ type BillExtended = Bill & {
         CommitteePrimaryOpposite: string
     }
     actions?: any[]
+}
+
+type Party = "Democrat" | "Republican"
+
+type ActionVote = {
+    vote: string
+    legislator?: {
+        party?: Party | null
+    } | null
+}
+
+type StrictPartyLineResult =
+    | {
+          kind: "UNANIMOUS_FOR"
+      }
+    | {
+          kind: "PARTY_LINE"
+          direction: "D_YEA_R_NAY" | "D_NAY_R_YEA"
+      }
+    | {
+          kind: "SPLIT"
+          direction: "D_YEA_R_NAY" | "D_NAY_R_YEA"
+          defectors: number
+      }
+    | {
+          kind: "NOT_PARTY_LINE"
+      }
+
+const normalizeVote = (v: string | null | undefined) => (v ?? "").trim().toUpperCase()
+
+const computeStrictPartyLine = (votes: ActionVote[] | null | undefined): StrictPartyLineResult => {
+    const yea = new Set<number>()
+    const nay = new Set<number>()
+
+    let totalYea = 0
+    let totalNay = 0
+
+    let dYea = 0
+    let dNay = 0
+    let rYea = 0
+    let rNay = 0
+
+    for (const v of votes ?? []) {
+        const val = normalizeVote(v.vote)
+        const party = v.legislator?.party ?? null
+
+        if (val !== "YEA" && val !== "NAY") {
+            continue
+        }
+
+        if (val === "YEA") {
+            totalYea += 1
+        } else {
+            totalNay += 1
+        }
+
+        if (party !== "Democrat" && party !== "Republican") {
+            continue
+        }
+
+        if (party === "Democrat") {
+            if (val === "YEA") {
+                dYea += 1
+            } else {
+                dNay += 1
+            }
+        } else {
+            if (val === "YEA") {
+                rYea += 1
+            } else {
+                rNay += 1
+            }
+        }
+    }
+
+    const totalConsidered = totalYea + totalNay
+    if (totalConsidered === 0) {
+        return { kind: "NOT_PARTY_LINE" }
+    }
+
+    // Unanimous (All members for): all considered votes are YEA
+    if (totalNay === 0) {
+        return { kind: "UNANIMOUS_FOR" }
+    }
+
+    const dTotal = dYea + dNay
+    const rTotal = rYea + rNay
+
+    // Need both parties represented to call something "Party Line" or "Split"
+    if (dTotal === 0 || rTotal === 0) {
+        return { kind: "NOT_PARTY_LINE" }
+    }
+
+    const isPartyLine_DYea_RNay = dYea === dTotal && rNay === rTotal
+    const isPartyLine_DNay_RYea = dNay === dTotal && rYea === rTotal
+
+    if (isPartyLine_DYea_RNay) {
+        return { kind: "PARTY_LINE", direction: "D_YEA_R_NAY" }
+    }
+
+    if (isPartyLine_DNay_RYea) {
+        return { kind: "PARTY_LINE", direction: "D_NAY_R_YEA" }
+    }
+
+    // Split (All D-1 / All R): exactly 1 defector from an otherwise party-line alignment
+    // Direction 1 target: D all YEA, R all NAY, allow one defector from either party
+    const defectors_DYea_RNay = (dTotal - dYea) + (rTotal - rNay)
+    if (defectors_DYea_RNay === 1) {
+        return { kind: "SPLIT", direction: "D_YEA_R_NAY", defectors: 1 }
+    }
+
+    // Direction 2 target: D all NAY, R all YEA, allow one defector from either party
+    const defectors_DNay_RYea = (dTotal - dNay) + (rTotal - rYea)
+    if (defectors_DNay_RYea === 1) {
+        return { kind: "SPLIT", direction: "D_NAY_R_YEA", defectors: 1 }
+    }
+
+    return { kind: "NOT_PARTY_LINE" }
+}
+
+const strictPartyLineLabel = (r: StrictPartyLineResult) => {
+    if (r.kind === "UNANIMOUS_FOR") {
+        return "Unanimous"
+    }
+
+    if (r.kind === "PARTY_LINE") {
+        return "Party Line"
+    }
+
+    if (r.kind === "SPLIT") {
+        return "Party Split"
+    }
+
+    return "Not party line"
+}
+
+const hasPartyVotes = (votes: ActionVote[] | null | undefined) => {
+    return (votes ?? []).some(
+        (v) =>
+            (v.vote === "YEA" || v.vote === "NAY") &&
+            (v.legislator?.party === "Democrat" || v.legislator?.party === "Republican")
+    )
 }
 
 async function BillContent({ billNumber, activeTab }: { billNumber: string, activeTab?: string }) {
@@ -236,15 +380,87 @@ async function BillContent({ billNumber, activeTab }: { billNumber: string, acti
                                                                         {formattedDate}
                                                                     </p>
                                                                 </div>
-                                                                <div>
-                                                                    { action.source == "MANUAL" && (
-                                                                        <Badge variant="outline" className="mr-5">
+                                                                <div className="flex items-center gap-2 flex-wrap justify-end">
+                                                                    <VoteBreakdownModal action={action} />
+
+                                                                    {(() => {
+                                                                        const voteAi = (action.dataSource as any)?.voteAi
+                                                                        const status = voteAi?.status as string | undefined
+                                                                        const attempts = voteAi?.attempts as number | undefined
+
+                                                                        if (!status) {
+                                                                            return null
+                                                                        }
+
+                                                                        const variant =
+                                                                            status === "DONE"
+                                                                                ? "default"
+                                                                                : status === "FAILED"
+                                                                                    ? "destructive"
+                                                                                    : "outline"
+
+                                                                        const label =
+                                                                            status === "DONE"
+                                                                                ? "AI: DONE"
+                                                                                : status === "FAILED"
+                                                                                    ? "AI: FAILED"
+                                                                                    : status === "PROCESSING"
+                                                                                        ? "AI: PROCESSING"
+                                                                                        : "AI: PENDING"
+
+                                                                        return (
+                                                                            <Badge variant={variant}>
+                                                                                {label}
+                                                                                {typeof attempts === "number" ? ` (${attempts})` : ""}
+                                                                            </Badge>
+                                                                        )
+                                                                    })()}
+
+                                                                    {(() => {
+                                                                        if (!hasPartyVotes(action.votes)) {
+                                                                            return null
+                                                                        }
+
+                                                                        const result = computeStrictPartyLine(action.votes)
+                                                                        const label = strictPartyLineLabel(result)
+
+                                                                        const className =
+                                                                            result.kind === "UNANIMOUS_FOR"
+                                                                                ? "bg-gray-200 text-gray-900 border-gray-300"
+                                                                                : result.kind === "PARTY_LINE"
+                                                                                    ? "bg-blue-600 text-white border-blue-700"
+                                                                                    : "bg-red-600 text-white border-red-700"
+
+                                                                        return (
+                                                                            <Badge variant="outline" className={className}>
+                                                                                Vote: {label}
+                                                                            </Badge>
+                                                                        )
+                                                                    })()}
+
+                                                                    {(action.dataSource as any)?.mga?.voteUrl && (
+                                                                        <a
+                                                                            href={(action.dataSource as any).mga.voteUrl}
+                                                                            target="_blank"
+                                                                            rel="noopener noreferrer"
+                                                                        >
+                                                                            <Badge variant="outline">
+                                                                                View PDF
+                                                                            </Badge>
+                                                                        </a>
+                                                                    )}
+
+                                                                    {action.source == "MANUAL" && (
+                                                                        <Badge variant="outline">
                                                                             MANUAL
                                                                         </Badge>
                                                                     )}
+
                                                                     <Badge
                                                                         variant={
-                                                                            action.voteResult === "Favorable" || action.voteResult === "Favorable with Amendments"
+                                                                            action.voteResult === "Favorable" ||
+                                                                            action.voteResult === "Favorable with Amendments" ||
+                                                                            action.voteResult === "Favorable with Amendment"
                                                                                 ? "default"
                                                                                 : "destructive"
                                                                         }

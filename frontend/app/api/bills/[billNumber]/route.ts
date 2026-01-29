@@ -77,6 +77,11 @@ export async function GET(
                 actions: {
                     include: {
                         committee: true,
+                        votes: {
+                            include: {
+                                legislator: true,
+                            },
+                        },
                     },
                     orderBy: {
                         actionDate: "desc",
