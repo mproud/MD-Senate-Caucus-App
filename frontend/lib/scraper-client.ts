@@ -49,6 +49,12 @@ export const scraperKinds = [
         description: "Runs every minute from 6am to 10pm",
         endpoint: "alert-sender",
     },
+    {
+        kind: "PROCESS_COMMITEE_VOTES",
+        name: "Process Committee Vote Sheets",
+        description: "Runs every minute from 6am to 10pm",
+        endpoint: "process-votes-ai",
+    },
 ] as const
 
 // Return the scraper object
