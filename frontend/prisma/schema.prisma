@@ -100,6 +100,14 @@ enum BillEventType {
   CALENDAR_UPDATED
 }
 
+enum Vote {
+  YEA
+  NAY
+  ABSTAIN
+  EXCUSED
+  ABSENT
+}
+
 //
 // Core Tables
 //
@@ -112,7 +120,7 @@ model User {
   name      String?
   firstName String?
   lastName  String?
-  
+
   welcomeEmailSentAt DateTime?
 
   userSettings Json?
@@ -148,6 +156,7 @@ model Legislator {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  votes     Votes[]
 
   @@map("legislators")
 }
@@ -356,6 +365,7 @@ model Bill {
   dataSource Json?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+  votes      Votes[]
 
   @@map("bills")
 }
@@ -416,6 +426,7 @@ model BillAction {
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
   billCurrentCommittees BillCurrentCommittee[]
+  votes                 Votes[]
 
   @@index([billId, actionDate, sequence])
 }
@@ -428,7 +439,7 @@ model BillNote {
 
   /// User ID from Clerk, etc
   userId String?
-  user   User?     @relation(fields: [userId], references: [clerkId])
+  user   User?   @relation(fields: [userId], references: [clerkId])
 
   visibility String?
   content    String
@@ -609,10 +620,10 @@ model Alert {
   id Int @id @default(autoincrement())
 
   /// Auth user id from your auth system (Clerk, etc.)
-  clerkUserId    String?
-  user           User?     @relation(fields: [clerkUserId], references: [clerkId])
-  active         Boolean   @default(true)
-  alertType      AlertType
+  clerkUserId String?
+  user        User?     @relation(fields: [clerkUserId], references: [clerkId])
+  active      Boolean   @default(true)
+  alertType   AlertType
 
   /// Optional filters: which entity/calendar this alert watches
   bill         Bill?         @relation(fields: [billId], references: [id])
@@ -754,4 +765,22 @@ model Settings {
   value String?
 }
 
-/// TODO
+/// Store Individual Votes
+model Votes {
+  id Int @id @default(autoincrement())
+
+  bill   Bill @relation(fields: [billId], references: [id])
+  billId Int
+
+  billAction   BillAction @relation(fields: [billActionId], references: [id])
+  billActionId Int
+
+  legislator   Legislator @relation(fields: [legislatorId], references: [id])
+  legislatorId Int
+
+  vote Vote
+
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

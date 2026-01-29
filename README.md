@@ -12,11 +12,11 @@
 - Constitutional Amendment status
 - Search bills by status?
 - Legislator scraper - Palakovich Carr and Lewis Young
+- Optimize the bill scraper. It's taking too long already
 
 # Known issues/gotchas
 
 - [ ] User Menu - Accoumt, Settings, etc
-- Figure out prod user - maybe shortcut and use Clerk components for now?
 - Single bill page - display votes numbers! this needs to be grabbed from the scraper
 - Single bill page - when manually recording a vote, trigger the status update/notification
 - Single bill page - after recording a vote, it needs to show up in the dashboard
@@ -24,7 +24,7 @@
 # Completed To Do
 
 - [x] Users - invite/add/remove user functionality!
-
+- [x] Figure out prod user - maybe shortcut and use Clerk components for now?
 
 
 # Database Tables Explained
@@ -33,13 +33,17 @@
 
 This is where a user subscribes to a bill's events
 
+## AlertDelivery
+
+Track progress/deliveries of alerts to users - this is basically the log of outbound notifications
+
 ## Bills
 
 You guessed it, the table with bills.
 
 ## BillEvent
 
-Adding a row to this is what triggers the actual event to fire to send a notification
+Adding a row to this is what triggers the actual event to fire to send a notification. Outbound notifications go to AlertDelivery
 
 ## BillAction
 
