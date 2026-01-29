@@ -98,6 +98,14 @@ type CommitteeVoteEvent = {
     date?: string | Date | null
 }
 
+type BillVote = {
+    billActionId: number | string
+    vote?: string | null
+    legislator?: {
+        party?: Party | null
+    } | null
+}
+
 function toInt(n: unknown): number | null {
     if (typeof n === "number" && Number.isFinite(n)) return n
     if (typeof n === "string" && n.trim() !== "" && Number.isFinite(Number(n))) return Number(n)
@@ -612,9 +620,11 @@ export async function CalendarReport({ calendarData }: { calendarData: CalendarD
 
                                                 const actionId = committeeVote.action?.id ?? null
 
+                                                const votes = (item.bill?.votes ?? []) as BillVote[]
+
                                                 const committeeVotesForAction =
                                                     actionId != null
-                                                        ? item.bill?.votes?.filter(v => v.billActionId === actionId) ?? []
+                                                        ? votes.filter((v: BillVote) => String(v.billActionId) === String(actionId))
                                                         : []
 
                                                 const partyLineLabel = getCommitteePartyLineLabel(committeeVotesForAction)
