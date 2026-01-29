@@ -32,6 +32,7 @@ interface ParsedHeader extends Prisma.JsonObject {
     readingDate?: string | null // this should be formatted as a date
     heading?: string | null // the original heading
     headerId?: string | null // the ID from the agenda table
+    committeeName?: string | null // get the committee name from the heading
 }
 
 interface ParsedAgendaItem extends Prisma.JsonObject {
@@ -55,7 +56,8 @@ interface ParsedSection {
 // @TODO handle laid over bills, etc (what others??)
 function parseAgendaHeader( header: string, headerId: string ): ParsedHeader | null {
     const primaryPatterns = [
-        { type: 'committee_report', regex: /Committee Report No\.\s*(\d+)/i },
+        // { type: 'committee_report', regex: /Committee Report No\.\s*(\d+)/i },
+        { type: 'committee_report', regex: /^(?:(.*?)\s+)?Committee Report No\.\s*(\d+)/i }, // grab the full heading from the committee report
         { type: 'third_reading_calendar', regex: /Third Reading Calendar No\.\s*(\d+)/i },
         { type: 'special_order_calendar', regex: /Special Order Calendar No\.\s*(\d+)/i },
         { type: "vetoed_bills_calendar", regex: /Calendar of Vetoed(?:\s+(Senate|House))?\s+Bills?\s+No\.\s*(\d+)/i },
@@ -114,21 +116,40 @@ function parseAgendaHeader( header: string, headerId: string ): ParsedHeader | n
     for (const { type, regex } of primaryPatterns) {
         const match = heading.match(regex)
         if (match) {
-            const number =
-                type === "vetoed_bills_calendar"
-                ? parseInt(match[2], 10) // vetoed has optional chamber group
-                : type === "first_reading_calendar"
-                    ? parseInt(match[2], 10) // intro has chamber group then number
-                    : parseInt(match[1], 10);
-            
+            let number: number | null = null
+            let committeeName: string | null = null
+            let finalHeading = displayHeading
+
+            if (type === "committee_report") {
+                // match[1] = optional committee prefix, match[2] = number
+                committeeName = match[1]?.trim() ?? null
+                number = parseInt(match[2], 10)
+
+                /**
+                 * Newly added: keep the committee name in the heading so that:
+                 * - the calendar name is unique/human-friendly
+                 * - extractCommitteeNameFromHeader works reliably
+                 */
+                finalHeading = committeeName
+                    ? `${committeeName} Committee Report No. ${number}`
+                    : `Committee Report No. ${number}`
+            } else if (type === "vetoed_bills_calendar") {
+                number = parseInt(match[2], 10)
+            } else if (type === "first_reading_calendar") {
+                number = parseInt(match[2], 10)
+            } else {
+                number = parseInt(match[1], 10)
+            }
+
             return {
                 calendarType: type,
                 calendarNumber: number,
                 consentCalendar,
                 distributionDate,
                 readingDate,
-                heading: displayHeading,
+                heading: finalHeading,
                 headerId,
+                committeeName,
             }
         }
     }
@@ -287,29 +308,33 @@ async function scrapeAgendaUrl( url: string ) {
     return sections
 }
 
-// Try to extract the committee name from the header for committee reports
-function extractCommitteeNameFromHeader( header: ParsedHeader | null ): string | null {
-    if ( ! header ) return null
-    if ( ! header.calendarType ) return null
+function extractCommitteeNameFromHeader(header: ParsedHeader | null): string | null {
+    if (!header) return null
+    if (!header.calendarType) return null
 
     const type = header.calendarType.toLowerCase()
-    if ( type !== 'committee_report' ) return null
+    if (type !== "committee_report") return null
 
-    const heading = header.heading ?? ''
-    if ( ! heading ) return null
+    /**
+     * Use the already-parsed committeeName first.
+     * this avoids relying on string patterns that can break when
+     * MGA changes formatting.
+     */
+    if (header.committeeName) {
+        return header.committeeName.trim()
+    }
 
-    // Example heading:
-    // "Education, Energy, and the Environment Committee Report No. 26 Distribution Date: March 27, 2025 Second Reading Date: March 27, 2025"
-    //
-    // We want everything before " Committee Report"
+    const heading = header.heading ?? ""
+    if (!heading) return null
+
     const match = heading.match(/^(.*?)\s+Committee Report/i)
-
-    if ( match && match[1] ) {
+    if (match && match[1]) {
         return match[1].trim()
     }
 
     return null
 }
+
 
 
 // Map the calendar ID to the DB's calendar type
@@ -619,13 +644,23 @@ async function upsertFloorCalendar(opts: {
 
     const existing = await prisma.floorCalendar.findFirst({
         where: {
+            sessionYear,
+            sessionCode,
             chamber,
             calendarType: calendarTypeEnum,
             calendarNumber,
+
+            /**
+             * Newly added: committee reports must also match committeeId,
+             * otherwise Finance #1 and JPR #1 will collide.
+             */
+            ...(calendarTypeEnum === "COMMITTEE_REPORT"
+                ? { committeeId: committee?.id ?? null }
+                : {}),
+
+            // keep your other match fields if you want them as additional guardrails
             calendarDate: calendarDate ?? undefined,
             calendarName: calendarName ?? undefined,
-            sessionYear,
-            sessionCode,
         },
         // select: {
         //     id: true,
@@ -817,7 +852,7 @@ export const GET = async ( request: Request ) => {
         // Get the agenda items
         const scrapeResult = await scrapeAgendaUrl( url )
 
-        console.log(`>> ${chamber} Scrape Result`, { scrapeResult })
+        console.log(`>> ${chamber} Scrape Result`, { items: scrapeResult[0].items })
 
         // For each section + bill, find the Bill and create BILL_ADDED_TO_CALENDAR events
         for ( const section of scrapeResult ) {
@@ -890,6 +925,8 @@ export const GET = async ( request: Request ) => {
                     where: { externalId },
                     select: { id: true, billNumber: true },
                 })
+
+                console.log('Processing items - bill', { externalId, bill })
 
                 // Either use the internal bill ID or the bill number for the key
                 const key =
