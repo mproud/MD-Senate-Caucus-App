@@ -529,7 +529,7 @@ model FloorCalendar {
   items  CalendarItem[]
   events BillEvent[]
 
-  @@unique([sessionYear, chamber, proceedingsNumber, calendarType, calendarNumber])
+  @@unique([sessionYear, chamber, proceedingsNumber, calendarType, calendarNumber, committeeId])
   @@index([sessionYear, chamber, calendarDate, calendarType])
 }
 
