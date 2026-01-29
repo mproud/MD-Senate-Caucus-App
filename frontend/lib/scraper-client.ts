@@ -50,7 +50,7 @@ export const scraperKinds = [
         endpoint: "alert-sender",
     },
     {
-        kind: "PROCESS_COMMITEE_VOTES",
+        kind: "PROCESS_COMMITTEE_VOTES",
         name: "Process Committee Vote Sheets",
         description: "Runs every minute from 6am to 10pm",
         endpoint: "process-votes-ai",
