@@ -318,6 +318,12 @@ function resolvePrimarySponsorId(
     return null
 }
 
+function asJsonObject(value: unknown): Record<string, unknown> {
+    if (!value || typeof value !== "object") return {}
+    if (Array.isArray(value)) return {}
+    return value as Record<string, unknown>
+}
+
 // handle when bills change...
 function createStatusChangedSummary(
     billNumber: string,
@@ -501,7 +507,7 @@ async function upsertBillAction(opts: {
             // Still let JSON improve committeeId if it was missing, but preserve authoritative values
             // Also optionally merge raw data into dataSource without overwriting voteAi fields:
             data.dataSource = {
-                ...(existing.dataSource ?? {}),
+                ...asJsonObject(existing.dataSource),
                 // preserve existing.voteAi + mga keys, but keep JSON info too
                 source: "legislation.json",
                 ...raw,
