@@ -6,6 +6,7 @@ import { auth } from "@clerk/nextjs/server"
 import { isValidCronSecret } from "@/lib/scrapers/helpers"
 import { getActiveSessionCode } from "@/lib/get-active-session"
 import { Prisma, Vote as VoteEnum, BillEventType } from "@prisma/client"
+import { finishScrapeRun, startScrapeRun } from "@/lib/scrapers/logging"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -1165,6 +1166,8 @@ async function findCandidateVoteActions(limit: number) {
 }
 
 export async function GET(request: Request) {
+    const run = await startScrapeRun('MGA_BILLS_JSON')
+    
     try {
         const { userId } = await auth()
         const hasClerkUser = !!userId
@@ -1231,6 +1234,10 @@ export async function GET(request: Request) {
             results.push(await processVoteBillActionAi(id))
         }
 
+        await finishScrapeRun(run.id, {
+            success: true,
+        })
+
         return NextResponse.json({
             mode: "batch",
             requestedLimit: safeLimit,
@@ -1240,6 +1247,14 @@ export async function GET(request: Request) {
         })
     } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
+
+        await finishScrapeRun(run.id, {
+            success: false,
+            error: err,
+        })
+
         return NextResponse.json({ error: message }, { status: 500 })
+    } finally {
+        await prisma.$disconnect()
     }
 }
