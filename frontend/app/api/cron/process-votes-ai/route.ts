@@ -1166,7 +1166,7 @@ async function findCandidateVoteActions(limit: number) {
 }
 
 export async function GET(request: Request) {
-    const run = await startScrapeRun('MGA_BILLS_JSON')
+    const run = await startScrapeRun('PROCESS_COMMITTEE_VOTES')
     
     try {
         const { userId } = await auth()
