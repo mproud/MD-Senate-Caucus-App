@@ -101,6 +101,7 @@ export async function GET(request: NextRequest) {
 
         const calendars = await prisma.floorCalendar.findMany({
             where,
+            // where: { id: 73 }, // for testing second reading calendar
             orderBy: { calendarDate: "desc" },
             include: {
                 committee: true,
@@ -130,6 +131,7 @@ export async function GET(request: NextRequest) {
                                     orderBy: [{ actionDate: "desc" }, { sequence: "desc" }],
                                     // take: 1,
                                     select: {
+                                        id: true,
                                         committeeId: true,
                                         source: true,
                                         voteResult: true,
@@ -138,6 +140,12 @@ export async function GET(request: NextRequest) {
                                         absent: true,
                                         excused: true,
                                         notVoting: true,
+                                    },
+                                },
+                                
+                                votes: {
+                                    include: {
+                                        legislator: true,
                                     },
                                 },
 

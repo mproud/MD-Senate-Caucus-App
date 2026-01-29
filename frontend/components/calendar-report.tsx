@@ -148,7 +148,7 @@ function pickCommitteeVoteForCommittee(args: {
 }): {
     action: CommitteeVoteEvent | null
     counts: Required<VoteCounts> | null
-    source: "MGA" | "MANUAL" | string | null
+    source: "MGA_SCRAPE" | "MANUAL" | string | null
     usedManualCountsToFillMGA: boolean
     manualEvent: CommitteeVoteEvent | null
 } {
@@ -179,7 +179,7 @@ function pickCommitteeVoteForCommittee(args: {
         }
     }
 
-    const mga = relevant.filter((e) => (e.source ?? "").toString().toUpperCase() === "MGA")
+    const mga = relevant.filter((e) => (e.source ?? "").toString().toUpperCase() === "MGA_SCRAPE")
     const manual = relevant.filter((e) => (e.source ?? "").toString().toUpperCase() === "MANUAL")
 
     // console.log( billNumber, { relevant, mga, manual })
@@ -198,7 +198,7 @@ function pickCommitteeVoteForCommittee(args: {
         return {
             action: bestMga,
             counts: mgaCounts!,
-            source: bestMga.source ?? "MGA",
+            source: bestMga.source ?? "MGA_SCRAPE",
             usedManualCountsToFillMGA: false,
             manualEvent: bestManual,
         }
@@ -418,6 +418,102 @@ const COLS = {
 
 const cellBase = "align-top whitespace-normal"
 
+type Party = "Democrat" | "Republican"
+
+type ActionVote = {
+    vote?: string | null
+    legislator?: {
+        party?: Party | null
+    } | null
+}
+
+type CommitteeActionWithVotes = {
+    votes?: ActionVote[] | null
+}
+
+const normalizeVote = (v: string | null | undefined) => (v ?? "").trim().toUpperCase()
+
+const normalizeYeaNay = (v: string | null | undefined): "YEA" | "NAY" | null => {
+    const val = normalizeVote(v)
+
+    if (val === "YEA" || val === "AYE" || val === "YES" || val === "Y") {
+        return "YEA"
+    }
+
+    if (val === "NAY" || val === "NO" || val === "N") {
+        return "NAY"
+    }
+
+    return null
+}
+
+function getCommitteePartyLineLabel( input: CommitteeActionWithVotes | ActionVote[] | null | undefined ): "Unanimous" | "Party Line" | "Party Split" | null {
+    const votes = Array.isArray(input) ? input : (input?.votes ?? [])
+
+    const considered = votes.filter((v): v is ActionVote => {
+        if (!v) return false
+
+        const val = normalizeYeaNay(v.vote)
+        const party = v.legislator?.party ?? null
+
+        return val !== null && (party === "Democrat" || party === "Republican")
+    })
+
+    if (considered.length === 0) {
+        return null
+    }
+
+    let totalYea = 0
+    let totalNay = 0
+    let dYea = 0
+    let dNay = 0
+    let rYea = 0
+    let rNay = 0
+
+    for (const v of considered) {
+        const val = normalizeYeaNay(v.vote)
+        const party = v.legislator?.party ?? null
+
+        if (val === "YEA") {
+            totalYea += 1
+            if (party === "Democrat") dYea += 1
+            if (party === "Republican") rYea += 1
+        }
+
+        if (val === "NAY") {
+            totalNay += 1
+            if (party === "Democrat") dNay += 1
+            if (party === "Republican") rNay += 1
+        }
+    }
+
+    if (totalYea > 0 && totalNay === 0) {
+        return "Unanimous"
+    }
+
+    const dTotal = dYea + dNay
+    const rTotal = rYea + rNay
+
+    const isPartyLine_DYea_RNay =
+        dTotal > 0 &&
+        rTotal > 0 &&
+        dYea === dTotal &&
+        rNay === rTotal
+
+    const isPartyLine_DNay_RYea =
+        dTotal > 0 &&
+        rTotal > 0 &&
+        dNay === dTotal &&
+        rYea === rTotal
+
+    if (isPartyLine_DYea_RNay || isPartyLine_DNay_RYea) {
+        return "Party Line"
+    }
+
+    return "Party Split"
+}
+
+
 export async function CalendarReport({ calendarData }: { calendarData: CalendarDay }) {
     // Show the filter by date, checkbox to show all bills or split votes only, show alert bills
 
@@ -427,11 +523,9 @@ export async function CalendarReport({ calendarData }: { calendarData: CalendarD
 
     // Need to find -- Second Reading, find vote with Committee ID. Prefer official if there are numbers, or unofficial if there aren't any numbers
     //                 Match house votes if this bill was in the house OR if it has a crossfile with motion
-
-    // return (
-    //     <code><pre>{JSON.stringify(calendarData, null, 2)}</pre></code>
-    // )
     
+    // return <code><pre>{JSON.stringify(rawCalendars, null, 2)}</pre></code>
+
     return (
         <>
             {calendars.sections.map(( section, index ) => {
@@ -515,6 +609,15 @@ export async function CalendarReport({ calendarData }: { calendarData: CalendarD
                                                     billActions,
                                                     committeeId: currentCommitteeId,
                                                 })
+
+                                                const actionId = committeeVote.action?.id ?? null
+
+                                                const committeeVotesForAction =
+                                                    actionId != null
+                                                        ? item.bill?.votes?.filter(v => v.billActionId === actionId) ?? []
+                                                        : []
+
+                                                const partyLineLabel = getCommitteePartyLineLabel(committeeVotesForAction)
 
                                                 const isFlagged = Boolean(item.bill?.isFlagged)
 
@@ -622,6 +725,15 @@ export async function CalendarReport({ calendarData }: { calendarData: CalendarD
                                                                     </>
                                                                 ) : (
                                                                     <div className="text-muted-foreground">---</div>
+                                                                )}
+
+                                                                {partyLineLabel && (
+                                                                    <>
+                                                                        <span className="text-xs">
+                                                                            {partyLineLabel}
+                                                                        </span>
+                                                                        <br />
+                                                                    </>
                                                                 )}
                                                             </div>
                                                         </TableCell>
