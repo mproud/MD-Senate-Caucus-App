@@ -62,6 +62,7 @@ export const TabEventHistory = () => {
                                     <TableHead>Bill ID</TableHead>
                                     <TableHead>Event Type</TableHead>
                                     <TableHead>Time</TableHead>
+                                    <TableHead>Chamber</TableHead>
                                     <TableHead>Summary</TableHead>
                                     <TableHead>Alert Status</TableHead>
                                     <TableHead>Alert Processed At</TableHead>
@@ -74,6 +75,7 @@ export const TabEventHistory = () => {
                                             <TableCell>{event.billId} { event.bill ? `(${event.bill?.billNumber})` : "-"}</TableCell>
                                             <TableCell>{event.eventType}</TableCell>
                                             <TableCell>{formatLongDate(event.createdAt)}</TableCell>
+                                            <TableCell>{event.chamber}</TableCell>
                                             <TableCell>{event.summary}</TableCell>
                                             <TableCell>{event.alertsStatus}</TableCell>
                                             <TableCell>{event.alertsProcessedAt && formatLongDate(event.alertsProcessedAt)}</TableCell>
