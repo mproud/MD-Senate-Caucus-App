@@ -52,7 +52,7 @@ export const scraperKinds = [
     {
         kind: "PROCESS_COMMITTEE_VOTES",
         name: "Process Committee Vote Sheets",
-        description: "Runs every minute from 6am to 10pm",
+        description: "Runs every five minutes from 7am to 10pm",
         endpoint: "process-votes-ai",
     },
 ] as const
