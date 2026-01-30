@@ -352,7 +352,7 @@ async function BillContent({ billNumber, activeTab }: { billNumber: string, acti
                                     {bill.actions && bill.actions.length > 0 ? (
                                         <div className="space-y-4">
                                             {bill.actions
-                                                .filter((action) => action.actionCode === "COMMITTEE_VOTE")
+                                                .filter((action) => ( action.actionCode === "COMMITTEE_VOTE" || action.actionCode === "COMMITEE_VOTE" ))
                                                 .sort((a, b) => new Date(b.actionDate).getTime() - new Date(a.actionDate).getTime())
                                                 .map((action) => {
                                                     const date = new Date(action.actionDate)
