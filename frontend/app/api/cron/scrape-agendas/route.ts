@@ -51,6 +51,13 @@ interface ParsedSection {
     items: ParsedAgendaItem[]
 }
 
+// Detect if there's no agenda
+function isNoAgendaPage($: cheerio.CheerioAPI): boolean {
+    const pageText = $("body").text().replace(/\s+/g, " ").trim()
+
+    return /\bno\s+(senate|house)\s+agenda\b/i.test(pageText)
+}
+
 // Parse the header for things like Second Reading, Third Reading, Consent Calendar, Special Order Calendar, etc
 // some bills can be second reading x consent y
 // @TODO handle laid over bills, etc (what others??)
@@ -174,6 +181,11 @@ async function scrapeAgendaUrl( url: string ) {
     // @TODO handle any errors! (log them!)
     const $ = await fetchHtml( url )
     // const html = $.html() // not sure if we need this, but just in case...
+
+    // Bail if there's no agenda
+    if (isNoAgendaPage($)) {
+        return []
+    }
 
     const sections: ParsedSection[] = []
 
@@ -851,6 +863,19 @@ export const GET = async ( request: Request ) => {
     try {
         // Get the agenda items
         const scrapeResult = await scrapeAgendaUrl( url )
+
+        // Short circuit if there's no agenda
+        if (scrapeResult.length === 0) {
+            await finishScrapeRun(run.id, {
+                success: true,
+                calendarsCount: 0,
+            })
+
+            return NextResponse.json({
+                ok: true,
+                agendas: 0,
+            })
+        }
 
         console.log(`>> ${chamber} Scrape Result`, { items: scrapeResult[0].items })
 
