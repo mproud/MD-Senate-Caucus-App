@@ -11,6 +11,12 @@ import { finishScrapeRun, startScrapeRun } from "@/lib/scrapers/logging"
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
+// Add other result codes here
+const voteResultMap: Record<string, string> = {
+    FAV: "Favorable",
+    FWA: "Favorable with Amendment",
+}
+
 type VoteAiStatus = "PENDING" | "PROCESSING" | "DONE" | "FAILED" | "FAILED_QUOTA"
 
 type VoteAiState = {
@@ -844,7 +850,9 @@ async function saveAiVoteResult(args: {
         excused: Number.isFinite(excused) ? excused : undefined,
         notVoting: Number.isFinite(notVoting) ? notVoting : undefined,
 
-        voteResult: normalized.vote.result,
+        // voteResult: normalized.vote.result,
+        // Map FWA and FAV etc to the full status
+        voteResult: voteResultMap[normalized.vote.result] ?? normalized.vote.result,
 
         dataSource: {
             ...args.ds,
