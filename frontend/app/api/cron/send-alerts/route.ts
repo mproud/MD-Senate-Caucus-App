@@ -1170,7 +1170,7 @@ export async function GET(request: Request) {
     for (const event of events) {
         const perEvent = {
             billEventId: event.id,
-            status: "DONE" as const,
+            status: "DONE" as "DONE" | "FAILED",
             attemptedDeliveries: 0,
             createdDeliveries: 0,
             sentInstant: 0,
