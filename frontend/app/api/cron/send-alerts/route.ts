@@ -401,6 +401,57 @@ function asNumber(v: unknown): number | null {
     return null
 }
 
+function safeStringify(value: unknown) {
+    try {
+        const seen = new WeakSet<object>()
+
+        return JSON.stringify(
+            value,
+            (_key, val) => {
+                if (typeof val === "object" && val !== null) {
+                    if (seen.has(val)) {
+                        return "[Circular]"
+                    }
+                    seen.add(val)
+                }
+                return val
+            },
+            2
+        )
+    } catch {
+        return null
+    }
+}
+
+function formatError(err: unknown) {
+    if (err instanceof Error) {
+        const stack = typeof err.stack === "string" ? `\n${err.stack}` : ""
+        return `${err.name}: ${err.message}${stack}`.trim()
+    }
+
+    if (typeof err === "string") {
+        return err
+    }
+
+    if (err && typeof err === "object") {
+        const anyErr = err as any
+
+        // Many libs (including email APIs) return { message, name, ... }
+        if (typeof anyErr.message === "string" && anyErr.message.trim() !== "") {
+            const name = typeof anyErr.name === "string" && anyErr.name.trim() !== "" ? anyErr.name : "Error"
+            const stack = typeof anyErr.stack === "string" ? `\n${anyErr.stack}` : ""
+            return `${name}: ${anyErr.message}${stack}`.trim()
+        }
+
+        const json = safeStringify(err)
+        if (json) {
+            return json
+        }
+    }
+
+    return String(err)
+}
+
 function normalizePartyKey(k: string) {
     const s = k.trim().toLowerCase()
 
@@ -1286,7 +1337,7 @@ export async function GET(request: Request) {
                             where: { id: deliveryId },
                             data: {
                                 status: AlertDeliveryStatus.FAILED,
-                                error: String(error),
+                                error: formatError(error),
                             },
                         })
 
@@ -1328,7 +1379,7 @@ export async function GET(request: Request) {
             results.events.push(perEvent)
         } catch (err) {
             perEvent.status = "FAILED"
-            perEvent.error = String(err)
+            perEvent.error = formatError(err)
 
             const refreshed = await prisma.billEvent.findUnique({
                 where: { id: event.id },
@@ -1342,7 +1393,7 @@ export async function GET(request: Request) {
                 where: { id: event.id },
                 data: {
                     alertsStatus: BillEventAlertsStatus.FAILED,
-                    alertsLastError: String(err),
+                    alertsLastError: formatError(err),
                     alertsNextAttemptAt: nextAttemptAt,
                 },
             })
@@ -1432,7 +1483,7 @@ export async function GET(request: Request) {
                 where: { id: { in: queued.map((q) => q.id) } },
                 data: {
                     status: AlertDeliveryStatus.FAILED,
-                    error: String(error),
+                    error: formatError(error),
                 },
             })
 
