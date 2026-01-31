@@ -31,11 +31,6 @@
     {
       "path": "/api/cron/process-votes-ai",
       "schedule": "*/5 0-3,12-23 * * *"
-    },
-
-    {
-      "path": "/api/cron/send-alerts",
-      "schedule": "* 0-3,12-23 * * *"
     }
   ]
 }
