@@ -44,6 +44,7 @@ enum CalendarType {
 
 /// High-level alert category (what the user cares about)
 enum AlertType {
+  BILL
   BILL_STATUS
   CALENDAR
   COMMITTEE_ACTION
