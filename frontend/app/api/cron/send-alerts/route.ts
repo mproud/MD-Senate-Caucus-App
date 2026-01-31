@@ -26,6 +26,7 @@ import {
     AlertType,
     BillEventAlertsStatus,
     BillEventType,
+    Prisma,
 } from "@prisma/client"
 import { finishScrapeRun, startScrapeRun } from "@/lib/scrapers/logging"
 
@@ -1122,7 +1123,7 @@ export async function GET(request: Request) {
                 not: "",
             },
             userSettings: {
-                not: null,
+                not: Prisma.JsonNull,
             },
         },
         select: {
