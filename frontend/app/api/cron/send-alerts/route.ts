@@ -1396,6 +1396,10 @@ export async function GET(request: Request) {
     })
 
     if (events.length === 0) {
+        await finishScrapeRun(run.id, {
+            success: true,
+        })
+
         return NextResponse.json({
             ok: true,
             message: "No events pending alert processing",
