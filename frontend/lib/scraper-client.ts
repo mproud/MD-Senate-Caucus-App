@@ -46,7 +46,7 @@ export const scraperKinds = [
     {
         kind: "ALERT_SENDER",
         name: "Send Updates & Alerts",
-        description: "Runs every minute from 6am to 10pm",
+        description: "Runs every two minutes from 6am to 10pm",
         endpoint: "send-alerts",
     },
     {
