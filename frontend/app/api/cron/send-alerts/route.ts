@@ -9,7 +9,9 @@
     special mark/alert for "alert" bills
 
     Add to user preferences
-        Bill Introduced
+        Bill Introduced, and others
+    
+    Hearing scheduled doesn't seem to be triggered??
 
 */
 
@@ -19,6 +21,7 @@ import { sendTemplateEmail } from "@/lib/resend"
 import { auth } from "@clerk/nextjs/server"
 import { isValidCronSecret } from "@/lib/scrapers/helpers"
 import {
+    Prisma,
     AlertDeliveryChannel,
     AlertDeliveryStatus,
     AlertDigestCadence,
@@ -26,9 +29,13 @@ import {
     AlertType,
     BillEventAlertsStatus,
     BillEventType,
-    Prisma,
 } from "@prisma/client"
 import { finishScrapeRun, startScrapeRun } from "@/lib/scrapers/logging"
+
+function normalizeChamber(text: string): string {
+    text = text.trim()
+    return text[0].toUpperCase() + text.slice(1).toLowerCase()
+}
 
 function escapeHtml(s: string) {
     return s.replace(/[&<>"']/g, (c) => {
@@ -69,8 +76,91 @@ function toPreviewText(s: string, max = 120) {
     return truncate(stripHtml(s), max)
 }
 
-function billDashboardUrl(billNumber: string) {
-    return `https://www.caucusreport.com/bills/${encodeURIComponent(billNumber)}?tab=votes`
+function billDashboardUrl(billNumber: string, eventType?: BillEventType) {
+    const base = `https://www.caucusreport.com/bills/${encodeURIComponent(billNumber)}`
+
+    if (eventType && eventType === "COMMITTEE_VOTE_RECORDED") {
+        return `${base}?activeTab=votes`
+    }
+
+    return base
+}
+
+/**
+ * Flagged bill helpers (high priority styling)
+ */
+function isFlaggedBill(event: any) {
+    return event?.bill?.isFlagged === true
+}
+
+function importantPrefixText(event: any) {
+    return isFlaggedBill(event) ? "IMPORTANT: " : ""
+}
+
+function importantSubjectPrefix(event: any) {
+    return isFlaggedBill(event) ? "🚨 IMPORTANT: " : ""
+}
+
+function importantBannerHtml(event: any) {
+    if (!isFlaggedBill(event)) {
+        return ""
+    }
+
+    return `
+        <div style="
+            margin:0 0 14px;
+            padding:12px 14px;
+            border:1px solid #ef4444;
+            background:#fee2e2;
+            border-radius:10px;
+            font-family: Arial, Helvetica, sans-serif;
+        ">
+            <div style="font-weight:700;color:#991b1b;font-size:14px;line-height:1.2;text-align:center;">
+                🚨 🚨 This bill has been flagged by the caucus. 🚨 🚨
+            </div>
+        </div>
+    `
+}
+
+function importantContainerStyle(event: any) {
+    if (!isFlaggedBill(event)) {
+        return `font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;`
+    }
+
+    return `
+        font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
+        border-left: 6px solid #ef4444;
+        background: #fff7f7;
+        padding: 14px 14px 14px 12px;
+        border-radius: 10px;
+    `
+}
+
+function importantRowStyle(event: any) {
+    return isFlaggedBill(event)
+        ? "background:#fff1f2;border-top:1px solid #fecaca;"
+        : "border-top:1px solid #eee;"
+}
+
+function importantPillHtml(event: any) {
+    if (!isFlaggedBill(event)) {
+        return ""
+    }
+
+    return `
+        <span style="
+            display:inline-block;
+            margin-left:8px;
+            padding:2px 8px;
+            border-radius:999px;
+            font-size:11px;
+            font-weight:700;
+            color:#991b1b;
+            background:#fee2e2;
+            border:1px solid #fecaca;
+            vertical-align:middle;
+        ">IMPORTANT</span>
+    `
 }
 
 function getZonedParts(date: Date, timeZone: string) {
@@ -149,7 +239,9 @@ const EVENT_TYPE_LABELS: Record<string, string> = {
     CALENDAR_UPDATED: "Calendar updated",
 }
 
-function humanizeEventType(eventType: string): string {
+function humanizeEventType(eventType: string, summary?: string): string {
+    if (summary) return summary
+
     return (
         EVENT_TYPE_LABELS[eventType] ??
         eventType
@@ -159,17 +251,29 @@ function humanizeEventType(eventType: string): string {
     )
 }
 
+type CalendarChamberPreference = "house" | "senate" | "both"
+
 /**
  * Preference keys used in user.userSettings.preferences.enabledAlertTypes.
  * These keys power the "notification settings" page, so we keep them stable.
+ *
+ * Note:
+ * - committeeReferral and committeeVoteRecorded are intentionally separate.
+ * - committeeVote remains as a legacy fallback for older saved preferences.
  */
 type EnabledAlertTypes = {
     floorVote?: boolean
     newCrossfile?: boolean
-    committeeVote?: boolean
+    committeeReferral?: boolean
+    committeeVoteRecorded?: boolean
     billStatusChange?: boolean
     hearingScheduled?: boolean
     billIntroduced?: boolean
+    committeeVote?: boolean
+    billAddedToCalendar?: boolean
+    billRemovedFromCalendar?: boolean
+    calendarPublished?: boolean
+    calendarUpdated?: boolean
     [key: string]: boolean | undefined
 }
 
@@ -183,6 +287,7 @@ type UserPreferences = {
     alertFrequency?: "realtime" | "daily_digest" | "weekly_digest"
     enabledAlertTypes?: EnabledAlertTypes
     alertDeliveryMethod?: "email" | "sms"
+    calendarChamber?: CalendarChamberPreference
 }
 
 function getUserPreferences(userSettings: unknown): UserPreferences {
@@ -197,6 +302,40 @@ function getUserPreferences(userSettings: unknown): UserPreferences {
     }
 
     return {}
+}
+
+function chamberToPreferenceValue(chamber: unknown): "house" | "senate" | null {
+    if (typeof chamber !== "string") {
+        return null
+    }
+
+    const c = chamber.trim().toLowerCase()
+
+    if (c === "house" || c === "h") {
+        return "house"
+    }
+
+    if (c === "senate" || c === "s") {
+        return "senate"
+    }
+
+    return null
+}
+
+function userWantsCalendarChamber(preferences: UserPreferences, event: any) {
+    // Back-compat: default to both
+    const pref = (preferences.calendarChamber ?? "both") as CalendarChamberPreference
+
+    if (pref === "both") {
+        return true
+    }
+
+    const eventChamber = chamberToPreferenceValue(event?.chamber)
+    if (!eventChamber) {
+        return true
+    }
+
+    return pref === eventChamber
 }
 
 function hhmmToMinutes(hhmm: string) {
@@ -274,34 +413,21 @@ function isDigestDue(args: {
 
 /**
  * Canonical mapping from BillEventType -> enabledAlertTypes preference key.
- *
- * This is what you asked for so you can build the preferences page:
- * - eventType: preferenceKey
- *
- * Notes:
- * - BILL_INTRODUCED now maps to billIntroduced (NOT newCrossfile)
- * - newCrossfile remains reserved for your crossfile-specific event type(s)
  */
 const EVENT_TYPE_TO_PREFERENCE_KEY: Partial<Record<BillEventType, keyof EnabledAlertTypes>> = {
     BILL_STATUS_CHANGED: "billStatusChange",
     BILL_INTRODUCED: "billIntroduced",
-    BILL_ADDED_TO_CALENDAR: "floorVote",
-    BILL_REMOVED_FROM_CALENDAR: "floorVote",
-    CALENDAR_PUBLISHED: "floorVote",
-    CALENDAR_UPDATED: "floorVote",
-    COMMITTEE_REFERRAL: "committeeVote",
-    COMMITTEE_VOTE_RECORDED: "committeeVote",
+    BILL_ADDED_TO_CALENDAR: "billAddedToCalendar",
+    BILL_REMOVED_FROM_CALENDAR: "billRemovedFromCalendar",
+    CALENDAR_PUBLISHED: "calendarPublished",
+    CALENDAR_UPDATED: "calendarUpdated",
+    COMMITTEE_REFERRAL: "committeeReferral",
+    COMMITTEE_VOTE_RECORDED: "committeeVoteRecorded",
     HEARING_SCHEDULED: "hearingScheduled",
     HEARING_CHANGED: "hearingScheduled",
     HEARING_CANCELED: "hearingScheduled",
 }
 
-/**
- * Any event types not included above will be treated as "unmapped".
- * For now, unmapped events do not send emails (safe default), but we
- * include them in the JSON response so you can add them to the mapping
- * and to your preferences UI later.
- */
 function eventTypeToPreferenceKey(eventType: BillEventType): keyof EnabledAlertTypes | null {
     return EVENT_TYPE_TO_PREFERENCE_KEY[eventType] ?? null
 }
@@ -311,12 +437,22 @@ function userWantsEmail(preferences: UserPreferences) {
 }
 
 function userWantsEvent(preferences: UserPreferences, eventType: BillEventType) {
+    const enabled = preferences.enabledAlertTypes ?? {}
+
+    if (eventType === "COMMITTEE_REFERRAL") {
+        return enabled.committeeReferral === true
+    }
+
+    if (eventType === "COMMITTEE_VOTE_RECORDED") {
+        return enabled.committeeVoteRecorded === true || enabled.committeeVote === true
+    }
+
     const key = eventTypeToPreferenceKey(eventType)
     if (!key) {
         return false
     }
 
-    return preferences.enabledAlertTypes?.[key] === true
+    return enabled[key] === true
 }
 
 function eventTypeToAlertType(eventType: BillEventType): AlertType {
@@ -363,6 +499,91 @@ function frequencyToDigestCadence(prefs: UserPreferences): AlertDigestCadence | 
 }
 
 /**
+ * Helpers for throttling + error persistence
+ */
+function sleep(ms: number) {
+    return new Promise<void>((resolve) => setTimeout(resolve, ms))
+}
+
+function safeStringify(value: unknown) {
+    try {
+        const seen = new WeakSet<object>()
+
+        return JSON.stringify(
+            value,
+            (_key, val) => {
+                if (typeof val === "object" && val !== null) {
+                    if (seen.has(val)) {
+                        return "[Circular]"
+                    }
+                    seen.add(val)
+                }
+                return val
+            },
+            2
+        )
+    } catch {
+        return null
+    }
+}
+
+function capString(s: string, max = 4000) {
+    if (s.length <= max) {
+        return s
+    }
+    return `${s.slice(0, max - 1)}…`
+}
+
+function formatError(err: unknown) {
+    if (err instanceof Error) {
+        const stack = typeof err.stack === "string" ? `\n${err.stack}` : ""
+        return `${err.name}: ${err.message}${stack}`.trim()
+    }
+
+    if (typeof err === "string") {
+        return err
+    }
+
+    if (err && typeof err === "object") {
+        const anyErr = err as any
+
+        const code =
+            typeof anyErr.code === "string"
+                ? anyErr.code
+                : typeof anyErr.name === "string"
+                    ? anyErr.name
+                    : null
+
+        const msg =
+            typeof anyErr.message === "string"
+                ? anyErr.message
+                : typeof anyErr.error === "string"
+                    ? anyErr.error
+                    : null
+
+        if (code && msg) {
+            return `${code}: ${msg}`
+        }
+
+        if (msg) {
+            return msg
+        }
+
+        const json = safeStringify(err)
+        if (json) {
+            return json
+        }
+    }
+
+    return String(err)
+}
+
+function isRateLimitError(err: unknown) {
+    const msg = formatError(err).toLowerCase()
+    return msg.includes("rate_limit") || msg.includes("too many requests") || msg.includes("429")
+}
+
+/**
  * Committee vote payload extraction (defensive).
  */
 type PartyCounts = Record<string, number>
@@ -399,57 +620,6 @@ function asNumber(v: unknown): number | null {
     }
 
     return null
-}
-
-function safeStringify(value: unknown) {
-    try {
-        const seen = new WeakSet<object>()
-
-        return JSON.stringify(
-            value,
-            (_key, val) => {
-                if (typeof val === "object" && val !== null) {
-                    if (seen.has(val)) {
-                        return "[Circular]"
-                    }
-                    seen.add(val)
-                }
-                return val
-            },
-            2
-        )
-    } catch {
-        return null
-    }
-}
-
-function formatError(err: unknown) {
-    if (err instanceof Error) {
-        const stack = typeof err.stack === "string" ? `\n${err.stack}` : ""
-        return `${err.name}: ${err.message}${stack}`.trim()
-    }
-
-    if (typeof err === "string") {
-        return err
-    }
-
-    if (err && typeof err === "object") {
-        const anyErr = err as any
-
-        // Many libs (including email APIs) return { message, name, ... }
-        if (typeof anyErr.message === "string" && anyErr.message.trim() !== "") {
-            const name = typeof anyErr.name === "string" && anyErr.name.trim() !== "" ? anyErr.name : "Error"
-            const stack = typeof anyErr.stack === "string" ? `\n${anyErr.stack}` : ""
-            return `${name}: ${anyErr.message}${stack}`.trim()
-        }
-
-        const json = safeStringify(err)
-        if (json) {
-            return json
-        }
-    }
-
-    return String(err)
 }
 
 function normalizePartyKey(k: string) {
@@ -628,7 +798,7 @@ function formatPartyBreakdownLine(info: CommitteeVoteInfo) {
         return null
     }
 
-    return `Yes: ${yesParts || "—"} | No: ${noParts || "—"}`
+    return `Yes: ${yesParts || "-"} | No: ${noParts || "-"}`
 }
 
 /**
@@ -719,15 +889,18 @@ function buildCalendarItemsTableHtml(items: CalendarItemRow[], maxRows = 40) {
 
     const rows = limited
         .map((it) => {
-            const pos = it.position !== null ? String(it.position) : "—"
-            const bill = it.billNumber ? escapeHtml(it.billNumber) : "—"
+            const pos = it.position !== null ? String(it.position) : "-"
+            const href = it.billNumber ? billDashboardUrl(it.billNumber) : "#"
+            const bill = it.billNumber ? escapeHtml(it.billNumber) : "-"
             const action = it.actionText ? escapeHtml(it.actionText) : ""
             const notes = it.notes ? escapeHtml(it.notes) : ""
 
             return `
                 <tr>
                     <td style="padding:8px;border-top:1px solid #eee;vertical-align:top;width:70px;">${escapeHtml(pos)}</td>
-                    <td style="padding:8px;border-top:1px solid #eee;vertical-align:top;width:140px;">${bill}</td>
+                    <td style="padding:8px;border-top:1px solid #eee;vertical-align:top;width:140px;">
+                        ${it.billNumber ? `<a href="${escapeHtml(href)}">${bill}</a>` : "-"}
+                    </td>
                     <td style="padding:8px;border-top:1px solid #eee;vertical-align:top;">
                         ${action ? `<div style="font-weight:600;">${action}</div>` : ""}
                         ${notes ? `<div style="color:#444;margin-top:4px;">${notes}</div>` : ""}
@@ -774,6 +947,7 @@ function getBillTitleFromEvent(event: any) {
 
 function buildInstantPreviewText(args: { event: any }) {
     const { event } = args
+    const prefix = importantPrefixText(event)
     const billNumber = getBillNumberFromEvent(event)
     const eventLabel = humanizeEventType(event.eventType)
 
@@ -784,28 +958,30 @@ function buildInstantPreviewText(args: { event: any }) {
         if (info.hasAnyCounts) {
             const countsInline = formatCountsInline(info.counts)
             const base = billNumber
-                ? `${billNumber}: Committee vote — ${countsInline} (${partyLine})`
-                : `Committee vote — ${countsInline} (${partyLine})`
-            return truncate(base, 120)
+                ? `${billNumber}: Committee vote - ${countsInline} (${partyLine})`
+                : `Committee vote - ${countsInline} (${partyLine})`
+            return truncate(`${prefix}${base}`, 120)
         }
 
         return truncate(
-            billNumber
-                ? `${billNumber}: Committee vote recorded — details not yet posted`
-                : "Committee vote recorded — details not yet posted",
+            `${prefix}${
+                billNumber
+                    ? `${billNumber}: Committee vote recorded - details not yet posted`
+                    : "Committee vote recorded - details not yet posted"
+            }`,
             120
         )
     }
 
     if (event.eventType === "CALENDAR_PUBLISHED") {
         const items = extractCalendarItems(event.payload)
-        const base = items.length > 0 ? `Calendar published — ${items.length} items` : "Calendar published"
-        return truncate(base, 120)
+        const base = items.length > 0 ? `${normalizeChamber(event.chamber)} ${event.summary} - ${items.length} items` : "Calendar published"
+        return truncate(`${prefix}${base}`, 120)
     }
 
     const summary = typeof event.summary === "string" ? event.summary : ""
-    const base = billNumber ? `${billNumber}: ${eventLabel} — ${summary}` : `${eventLabel} — ${summary}`
-    return truncate(base.replace(/\s+/g, " ").trim(), 120)
+    const base = billNumber ? `${billNumber}: ${eventLabel} - ${summary}` : `${eventLabel} - ${summary}`
+    return truncate(`${prefix}${base}`.replace(/\s+/g, " ").trim(), 120)
 }
 
 function buildDigestPreviewText(args: { items: Array<{ event: any }> }) {
@@ -817,21 +993,22 @@ function buildDigestPreviewText(args: { items: Array<{ event: any }> }) {
         .sort((a, b) => new Date(b.event.eventTime).getTime() - new Date(a.event.eventTime).getTime())
         .slice(0, 3)
         .map(({ event }) => {
+            const prefix = importantPrefixText(event)
             const billNumber = getBillNumberFromEvent(event) ?? humanizeEventType(event.eventType)
 
             if (event.eventType === "COMMITTEE_VOTE_RECORDED") {
                 const info = extractCommitteeVoteInfo(event.payload)
                 const partyLine = computePartyLineLabel(info)
                 const countsInline = info.hasAnyCounts ? formatCountsInline(info.counts) : "details pending"
-                return `${billNumber} (${countsInline}, ${partyLine})`
+                return `${prefix}${billNumber} (${countsInline}, ${partyLine})`
             }
 
             if (event.eventType === "CALENDAR_PUBLISHED") {
-                const itemsList = extractCalendarItems(event.payload)
-                return `Calendar (${itemsList.length || 0} items)`
+                const itemsList = event.floorCalendar.items
+                return `${prefix}Calendar (${itemsList.length || 0} items)`
             }
 
-            return billNumber
+            return `${prefix}${billNumber}`
         })
         .join(", ")
 
@@ -852,6 +1029,7 @@ function buildBillLineHtml(event: any) {
         <p style="margin:0 0 8px;">
             <strong>Bill:</strong>
             ${escapeHtml(billLabel)}
+            ${importantPillHtml(event)}
         </p>
     `
 }
@@ -862,13 +1040,32 @@ function buildDashboardLineHtml(event: any, label: string) {
         return ""
     }
 
-    const url = billDashboardUrl(billNumber)
+    const url = billDashboardUrl(billNumber, event.eventType)
+
+    const isImportant = isFlaggedBill(event)
+    const buttonBg = isImportant ? "#dc2626" : "#000000"
 
     return `
-        <p style="margin:0 0 8px;">
-            <strong>${escapeHtml(label)}:</strong>
-            <a href="${escapeHtml(url)}">${escapeHtml("View on dashboard")}</a>
-        </p>
+        <table role="presentation" cellspacing="0" cellpadding="0" align="center" style="margin:25px auto 20px;">
+            <tr>
+                <td align="center" bgcolor="${escapeHtml(buttonBg)}" style="border-radius:8px;">
+                    <a href="${escapeHtml(url)}"
+                        target="_blank"
+                        style="
+                            display:inline-block;
+                            padding:12px 24px;
+                            font-family: Arial, Helvetica, sans-serif;
+                            font-size:12px;
+                            color:#ffffff;
+                            text-decoration:none;
+                            border-radius:8px;
+                            background-color:${escapeHtml(buttonBg)};
+                        ">
+                        ${escapeHtml(label)}
+                    </a>
+                </td>
+            </tr>
+        </table>
     `
 }
 
@@ -904,13 +1101,18 @@ function buildInstantEmailHtml(args: { event: any }) {
             `
 
         const billLine = buildBillLineHtml(event)
-        const dashboardLine = buildDashboardLineHtml(event, "Dashboard")
+        const dashboardLine = buildDashboardLineHtml(event, "View on dashboard")
 
         return `
-            <div style="font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;">
-                <h2 style="margin:0 0 12px;">${escapeHtml(eventLabel)}</h2>
+            <div style="${importantContainerStyle(event)}">
+                ${importantBannerHtml(event)}
+
+                <h2 style="margin:0 0 12px;">
+                    ${escapeHtml(eventLabel)}
+                </h2>
 
                 ${billLine}
+
                 <p style="margin:0 0 8px;"><strong>When:</strong> ${escapeHtml(formatMarylandWhen(event.eventTime))}</p>
 
                 ${pdfBlock}
@@ -924,12 +1126,16 @@ function buildInstantEmailHtml(args: { event: any }) {
     }
 
     if (event.eventType === "CALENDAR_PUBLISHED") {
-        const items = extractCalendarItems(event.payload)
-        const table = buildCalendarItemsTableHtml(items, Number(process.env.ALERTS_MAX_CALENDAR_ROWS ?? "40"))
+        const { items } = event.floorCalendar
+        const table = buildCalendarItemsTableHtml(items, Number(process.env.ALERTS_MAX_CALENDAR_ROWS ?? "100"))
 
         return `
-            <div style="font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;">
-                <h2 style="margin:0 0 12px;">${escapeHtml(eventLabel)}</h2>
+            <div style="${importantContainerStyle(event)}">
+                ${importantBannerHtml(event)}
+
+                <h2 style="margin:0 0 12px;">
+                    ${normalizeChamber(event.chamber)} ${escapeHtml(event.summary)}
+                </h2>
 
                 <p style="margin:0 0 8px;"><strong>When:</strong> ${escapeHtml(formatMarylandWhen(event.eventTime))}</p>
 
@@ -942,12 +1148,16 @@ function buildInstantEmailHtml(args: { event: any }) {
     }
 
     const billLine = buildBillLineHtml(event)
-    const dashboardLine = buildDashboardLineHtml(event, "Dashboard")
+    const dashboardLine = buildDashboardLineHtml(event, "View on dashboard")
     const summary = typeof event.summary === "string" ? event.summary : ""
 
     return `
-        <div style="font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;">
-            <h2 style="margin:0 0 12px;">${escapeHtml(eventLabel)}</h2>
+        <div style="${importantContainerStyle(event)}">
+            ${importantBannerHtml(event)}
+
+            <h2 style="margin:0 0 12px;">
+                ${escapeHtml(eventLabel)}
+            </h2>
 
             ${billLine}
             <p style="margin:0 0 8px;"><strong>When:</strong> ${escapeHtml(formatMarylandWhen(event.eventTime))}</p>
@@ -963,9 +1173,6 @@ function buildInstantEmailHtml(args: { event: any }) {
 
 /**
  * DIGEST HTML RULES
- * - For committee vote recorded: only include a simple count, party line label, bill number, title, and dashboard link
- * - For CALENDAR_PUBLISHED: include a compact table of items (capped)
- * - For other events: keep a simple default row
  */
 function buildDigestEmailHtml(args: { items: Array<{ event: any }> }) {
     const { items } = args
@@ -977,26 +1184,29 @@ function buildDigestEmailHtml(args: { items: Array<{ event: any }> }) {
         .map(({ event }) => {
             const billNumber = getBillNumberFromEvent(event)
             const billTitle = getBillTitleFromEvent(event)
-            const dash = billNumber ? billDashboardUrl(billNumber) : null
+            const dash = billNumber ? billDashboardUrl(billNumber, event.eventType) : null
 
             if (event.eventType === "COMMITTEE_VOTE_RECORDED") {
                 const info = extractCommitteeVoteInfo(event.payload)
                 const partyLine = computePartyLineLabel(info)
 
                 const countsInline = info.hasAnyCounts
-                    ? `Yes ${info.counts.yes ?? "—"} · No ${info.counts.no ?? "—"}`
+                    ? `Yes ${info.counts.yes ?? "-"} · No ${info.counts.no ?? "-"}`
                     : "Vote details pending"
 
                 const billCellTitle = billNumber ? escapeHtml(billNumber) : "Committee vote"
                 const billCellSubtitle = billTitle ? escapeHtml(billTitle) : ""
 
                 return `
-                    <tr>
-                        <td style="padding:10px;border-top:1px solid #eee;vertical-align:top;">
-                            <div style="font-weight:600;">${billCellTitle}</div>
+                    <tr style="${importantRowStyle(event)}">
+                        <td style="padding:10px;vertical-align:top;">
+                            <div style="font-weight:600;">
+                                ${billCellTitle}
+                                ${importantPillHtml(event)}
+                            </div>
                             ${billCellSubtitle ? `<div style="color:#666;font-size:12px;">${billCellSubtitle}</div>` : ""}
                         </td>
-                        <td style="padding:10px;border-top:1px solid #eee;vertical-align:top;">
+                        <td style="padding:10px;vertical-align:top;">
                             <div style="font-weight:600;">Committee vote</div>
                             <div>${escapeHtml(`${countsInline} (${partyLine})`)}</div>
                             ${dash ? `<div style="margin-top:6px;"><a href="${escapeHtml(dash)}">View on dashboard</a></div>` : ""}
@@ -1008,16 +1218,19 @@ function buildDigestEmailHtml(args: { items: Array<{ event: any }> }) {
             if (event.eventType === "CALENDAR_PUBLISHED") {
                 const when = formatMarylandWhen(event.eventTime)
                 const eventLabel = humanizeEventType(event.eventType)
-                const itemsList = extractCalendarItems(event.payload)
+                const itemsList = event.floorCalendar.items
                 const table = buildCalendarItemsTableHtml(itemsList, maxCalendarRows)
 
                 return `
-                    <tr>
-                        <td style="padding:10px;border-top:1px solid #eee;vertical-align:top;">
-                            <div style="font-weight:600;">${escapeHtml(eventLabel)}</div>
+                    <tr style="${importantRowStyle(event)}">
+                        <td style="padding:10px;vertical-align:top;">
+                            <div style="font-weight:600;">
+                                ${escapeHtml(eventLabel)}
+                                ${importantPillHtml(event)}
+                            </div>
                             <div style="color:#666;font-size:12px;">${escapeHtml(when)}</div>
                         </td>
-                        <td style="padding:10px;border-top:1px solid #eee;vertical-align:top;">
+                        <td style="padding:10px;vertical-align:top;">
                             ${table}
                         </td>
                     </tr>
@@ -1032,12 +1245,15 @@ function buildDigestEmailHtml(args: { items: Array<{ event: any }> }) {
             const leftSubtitle = billTitle ? escapeHtml(billTitle) : ""
 
             return `
-                <tr>
-                    <td style="padding:10px;border-top:1px solid #eee;vertical-align:top;">
-                        <div style="font-weight:600;">${leftTitle}</div>
+                <tr style="${importantRowStyle(event)}">
+                    <td style="padding:10px;vertical-align:top;">
+                        <div style="font-weight:600;">
+                            ${leftTitle}
+                            ${importantPillHtml(event)}
+                        </div>
                         ${leftSubtitle ? `<div style="color:#666;font-size:12px;">${leftSubtitle}</div>` : ""}
                     </td>
-                    <td style="padding:10px;border-top:1px solid #eee;vertical-align:top;">
+                    <td style="padding:10px;vertical-align:top;">
                         ${billNumber ? `<div style="font-weight:600;">${escapeHtml(eventLabel)}</div>` : ""}
                         <div style="color:#666;font-size:12px;">${escapeHtml(when)}</div>
                         ${summary ? `<div>${escapeHtml(summary)}</div>` : ""}
@@ -1072,7 +1288,6 @@ function buildDigestEmailHtml(args: { items: Array<{ event: any }> }) {
 
 /**
  * Find or create an Alert row used only to anchor AlertDelivery records.
- * This does not assume "subscriptions" live in the Alert table.
  */
 async function getOrCreateDeliveryAnchorAlert(args: {
     clerkUserId: string
@@ -1126,6 +1341,19 @@ function computeNextAttemptAt(args: { attempts: number; now: Date }) {
     return new Date(now.getTime() + minutes * 60 * 1000)
 }
 
+type PerEventResult = {
+    billEventId: number
+    billEventType: string
+    status: "DONE" | "FAILED"
+    attemptedDeliveries: number
+    createdDeliveries: number
+    sentInstant: number
+    queuedDigest: number
+    skipped: number
+    failed: number
+    error?: string
+}
+
 export async function GET(request: Request) {
     const { userId } = await auth()
     const hasClerkUser = !!userId
@@ -1152,10 +1380,17 @@ export async function GET(request: Request) {
         },
         include: {
             bill: true,
+            committee: true,
+            floorCalendar: {
+                include: {
+                    items: true,
+                },
+            },
         },
         orderBy: [
             { alertsStatus: "asc" },
-            { eventTime: "asc" },
+            { id: "asc" },
+            // { eventTime: "asc" },
         ],
         take: 50,
     })
@@ -1193,22 +1428,10 @@ export async function GET(request: Request) {
         ok: true,
         eventsFetched: events.length,
         usersFetched: users.length,
-        // Helpful for building your settings page:
         eventTypeToPreferenceKey: EVENT_TYPE_TO_PREFERENCE_KEY,
-        unmappedEventTypesSeenThisRun: [] as string[],
-        // Helpful for labels:
         eventTypeLabels: EVENT_TYPE_LABELS,
-        events: [] as Array<{
-            billEventId: number
-            status: "DONE" | "FAILED"
-            attemptedDeliveries: number
-            createdDeliveries: number
-            sentInstant: number
-            queuedDigest: number
-            skipped: number
-            failed: number
-            error?: string
-        }>,
+        unmappedEventTypesSeenThisRun: [] as string[],
+        events: [] as Array<PerEventResult>,
         digests: {
             attempted: 0,
             sent: 0,
@@ -1219,16 +1442,17 @@ export async function GET(request: Request) {
     const digestAlertIdsTouched = new Set<number>()
 
     for (const event of events) {
-        const perEvent = {
+        const perEvent: PerEventResult = {
             billEventId: event.id,
-            status: "DONE" as "DONE" | "FAILED",
+            billEventType: event.eventType,
+            status: "DONE",
             attemptedDeliveries: 0,
             createdDeliveries: 0,
             sentInstant: 0,
             queuedDigest: 0,
             skipped: 0,
             failed: 0,
-            error: undefined as string | undefined,
+            error: undefined,
         }
 
         const key = eventTypeToPreferenceKey(event.eventType)
@@ -1282,6 +1506,13 @@ export async function GET(request: Request) {
                     continue
                 }
 
+                if (event.eventType === "CALENDAR_PUBLISHED") {
+                    if (!userWantsCalendarChamber(preferences, event)) {
+                        perEvent.skipped += 1
+                        continue
+                    }
+                }
+
                 perEvent.attemptedDeliveries += 1
 
                 const sendMode = frequencyToSendMode(preferences)
@@ -1318,7 +1549,19 @@ export async function GET(request: Request) {
                 if (sendMode === AlertSendMode.INSTANT) {
                     const eventTypeLabel = humanizeEventType(event.eventType)
                     const billNumber = getBillNumberFromEvent(event)
-                    const subject = billNumber ? `${billNumber} - ${eventTypeLabel}` : eventTypeLabel
+
+                    let subject = billNumber
+                        ? `${billNumber} - ${eventTypeLabel}`
+                        : eventTypeLabel
+
+                    if (
+                        event.eventType === "CALENDAR_PUBLISHED" &&
+                        event.summary?.trim()
+                    ) {
+                        subject = `${normalizeChamber(event.chamber!)} ${event.summary}`
+                    }
+
+                    subject = `${importantSubjectPrefix(event)}${subject}`
 
                     const html = buildInstantEmailHtml({ event })
                     const preview = buildInstantPreviewText({ event })
@@ -1328,26 +1571,28 @@ export async function GET(request: Request) {
                         subject,
                         html,
                         preview,
+                        important: isFlaggedBill(event),
                     })
 
                     if (error) {
                         perEvent.failed += 1
 
                         await prisma.alertDelivery.update({
-                            where: { id: deliveryId },
+                            where: { id: deliveryId as number },
                             data: {
                                 status: AlertDeliveryStatus.FAILED,
-                                error: formatError(error),
+                                error: capString(formatError(error)),
                             },
                         })
 
+                        await sleep(isRateLimitError(error) ? 2000 : 550)
                         continue
                     }
 
                     perEvent.sentInstant += 1
 
                     await prisma.alertDelivery.update({
-                        where: { id: deliveryId },
+                        where: { id: deliveryId as number },
                         data: {
                             status: AlertDeliveryStatus.SENT,
                             sentAt: new Date(),
@@ -1360,6 +1605,7 @@ export async function GET(request: Request) {
                         data: { lastTriggeredAt: new Date() },
                     })
 
+                    await sleep(550)
                     continue
                 }
 
@@ -1379,7 +1625,7 @@ export async function GET(request: Request) {
             results.events.push(perEvent)
         } catch (err) {
             perEvent.status = "FAILED"
-            perEvent.error = formatError(err)
+            perEvent.error = capString(formatError(err))
 
             const refreshed = await prisma.billEvent.findUnique({
                 where: { id: event.id },
@@ -1393,7 +1639,7 @@ export async function GET(request: Request) {
                 where: { id: event.id },
                 data: {
                     alertsStatus: BillEventAlertsStatus.FAILED,
-                    alertsLastError: formatError(err),
+                    alertsLastError: capString(formatError(err)),
                     alertsNextAttemptAt: nextAttemptAt,
                 },
             })
@@ -1469,11 +1715,15 @@ export async function GET(request: Request) {
             items: queued.map((q) => ({ event: q.billEvent })),
         })
 
+        // Figure out if there's a priority bill in the digest
+        const digestImportant = queued.some((q) => q.billEvent?.bill?.isFlagged === true)
+
         const { error } = await sendTemplateEmail({
             to: alert.target,
             subject,
             html,
             preview,
+            important: digestImportant,
         })
 
         if (error) {
@@ -1483,10 +1733,11 @@ export async function GET(request: Request) {
                 where: { id: { in: queued.map((q) => q.id) } },
                 data: {
                     status: AlertDeliveryStatus.FAILED,
-                    error: formatError(error),
+                    error: capString(formatError(error)),
                 },
             })
 
+            await sleep(isRateLimitError(error) ? 2000 : 550)
             continue
         }
 
@@ -1505,16 +1756,17 @@ export async function GET(request: Request) {
             where: { id: alertId },
             data: { lastTriggeredAt: new Date() },
         })
+
+        await sleep(550)
     }
 
     results.unmappedEventTypesSeenThisRun = Array.from(unknownEventTypes)
 
-    // Also include a hint of preference keys you've actually used (handy for building the settings UI)
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const preferenceKeysUsedThisRun = Array.from(preferenceKeyHints)
 
     await finishScrapeRun(run.id, {
-        success: true
+        success: true,
     })
 
     return NextResponse.json(results)
