@@ -21,14 +21,106 @@ interface UserPreferences {
     phoneNumber: string
     digestTime: string // 24-hour format, e.g., "09:00"
     digestDay: "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday"
-    enabledAlertTypes: {
-        billStatusChange: boolean
-        committeeVote: boolean
-        floorVote: boolean
-        newCrossfile: boolean
-        hearingScheduled: boolean
-    }
+    enabledAlertTypes: Record<AlertKey, boolean>
+    // enabledAlertTypes: {
+    //     billStatusChange: boolean
+    //     committeeVote: boolean
+    //     floorVote: boolean
+    //     newCrossfile: boolean
+    //     hearingScheduled: boolean
+    // }
 }
+
+type AlertKey = (typeof alertTypes)[number]["key"]
+
+interface AlertType {
+    kind: string
+    key: string
+    label: string
+    description: string
+    example?: string
+}
+
+                                            // BILL_ADDED_TO_CALENDAR: "billAddedToCalendar",
+                                            // BILL_REMOVED_FROM_CALENDAR: "billRemovedFromCalendar",
+                                            // CALENDAR_PUBLISHED: "calendarPublished",
+                                            // CALENDAR_UPDATED: "calendarUpdated",
+                                            // COMMITTEE_REFERRAL: "committeeReferral",
+                                            // COMMITTEE_VOTE_RECORDED: "committeeVoteRecorded",
+                                            // HEARING_SCHEDULED: "hearingScheduled",
+                                            // HEARING_CHANGED: "hearingScheduled",
+                                            // HEARING_CANCELED: "hearingScheduled",
+
+
+// @TODO handle default/not present in user preferences
+const alertTypes: AlertType[] = [
+    {
+        kind: "BILL_INTRODUCED",
+        key: "billIntroduced",
+        label: "Bill Introduced",
+        description: "When a bill is introduced"
+    },
+    {
+        kind: "BILL_STATUS_CHANGED",
+        key: "billStatusChange",
+        label: "Bill Status Change",
+        description: "When a bill moves to a new stage (e.g., committee to floor)"
+    },
+    {
+        kind: "BILL_ADDED_TO_CALENDAR",
+        key: "billAddedToCalendar",
+        label: "Bill Added to Calendar",
+        description: "When a bill is added to the legislative calendar for consideration",
+    },
+    {
+        kind: "BILL_REMOVED_FROM_CALENDAR",
+        key: "billRemovedFromCalendar",
+        label: "Bill Removed from Calendar",
+        description: "When a bill is removed from the legislative calendar",
+    },
+    {
+        kind: "CALENDAR_PUBLISHED",
+        key: "calendarPublished",
+        label: "Calendar Published",
+        description: "When a new legislative calendar is officially published",
+    },
+    {
+        kind: "CALENDAR_UPDATED",
+        key: "calendarUpdated",
+        label: "Calendar Updated",
+        description: "When an existing legislative calendar is updated or revised",
+    },
+    {
+        kind: "COMMITTEE_REFERRAL",
+        key: "committeeReferral",
+        label: "Committee Referral",
+        description: "When a bill is referred to a committee for review",
+    },
+    {
+        kind: "COMMITTEE_VOTE_RECORDED",
+        key: "committeeVoteRecorded",
+        label: "Committee Vote Recorded",
+        description: "When a committee vote on a bill is officially recorded",
+    },
+    {
+        kind: "HEARING_SCHEDULED",
+        key: "hearingScheduled",
+        label: "Hearing Scheduled",
+        description: "When a hearing is scheduled for a bill or issue",
+    },
+    {
+        kind: "HEARING_CHANGED",
+        key: "hearingChanged",
+        label: "Hearing Details Changed",
+        description: "When the date, time, or location of a scheduled hearing changes",
+    },
+    {
+        kind: "HEARING_CANCELED",
+        key: "hearingCanceled",
+        label: "Hearing Canceled",
+        description: "When a previously scheduled hearing is canceled",
+    }
+]
 
 export default function UserSettingsPage() {
     const [preferences, setPreferences] = useState<UserPreferences | null>(null)
@@ -370,6 +462,46 @@ export default function UserSettingsPage() {
                             </CardHeader>
                             <CardContent>
                                 <div className="grid gap-4">
+                                    {alertTypes.map((alert) => (
+                                        <div
+                                            key={alert.key}
+                                            className="flex items-center space-x-3 rounded-lg border p-4"
+                                        >
+                                            <Checkbox
+                                                id={alert.key}
+                                                checked={preferences.enabledAlertTypes[alert.key]}
+                                                onCheckedChange={(checked) =>
+                                                    setPreferences({
+                                                        ...preferences,
+                                                        enabledAlertTypes: {
+                                                            ...preferences.enabledAlertTypes,
+                                                            [alert.key]: checked as boolean,
+                                                        },
+                                                    })
+                                                }
+                                            />
+
+                                            <Label htmlFor={alert.key} className="flex-1 cursor-pointer space-y-1">
+                                                <span className="font-medium">{alert.label}</span>
+
+                                                <p className="text-sm text-muted-foreground">
+                                                    {alert.description}
+                                                </p>
+
+                                                {alert.example && (
+                                                    <p className="text-xs italic text-muted-foreground/80">
+                                                        {alert.example}
+                                                    </p>
+                                                )}
+                                            </Label>
+                                        </div>
+                                    ))}
+
+
+<hr/>
+
+
+
                                     <div className="flex items-center space-x-3 rounded-lg border p-4">
                                         <Checkbox
                                             id="billStatusChange"
