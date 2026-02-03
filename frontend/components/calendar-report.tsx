@@ -150,6 +150,20 @@ function looksLikeCommitteeVote(e: CommitteeVoteEvent): boolean {
 }
 
 
+function pickHouseFloorVote(bill: any) {
+    if (!bill?.actions?.length) return null
+
+    return bill.actions.find((a: any) =>
+        a.chamber === "HOUSE" &&
+        (
+            a.actionCode === "THIRD_READING" ||
+            a.actionCode === "PASSAGE" ||
+            a.voteResult?.toLowerCase().includes("passed")
+        ) &&
+        (a.yesVotes ?? 0) > 0
+    ) ?? null
+}
+
 // >>>>>>>>>>>>> this needs to use billActions, not billEvents
 
 function pickCommitteeVoteForCommittee(args: {
@@ -703,6 +717,22 @@ export async function CalendarReport({ calendarData, hideCalendars }: { calendar
                                                 const billActions = (item.bill?.actions ?? [])
                                                 const currentCommitteeId = item.committeeId ?? item.committee?.id ?? null
 
+                                                const bill = item.bill
+
+                                                // Case 1: Bill started in HOUSE and already passed there
+                                                const houseVote =
+                                                    bill?.originChamber === "HOUSE"
+                                                        ? pickHouseFloorVote(bill)
+                                                        : null
+
+                                                // Case 2: Senate bill with a crossfile that passed the House
+                                                const crossfileHouseVote =
+                                                    !houseVote && bill?.crossFileExternalId
+                                                        ? pickHouseFloorVote(bill.crossFile)
+                                                        : null
+
+                                                const houseFloorVote = houseVote ?? crossfileHouseVote
+
                                                 // On THIRD_READING items, CalendarItem.committeeId is often null.
                                                 // Prefer BillCurrentCommittee.committeeId, and for vote display prefer lastVoteAction when available.
                                                 const effectiveCommitteeId =
@@ -908,15 +938,24 @@ export async function CalendarReport({ calendarData, hideCalendars }: { calendar
                                                                     </>
                                                                 )}
 
-                                                                {item.bill.crossFileExternalId && (
+                                                                {houseFloorVote && (
                                                                     <>
-                                                                        {/* @TODO - get the house vote if there is one */}
-                                                                        {/* <span className="font-sm">
-                                                                            House Vote: (90-42-1-1)
+                                                                        <span className="text-xs">
+                                                                            House Vote: ({houseFloorVote.yesVotes}-{houseFloorVote.noVotes})
                                                                         </span>
-                                                                        <br /> */}
+                                                                        <br />
                                                                     </>
                                                                 )}
+
+                                                                {/* {item.bill.crossFileExternalId && (
+                                                                    <>
+                                                                        --- @TODO - get the house vote if there is one ---
+                                                                        <span className="font-sm">
+                                                                            House Vote: (90-42-1-1)
+                                                                        </span>
+                                                                        <br />
+                                                                    </>
+                                                                )} */}
 
                                                                 <div>
                                                                     {item.bill.notes

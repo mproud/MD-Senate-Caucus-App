@@ -10,16 +10,19 @@ import { auth } from "@clerk/nextjs/server"
 
 
 const CHAMBERS = ['SENATE', 'HOUSE', 'JOINT'] as const
-const isChamber = (value: string): value is Chamber =>
-    CHAMBERS.includes(value as Chamber)
+const isChamber = (value: string): value is Chamber => CHAMBERS.includes(value as Chamber)
 
+// scrape today + next N days (N=3 means today + 3 more = 4 total days)
+const DAYS_AHEAD_TO_SCRAPE = 3
 
-// export async function GET( request: Request ) {
-//     const { searchParams } = new URL( request.url )
-//     const chamber = searchParams.get('chamber')
+// build the MGA agenda URL for a given chamber + date
+function buildAgendaUrl(chamber: Chamber, date: Date) {
+    const mm = String(date.getMonth() + 1).padStart(2, '0')
+    const dd = String(date.getDate()).padStart(2, '0')
+    const yyyy = date.getFullYear()
 
-//     return NextResponse.json({ ok: 'ok' })
-// }
+    return `https://mgaleg.maryland.gov/mgawebsite/FloorActions/Agenda/${chamber.toLowerCase()}-${mm}${dd}${yyyy}`
+}
 
 // Scrape today's agenda from the MGA site
 // v3 (v1 got messy, v2 was standalone)
@@ -837,22 +840,15 @@ export const GET = async ( request: Request ) => {
         chamber = normalized
     }
 
-    // @TODO this needs to be found automatically!!
-    // const url = event?.url as string
+    // build the list of agenda URLs (today + next 3 days)
+    const agendaUrls: string[] = []
+    const baseDate = new Date()
+    baseDate.setHours(0, 0, 0, 0)
 
-    // const url = 'https://mgaleg.maryland.gov/mgawebsite/FloorActions/Agenda/senate-01152026-1'
-    // const url = 'https://mgaleg.maryland.gov/mgawebsite/FloorActions/Agenda/house-01152026-1'
-
-    const date = new Date()
-    const mm = String(date.getMonth() + 1).padStart(2, '0')
-    const dd = String(date.getDate()).padStart(2, '0')
-    const yyyy = date.getFullYear()
-
-    const url = `https://mgaleg.maryland.gov/mgawebsite/FloorActions/Agenda/${chamber.toLowerCase()}-${mm}${dd}${yyyy}`
-
-    if ( ! url ) {
-        console.error('No URL')
-        return NextResponse.json({ error: 'No URL' }, { status: 500 })
+    for ( let offset = 0; offset <= DAYS_AHEAD_TO_SCRAPE; offset++ ) {
+        const d = new Date(baseDate)
+        d.setDate(baseDate.getDate() + offset)
+        agendaUrls.push(buildAgendaUrl(chamber, d))
     }
 
     // log the scrape start
@@ -861,11 +857,207 @@ export const GET = async ( request: Request ) => {
     let agendaCount = 1
 
     try {
-        // Get the agenda items
-        const scrapeResult = await scrapeAgendaUrl( url )
+        let totalAgendas = 0
 
-        // Short circuit if there's no agenda
-        if (scrapeResult.length === 0) {
+        for (const agendaUrl of agendaUrls) {
+            // Get the agenda items
+            const scrapeResult = await scrapeAgendaUrl(agendaUrl)
+
+            // No agenda for this day, continue
+            if (scrapeResult.length === 0) {
+                continue
+            }
+
+            totalAgendas += scrapeResult.length
+
+            console.log(`>> ${chamber} Scrape Result`, { items: scrapeResult[0].items })
+
+            // For each section + bill, find the Bill and create BILL_ADDED_TO_CALENDAR events
+            for (const section of scrapeResult) {
+                const header = section.header
+                if (!header) continue
+
+                // Get session year/code from reading/distribution date
+                const dateStr = header.readingDate ?? header.distributionDate ?? null
+                const dateObj = dateStr ? new Date(dateStr) : new Date()
+                const sessionYear = dateObj.getFullYear()
+                const sessionCode = `${sessionYear}RS`
+
+                const result = await upsertFloorCalendar({
+                    chamber,
+                    header,
+                    agendaUrl: agendaUrl,
+                    sessionYear,
+                    sessionCode,
+                })
+
+                if (!result) {
+                    console.warn("Agenda scraper: upsertFloorCalendar returned null for header", header)
+                    continue
+                }
+
+                const { calendar: floorCalendar, wasNew } = result
+
+                if (!floorCalendar) {
+                    console.warn("Agenda scraper: no floorCalendar returned for header", header)
+                    continue
+                }
+
+                const committeeId = floorCalendar.committeeId ?? null
+
+                const existingItems = await prisma.calendarItem.findMany({
+                    where: { floorCalendarId: floorCalendar.id },
+                    orderBy: { position: "asc" },
+                    select: {
+                        id: true,
+                        position: true,
+                        billId: true,
+                        billNumber: true,
+                    },
+                })
+
+                // Key: prefer billId (if set), fall back to billNumber.
+                const existingByKey = new Map<string, (typeof existingItems)[number]>()
+                for (const ci of existingItems) {
+                    const key =
+                        ci.billId != null ? `bill:${ci.billId}` : `num:${ci.billNumber.toUpperCase()}`
+                    existingByKey.set(key, ci)
+                }
+
+                const touchedKeys = new Set<string>()
+                const changes: Array<{
+                    billNumber: string
+                    changeType: "added" | "removed" | "moved"
+                    oldPosition?: number | null
+                    newPosition?: number | null
+                }> = []
+
+                // Process items from the scrape
+                let position = 1
+
+                for (const item of section.items) {
+                    const billNumber = item.billNumber
+                    const externalId = `${sessionCode}-${billNumber}`
+
+                    const bill = await prisma.bill.findUnique({
+                        where: { externalId },
+                        select: { id: true, billNumber: true },
+                    })
+
+                    console.log("Processing items - bill", { externalId, bill })
+
+                    // Either use the internal bill ID or the bill number for the key
+                    const key =
+                        bill?.id != null ? `bill:${bill.id}` : `num:${billNumber.toUpperCase()}`
+
+                    const existing = existingByKey.get(key)
+                    const oldPosition = existing?.position ?? null
+
+                    // Mark this key as seen in the new scrape
+                    touchedKeys.add(key)
+
+                    const committeeId = (floorCalendar as any).committeeId ?? null
+
+                    // Upsert the CalendarItem itself
+                    await upsertCalendarItem({
+                        floorCalendarId: floorCalendar.id,
+                        position,
+                        billNumber: bill?.billNumber ?? billNumber,
+                        billId: bill?.id ?? null,
+                        committeeId,
+                        actionText: item.disposition ?? null,
+                        notes: item.description ?? null,
+                        rawItem: item,
+                    })
+
+                    if (!existing) {
+                        changes.push({
+                            billNumber: bill?.billNumber ?? billNumber,
+                            changeType: "added",
+                            oldPosition: null,
+                            newPosition: position,
+                        })
+
+                        if (bill) {
+                            await createBillAddedToCalendarEvent({
+                                billId: bill.id,
+                                billNumber: bill.billNumber,
+                                chamber,
+                                floorCalendarId: floorCalendar.id,
+                                committeeId,
+                                header,
+                                agendaUrl: agendaUrl,
+                            })
+                        } else {
+                            console.warn(
+                                `Agenda scraper: could not find bill for externalId=${externalId} (billNumber=${billNumber})`
+                            )
+                        }
+                    } else if (existing.position !== position) {
+                        // the bill has changed positions in the calendar
+                        changes.push({
+                            billNumber: bill?.billNumber ?? billNumber,
+                            changeType: "moved",
+                            oldPosition,
+                            newPosition: position,
+                        })
+                    }
+
+                    position++
+                }
+
+                // Find any removed items
+                const removedItems = existingItems.filter((ci) => {
+                    const key =
+                        ci.billId != null ? `bill:${ci.billId}` : `num:${ci.billNumber.toUpperCase()}`
+                    return !touchedKeys.has(key)
+                })
+
+                // Track the changes here
+                for (const ci of removedItems) {
+                    changes.push({
+                        billNumber: ci.billNumber,
+                        changeType: "removed",
+                        oldPosition: ci.position,
+                        newPosition: null,
+                    })
+
+                    if (ci.billId != null) {
+                        await createBillRemovedFromCalendarEvent({
+                            billId: ci.billId,
+                            billNumber: ci.billNumber,
+                            chamber,
+                            floorCalendarId: floorCalendar.id,
+                            committeeId,
+                            header,
+                            agendaUrl: agendaUrl,
+                        })
+                    }
+
+                    // Remove the CalendarItem row since it's no longer on the calendar
+                    await prisma.calendarItem.delete({
+                        where: { id: ci.id },
+                    })
+                }
+
+                // If anything changed (add / move / remove) and its not a new calendar, fire CALENDAR_UPDATED
+                if (changes.length > 0 && !wasNew) {
+                    await createCalendarUpdatedEvent({
+                        chamber,
+                        floorCalendarId: floorCalendar.id,
+                        committeeId,
+                        header,
+                        agendaUrl: agendaUrl,
+                        changes,
+                    })
+                }
+
+                agendaCount++
+            }
+        }
+
+        // If none of the days had an agenda, return 0
+        if (totalAgendas === 0) {
             await finishScrapeRun(run.id, {
                 success: true,
                 calendarsCount: 0,
@@ -877,205 +1069,15 @@ export const GET = async ( request: Request ) => {
             })
         }
 
-        console.log(`>> ${chamber} Scrape Result`, { items: scrapeResult[0].items })
-
-        // For each section + bill, find the Bill and create BILL_ADDED_TO_CALENDAR events
-        for ( const section of scrapeResult ) {
-            const header = section.header
-            if ( ! header ) continue
-
-            // Get session year/code from reading/distribution date
-            const dateStr = header.readingDate ?? header.distributionDate ?? null
-            const dateObj = dateStr ? new Date(dateStr) : new Date()
-            const sessionYear = dateObj.getFullYear()
-            const sessionCode = `${sessionYear}RS`
-
-            const result = await upsertFloorCalendar({
-                chamber,
-                header,
-                agendaUrl: url,
-                sessionYear,
-                sessionCode,
-            })
-
-            if ( ! result ) {
-                console.warn("Agenda scraper: upsertFloorCalendar returned null for header", header)
-                continue
-            }
-
-            const { calendar: floorCalendar, wasNew } = result // @TODO this is causing a type error
-
-            if ( ! floorCalendar ) {
-                console.warn('Agenda scraper: no floorCalendar returned for header', header)
-                continue
-            }
-
-            const committeeId = floorCalendar.committeeId ?? null
-
-            const existingItems = await prisma.calendarItem.findMany({
-                where: { floorCalendarId: floorCalendar.id },
-                orderBy: { position: 'asc' },
-                select: {
-                    id: true,
-                    position: true,
-                    billId: true,
-                    billNumber: true,
-                },
-            })
-
-            // Key: prefer billId (if set), fall back to billNumber.
-            const existingByKey = new Map<string, (typeof existingItems)[number]>()
-            for (const ci of existingItems) {
-                const key =
-                    ci.billId != null ? `bill:${ci.billId}` : `num:${ci.billNumber.toUpperCase()}`
-                existingByKey.set(key, ci)
-            }
-
-            const touchedKeys = new Set<string>()
-            const changes: Array<{
-                billNumber: string
-                changeType: 'added' | 'removed' | 'moved'
-                oldPosition?: number | null
-                newPosition?: number | null
-            }> = []
-
-            // Process items from the scrape
-            let position = 1
-
-            for ( const item of section.items ) {
-                const billNumber = item.billNumber
-                const externalId = `${sessionCode}-${billNumber}`
-
-                const bill = await prisma.bill.findUnique({
-                    where: { externalId },
-                    select: { id: true, billNumber: true },
-                })
-
-                console.log('Processing items - bill', { externalId, bill })
-
-                // Either use the internal bill ID or the bill number for the key
-                const key =
-                    bill?.id != null ? `bill:${bill.id}` : `num:${billNumber.toUpperCase()}`
-
-                const existing = existingByKey.get(key)
-                const oldPosition = existing?.position ?? null
-
-                // Mark this key as seen in the new scrape
-                touchedKeys.add(key)
-
-                const committeeId = (floorCalendar as any).committeeId ?? null
-
-                // Upsert the CalendarItem itself
-                await upsertCalendarItem({
-                    floorCalendarId: floorCalendar.id,
-                    position,
-                    billNumber: bill?.billNumber ?? billNumber,
-                    billId: bill?.id ?? null,
-                    committeeId,
-                    actionText: item.disposition ?? null,
-                    notes: item.description ?? null,
-                    rawItem: item,
-                })
-
-                if ( ! existing ) {
-                    changes.push({
-                        billNumber: bill?.billNumber ?? billNumber,
-                        changeType: 'added',
-                        oldPosition: null,
-                        newPosition: position,
-                    })
-
-                    if ( bill ) {
-                        await createBillAddedToCalendarEvent({
-                            billId: bill.id,
-                            billNumber: bill.billNumber,
-                            chamber,
-                            floorCalendarId: floorCalendar.id,
-                            committeeId,
-                            header,
-                            agendaUrl: url,
-                        })
-                    } else {
-                        console.warn(
-                            `Agenda scraper: could not find bill for externalId=${externalId} (billNumber=${billNumber})`
-                        )
-                    }
-                } else if ( existing.position !== position ) {
-                    // the bill has changed positions in the calendar
-                    changes.push({
-                        billNumber: bill?.billNumber ?? billNumber,
-                        changeType: 'moved',
-                        oldPosition,
-                        newPosition: position,
-                    })
-                }
-
-                position++
-            }
-
-            // Find any removed items
-            const removedItems = existingItems.filter((ci) => {
-                const key =
-                    ci.billId != null ? `bill:${ci.billId}` : `num:${ci.billNumber.toUpperCase()}`
-                return !touchedKeys.has(key)
-            })
-
-            // Track the changes here
-            for ( const ci of removedItems ) {
-                changes.push({
-                    billNumber: ci.billNumber,
-                    changeType: 'removed',
-                    oldPosition: ci.position,
-                    newPosition: null,
-                })
-
-                if ( ci.billId != null ) {
-                    await createBillRemovedFromCalendarEvent({
-                        billId: ci.billId,
-                        billNumber: ci.billNumber,
-                        chamber,
-                        floorCalendarId: floorCalendar.id,
-                        committeeId,
-                        header,
-                        agendaUrl: url,
-                    })
-                }
-
-                // Remove the CalendarItem row since it's no longer on the calendar
-                await prisma.calendarItem.delete({
-                    where: { id: ci.id },
-                })
-            }
-
-            // If anything changed (add / move / remove) and its not a new calendar, fire CALENDAR_UPDATED
-            if ( changes.length > 0  && !wasNew ) {
-                await createCalendarUpdatedEvent({
-                    chamber,
-                    floorCalendarId: floorCalendar.id,
-                    committeeId,
-                    header,
-                    agendaUrl: url,
-                    changes,
-                })
-            }
-
-            agendaCount++
-
-            // stop after x calendars // @TODO remove this when done debugging
-            // if ( agendaCount > 3 ) {
-            //     return false
-            // }
-        }
-
         // Finished!
         await finishScrapeRun(run.id, {
             success: true,
-            calendarsCount: scrapeResult.length,
+            calendarsCount: totalAgendas,
         })
 
         return NextResponse.json({
             ok: true,
-            agendas: scrapeResult.length,
+            agendas: totalAgendas,
         })
     } catch ( error ) {
         console.error( `${chamber} agenda scraper error`, error )

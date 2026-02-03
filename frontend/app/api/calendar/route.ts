@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { Prisma, CalendarType } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
+import { tree } from "next/dist/build/templates/app-page"
 
 function isValidIsoDateOnly(value: string) {
     return /^\d{4}-\d{2}-\d{2}$/.test(value)
@@ -193,6 +194,8 @@ export async function GET(request: NextRequest) {
                                     orderBy: [{ actionDate: "desc" }, { sequence: "desc" }],
                                     select: {
                                         id: true,
+                                        chamber: true,
+                                        actionCode: true,
                                         committeeId: true,
                                         source: true,
                                         voteResult: true,
