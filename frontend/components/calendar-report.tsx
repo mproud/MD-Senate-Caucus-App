@@ -188,7 +188,10 @@ function pickCommitteeVoteForCommittee(args: {
         }
     }
 
-    const mga = relevant.filter((e) => (e.source ?? "").toString().toUpperCase() === "MGA_SCRAPE")
+    // const mga = relevant.filter((e) => (e.source ?? "").toString().toUpperCase() === "MGA_SCRAPE")
+    // const manual = relevant.filter((e) => (e.source ?? "").toString().toUpperCase() === "MANUAL")
+
+    const mga = relevant.filter((e) => (e.source ?? "").toString().toUpperCase().startsWith("MGA"))
     const manual = relevant.filter((e) => (e.source ?? "").toString().toUpperCase() === "MANUAL")
 
     // console.log( billNumber, { relevant, mga, manual })
@@ -698,16 +701,43 @@ export async function CalendarReport({ calendarData, hideCalendars }: { calendar
                                                 const billActions = (item.bill?.actions ?? [])
                                                 const currentCommitteeId = item.committeeId ?? item.committee?.id ?? null
 
+                                                // On THIRD_READING items, CalendarItem.committeeId is often null.
+                                                // Prefer BillCurrentCommittee.committeeId, and for vote display prefer lastVoteAction when available.
+                                                const effectiveCommitteeId =
+                                                    item.committeeId ??
+                                                    item.committee?.id ??
+                                                    item.bill?.currentCommittee?.committeeId ??
+                                                    null
+
+                                                const lastVoteAction = item.bill?.currentCommittee?.lastVoteAction ?? null
+
+                                                const committeeVote = lastVoteAction
+                                                    ? {
+                                                        action: lastVoteAction,
+                                                        counts: extractCounts(lastVoteAction),
+                                                        source: lastVoteAction.source ?? null,
+                                                        usedManualCountsToFillMGA: false,
+                                                        manualEvent: null,
+                                                    }
+                                                    : pickCommitteeVoteForCommittee({
+                                                        billNumber: item.billNumber,
+                                                        billActions,
+                                                        committeeId: effectiveCommitteeId,
+                                                    })
+
+                                                const actionId = committeeVote.action?.id ?? null
+
                                                 // console.log('>>>> item', { currentCommitteeId, committeeId: item.committeeId })
                                                 // console.log('>>> item', item.billNumber, { billActions, item })
 
-                                                const committeeVote = pickCommitteeVoteForCommittee({
-                                                    billNumber: item.billNumber,
-                                                    billActions,
-                                                    committeeId: currentCommitteeId,
-                                                })
+                                                //  Change these for third reading
+                                                // const committeeVote = pickCommitteeVoteForCommittee({
+                                                //     billNumber: item.billNumber,
+                                                //     billActions,
+                                                //     committeeId: currentCommitteeId,
+                                                // })
 
-                                                const actionId = committeeVote.action?.id ?? null
+                                                // const actionId = committeeVote.action?.id ?? null
 
                                                 const votes = (item.bill?.votes ?? []) as BillVote[]
 

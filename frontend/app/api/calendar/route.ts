@@ -172,6 +172,20 @@ export async function GET(request: NextRequest) {
                                 currentCommittee: {
                                     include: {
                                         committee: true,
+
+                                        lastVoteAction: {
+                                            select: {
+                                                id: true,
+                                                committeeId: true,
+                                                source: true,
+                                                voteResult: true,
+                                                yesVotes: true,
+                                                noVotes: true,
+                                                absent: true,
+                                                excused: true,
+                                                notVoting: true,
+                                            },
+                                        },
                                     },
                                 },
 
