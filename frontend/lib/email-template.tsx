@@ -22,8 +22,8 @@ export function Email(props: { url: string }) {
     )
 }
 
-export const EmailTemplate = ( props: { html: string, preview?: string } ) => {
-    const { html, preview } = props
+export const EmailTemplate = ( props: { html: string, preview?: string, to?: string } ) => {
+    const { html, preview, to } = props
 
     return (
         <Html lang="en" dir="ltr">
@@ -150,12 +150,14 @@ export const EmailTemplate = ( props: { html: string, preview?: string } ) => {
                                     Dashboard
                                 </Link> | 
                                 <Link href="https://www.caucusreport.com/user" className="text-blue-600 underline ml-[8px]">
-                                    Update Preferences
+                                    Update My Preferences
                                 </Link>
                             </Text>
-                            {/* <Text className="text-[12px] text-gray-500 m-0">
-                                Not for distribution
-                            </Text> */}
+                            { to && (
+                                <Text className="text-[12px] text-gray-500 m-0">
+                                    {to}
+                                </Text>
+                            )}
                         </Section>
                     </Container>
                 </Body>

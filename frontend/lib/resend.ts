@@ -32,7 +32,7 @@ export async function sendTemplateEmail({
         to: `"Alert test" <alert-test@mattproud.com>`,
         subject,
         headers,
-        react: EmailTemplate({ html, preview })
+        react: EmailTemplate({ html, preview, to })
     })
 }
 
