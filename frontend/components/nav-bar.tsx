@@ -68,7 +68,7 @@ export function Navbar() {
                         </Link>
                         {isAdmin && (
                             <Link
-                                href="/calendar"
+                                href="/calendar?hideCalendars=first,vetoed"
                                 className="flex items-center gap-2 text-muted-foreground transition-colors hover:text-foreground"
                             >
                                 <Calendar className="h-4 w-4" />
