@@ -7,13 +7,11 @@ import { startScrapeRun, finishScrapeRun } from "@/lib/scrapers/logging"
 import { BillEventType, CalendarType, Chamber, FloorCalendar, Prisma } from "@prisma/client"
 import { isValidCronSecret, normalizeDate } from "@/lib/scrapers/helpers"
 import { auth } from "@clerk/nextjs/server"
+import { getScraperDays } from "@/lib/get-system-setting"
 
 
 const CHAMBERS = ['SENATE', 'HOUSE', 'JOINT'] as const
 const isChamber = (value: string): value is Chamber => CHAMBERS.includes(value as Chamber)
-
-// scrape today + next N days (N=3 means today + 3 more = 4 total days)
-const DAYS_AHEAD_TO_SCRAPE = 3
 
 // build the MGA agenda URL for a given chamber + date
 function buildAgendaUrl(chamber: Chamber, date: Date) {
@@ -821,6 +819,8 @@ export const GET = async ( request: Request ) => {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    const daysAheadToScrape = await getScraperDays()
+
 
     const { searchParams } = new URL(request.url)
     const rawChamber = searchParams.get('chamber')
@@ -845,7 +845,7 @@ export const GET = async ( request: Request ) => {
     const baseDate = new Date()
     baseDate.setHours(0, 0, 0, 0)
 
-    for ( let offset = 0; offset <= DAYS_AHEAD_TO_SCRAPE; offset++ ) {
+    for ( let offset = 0; offset <= daysAheadToScrape; offset++ ) {
         const d = new Date(baseDate)
         d.setDate(baseDate.getDate() + offset)
         agendaUrls.push(buildAgendaUrl(chamber, d))

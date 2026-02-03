@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma"
 import { NextResponse } from "next/server"
 import { auth } from "@clerk/nextjs/server"
 import { isValidCronSecret } from "@/lib/scrapers/helpers"
-import { getActiveSessionCode } from "@/lib/get-active-session"
+import { getActiveSessionCode } from "@/lib/get-system-setting"
 import { Prisma, Vote as VoteEnum, BillEventType } from "@prisma/client"
 import { finishScrapeRun, startScrapeRun } from "@/lib/scrapers/logging"
 

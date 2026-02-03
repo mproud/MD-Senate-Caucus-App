@@ -3,7 +3,7 @@ import { z } from "zod"
 import { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@clerk/nextjs/server"
-import { getActiveSessionCode } from "@/lib/get-active-session"
+import { getActiveSessionCode } from "@/lib/get-system-setting"
 
 // ---------- helpers ----------
 async function getClerkUserId() {

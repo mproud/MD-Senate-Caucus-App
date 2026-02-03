@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { ActionSource, BillEventType, Chamber, Prisma } from "@prisma/client"
-import { getActiveSessionCode } from "@/lib/get-active-session"
+import { getActiveSessionCode } from "@/lib/get-system-setting"
 
 interface CommitteeVoteRequest {
     type: "committee"

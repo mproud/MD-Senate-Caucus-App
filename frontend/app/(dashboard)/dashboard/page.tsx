@@ -1,6 +1,6 @@
 import type { Metadata } from "next"
 import { DashboardContent } from "./dashboard-content"
-import { getActiveSessionCode } from "@/lib/get-active-session"
+import { getActiveSessionCode } from "@/lib/get-system-setting"
 
 export const metadata: Metadata = {
     title: "Dashboard",

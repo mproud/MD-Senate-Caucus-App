@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { getActiveSessionCode } from "@/lib/get-active-session"
+import { getActiveSessionCode } from "@/lib/get-system-setting"
 
 // Flag this bill for all users
 // export async function mock___GET( request: NextRequest ) {
