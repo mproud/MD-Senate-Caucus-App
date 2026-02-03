@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useMemo, useTransition } from "react"
+import { useEffect, useMemo, useState, useTransition } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { addDays, format, isValid, parseISO } from "date-fns"
 
@@ -9,43 +9,44 @@ import { Calendar } from "@/components/ui/calendar"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { cn } from "@/lib/utils"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { cn } from "@/lib/utils"
 
-type Props = {
-    startDate: string // yyyy-MM-dd
-    endDate: string // yyyy-MM-dd
+type ReportFilterProps = {
+    startDate: string
+    endDate: string
     hideUnanimous: boolean
     flaggedOnly: boolean
+    hideCalendars?: string
 }
-
-const TEMP_RANGE_SHORTCUTS: Array<{ label: string; start: string; end: string }> = [
-    { label: "TESTING", start: "2025-03-26", end: "2025-03-27" }, // temp single-day shortcut
-]
 
 function safeParse(dateStr: string) {
     const d = parseISO(dateStr)
     return isValid(d) ? d : new Date()
 }
 
+const DEFAULT_HIDDEN_CALENDARS = new Set(["first"])
+
 export function ReportFilters({
     startDate,
     endDate,
     hideUnanimous,
     flaggedOnly,
-}: Props) {
+    hideCalendars,
+}: ReportFilterProps) {
     const router = useRouter()
     const pathname = usePathname()
     const sp = useSearchParams()
     const [isPending, startTransition] = useTransition()
 
     const [open, setOpen] = useState(false)
+    const [calendarsOpen, setCalendarsOpen] = useState(false)
 
     const from = useMemo(() => safeParse(startDate), [startDate])
     const to = useMemo(() => safeParse(endDate), [endDate])
 
-    const [draftFrom, setDraftFrom] = useState<Date>(from)
-    const [draftTo, setDraftTo] = useState<Date>(to)
+    const [draftFrom, setDraftFrom] = useState(from)
+    const [draftTo, setDraftTo] = useState(to)
 
     useEffect(() => {
         setDraftFrom(from)
@@ -61,25 +62,91 @@ export function ReportFilters({
         startTransition(() => router.push(`${pathname}?${params.toString()}`))
     }
 
-    function setRange(start: Date, end: Date, close?: Boolean) {
-        // close the popover when a full range is selected
-        if ( close ) {
-            setOpen(false)
-        }
-
-        setParams({
-            startDate: format(start, "yyyy-MM-dd"),
-            endDate: format(end, "yyyy-MM-dd"),
-        })
-    }
-
-    const today = new Date()
-    const todayStr = format(today, "yyyy-MM-dd")
-
     const rangeLabel =
         startDate === endDate
             ? format(from, "PPP")
             : `${format(from, "PPP")} – ${format(to, "PPP")}`
+
+    const CALENDAR_FILTERS = [
+        { id: "first", label: "First Reading" },
+        { id: "second", label: "Second Reading" },
+        { id: "third", label: "Third Reading" },
+        { id: "special", label: "Special Order" },
+        { id: "laid_over", label: "Laid Over Bills" },
+        { id: "vetoed", label: "Vetoed Bills" },
+    ] as const
+
+    type CalendarFilterId = (typeof CALENDAR_FILTERS)[number]["id"]
+
+    const urlHiddenSet = useMemo(() => {
+        if ( hideCalendars === undefined ) {
+            return new Set(DEFAULT_HIDDEN_CALENDARS as Set<CalendarFilterId>)
+        }
+
+        const parts = hideCalendars
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean)
+
+        return new Set(parts as CalendarFilterId[])
+    }, [hideCalendars])
+
+    const [uiHiddenSet, setUiHiddenSet] = useState<Set<CalendarFilterId>>(
+        () => new Set(urlHiddenSet)
+    )
+
+    const [calendarPending, setCalendarPending] = useState<Set<CalendarFilterId>>(
+        () => new Set()
+    )
+
+    useEffect(() => {
+        setUiHiddenSet(new Set(urlHiddenSet))
+        setCalendarPending(new Set())
+    }, [urlHiddenSet])
+
+    const totalCalendars = CALENDAR_FILTERS.length
+    const shownCount = totalCalendars - uiHiddenSet.size
+
+    const isShown = (id: CalendarFilterId) => !uiHiddenSet.has(id)
+    const isCalendarBusy = (id: CalendarFilterId) => calendarPending.has(id)
+
+    function pushHiddenSet(nextHidden: Set<CalendarFilterId>) {
+        const csv = Array.from(nextHidden).join(",")
+        setParams({ hideCalendars: csv })
+    }
+
+    function toggleCalendar(id: CalendarFilterId) {
+        if (isCalendarBusy(id)) return
+
+        const nextHidden = new Set(uiHiddenSet)
+        if (nextHidden.has(id)) nextHidden.delete(id)
+        else nextHidden.add(id)
+
+        setUiHiddenSet(nextHidden)
+
+        setCalendarPending((prev) => {
+            const next = new Set(prev)
+            next.add(id)
+            return next
+        })
+
+        pushHiddenSet(nextHidden)
+    }
+
+    function showAllCalendars() {
+        setUiHiddenSet(new Set())
+        setCalendarPending(new Set(CALENDAR_FILTERS.map((c) => c.id)))
+        setParams({ hideCalendars: undefined })
+    }
+
+    function hideAllCalendars() {
+        const nextHidden = new Set(CALENDAR_FILTERS.map((c) => c.id))
+        setUiHiddenSet(nextHidden)
+        setCalendarPending(new Set(nextHidden))
+        pushHiddenSet(nextHidden)
+    }
+
+    const today = new Date()
 
     return (
         <div className="relative">
@@ -98,20 +165,11 @@ export function ReportFilters({
                     isPending && "pointer-events-none"
                 )}
             >
-                {/* Date range chooser */}
+                {/* Date range */}
                 <div className="flex items-center gap-3">
-                    <Label className="whitespace-nowrap">Date range</Label>
+                    <Label>Date range</Label>
 
-                    <Popover
-                        open={open}
-                        onOpenChange={(nextOpen) => {
-                            setOpen(nextOpen)
-                            if (nextOpen) {
-                                setDraftFrom(from)
-                                setDraftTo(to)
-                            }
-                        }}
-                    >
+                    <Popover open={open} onOpenChange={setOpen}>
                         <PopoverTrigger asChild>
                             <Button
                                 variant="outline"
@@ -122,10 +180,8 @@ export function ReportFilters({
                         </PopoverTrigger>
 
                         <PopoverContent className="w-auto p-3" align="start">
-                            {/* Quick ranges */}
-                            <div className="mb-2 flex flex-wrap items-center gap-2">
+                            <div className="mb-2 flex gap-2">
                                 <Button
-                                    type="button"
                                     size="sm"
                                     variant="secondary"
                                     onClick={() => {
@@ -137,7 +193,6 @@ export function ReportFilters({
                                 </Button>
 
                                 <Button
-                                    type="button"
                                     size="sm"
                                     variant="outline"
                                     onClick={() => {
@@ -149,7 +204,6 @@ export function ReportFilters({
                                 </Button>
 
                                 <Button
-                                    type="button"
                                     size="sm"
                                     variant="outline"
                                     onClick={() => {
@@ -159,108 +213,126 @@ export function ReportFilters({
                                 >
                                     Last 30 days
                                 </Button>
-
-                                {/* {TEMP_RANGE_SHORTCUTS.map((s) => (
-                                    <Button
-                                        key={`${s.start}-${s.end}`}
-                                        type="button"
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() => {
-                                            setOpen(false)
-                                            setParams({ startDate: s.start, endDate: s.end })
-                                        }}
-                                    >
-                                        {s.label}
-                                    </Button>
-                                ))} */}
                             </div>
 
-                            {/* Range calendar */}
-                            <div className="rounded-md border">
-                                <Calendar
-                                    mode="range"
-                                    numberOfMonths={2}
-                                    selected={{ from: draftFrom, to: draftTo }}
-                                    onSelect={(range) => {
-                                        if (!range?.from) return
+                            <Calendar
+                                mode="range"
+                                numberOfMonths={2}
+                                selected={{ from: draftFrom, to: draftTo }}
+                                onSelect={(range) => {
+                                    if (!range?.from) return
+                                    setDraftFrom(range.from)
+                                    setDraftTo(range.to ?? range.from)
+                                }}
+                                initialFocus
+                            />
 
-                                        setDraftFrom(range.from)
-                                        setDraftTo(range.to ?? range.from)
+                            <div className="mt-2 flex justify-end gap-2">
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => setOpen(false)}
+                                >
+                                    Cancel
+                                </Button>
+
+                                <Button
+                                    size="sm"
+                                    onClick={() => {
+                                        setParams({
+                                            startDate: format(draftFrom, "yyyy-MM-dd"),
+                                            endDate: format(draftTo, "yyyy-MM-dd"),
+                                        })
+                                        setOpen(false)
                                     }}
-                                    initialFocus
-                                />
-                            </div>
-
-                            <div className="mt-2 flex items-center justify-between gap-3">
-                                <div className="text-xs text-muted-foreground">
-                                    Tip: pick a start date, then an end date.
-                                </div>
-
-                                <div className="flex items-center gap-2">
-                                    <Button
-                                        type="button"
-                                        size="sm"
-                                        variant="ghost"
-                                        onClick={() => {
-                                            setDraftFrom(from)
-                                            setDraftTo(to)
-                                            setOpen(false)
-                                        }}
-                                    >
-                                        Cancel
-                                    </Button>
-
-                                    <Button
-                                        type="button"
-                                        size="sm"
-                                        onClick={() => {
-                                            setParams({
-                                                startDate: format(draftFrom, "yyyy-MM-dd"),
-                                                endDate: format(draftTo, "yyyy-MM-dd"),
-                                            })
-                                            setOpen(false)
-                                        }}
-                                    >
-                                        Apply
-                                    </Button>
-                                </div>
+                                >
+                                    Apply
+                                </Button>
                             </div>
                         </PopoverContent>
                     </Popover>
                 </div>
 
-                {/* Radio: all vs hide unanimous */}
-                <div className="flex items-center gap-4">
-                    <Label className="whitespace-nowrap">Bills</Label>
+                {/* Calendars */}
+                <div className="flex items-center gap-3">
+                    <Label>Calendars</Label>
 
-                    <RadioGroup
-                        className="flex items-center gap-4"
-                        value={hideUnanimous ? "hide-unanimous" : "all"}
-                        onValueChange={(v) =>
-                            setParams({ hideUnanimous: v === "hide-unanimous" })
-                        }
-                    >
-                        <div className="flex items-center gap-2">
-                            <RadioGroupItem id="bills-all" value="all" />
-                            <Label htmlFor="bills-all">Show all</Label>
-                        </div>
+                    <Popover open={calendarsOpen} onOpenChange={setCalendarsOpen}>
+                        <PopoverTrigger asChild>
+                            <Button variant="outline" className="md:w-[240px] justify-between">
+                                {shownCount} of {totalCalendars} shown
+                                {calendarPending.size > 0 && (
+                                    <span className="ml-3 h-3 w-3 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground" />
+                                )}
+                            </Button>
+                        </PopoverTrigger>
 
-                        <div className="flex items-center gap-2">
-                            <RadioGroupItem id="bills-hide-unanimous" value="hide-unanimous" />
-                            <Label htmlFor="bills-hide-unanimous">Hide unanimous</Label>
-                        </div>
-                    </RadioGroup>
+                        <PopoverContent className="w-[320px] p-3" align="start">
+                            <div className="flex justify-between mb-3">
+                                <Button size="sm" variant="outline" onClick={showAllCalendars}>
+                                    Show all
+                                </Button>
+                                <Button size="sm" variant="outline" onClick={hideAllCalendars}>
+                                    Hide all
+                                </Button>
+                            </div>
+
+                            <div className="grid gap-2">
+                                {CALENDAR_FILTERS.map((c) => {
+                                    const busy = isCalendarBusy(c.id)
+
+                                    return (
+                                        <div
+                                            key={c.id}
+                                            className={cn(
+                                                "flex items-center justify-between rounded-md border px-3 py-2",
+                                                busy && "opacity-80"
+                                            )}
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <Checkbox
+                                                    checked={isShown(c.id)}
+                                                    disabled={busy}
+                                                    onCheckedChange={() => toggleCalendar(c.id)}
+                                                />
+                                                <Label>{c.label}</Label>
+                                            </div>
+
+                                            {busy && (
+                                                <div className="h-3 w-3 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground" />
+                                            )}
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        </PopoverContent>
+                    </Popover>
                 </div>
 
-                {/* Checkbox: flagged only */}
+                {/* Bills */}
+                <RadioGroup
+                    className="flex items-center gap-4"
+                    value={hideUnanimous ? "hide" : "all"}
+                    onValueChange={(v) => setParams({ hideUnanimous: v === "hide" })}
+                >
+                    <div className="flex items-center gap-2">
+                        <RadioGroupItem value="all" />
+                        <Label>Show all</Label>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                        <RadioGroupItem value="hide" />
+                        <Label>Hide unanimous</Label>
+                    </div>
+                </RadioGroup>
+
+                {/* Flagged */}
                 <div className="flex items-center gap-2">
                     <Checkbox
-                        id="flaggedOnly"
                         checked={flaggedOnly}
                         onCheckedChange={(v) => setParams({ flaggedOnly: v === true })}
                     />
-                    <Label htmlFor="flaggedOnly">Show flagged bills only</Label>
+                    <Label>Show flagged bills only</Label>
                 </div>
             </div>
         </div>

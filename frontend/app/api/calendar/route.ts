@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
+import { Prisma, CalendarType } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
-import { Prisma } from "@prisma/client"
 
 function isValidIsoDateOnly(value: string) {
     return /^\d{4}-\d{2}-\d{2}$/.test(value)
@@ -11,14 +11,50 @@ function parseBool(v: string | null, defaultValue = false) {
     return v === "true" || v === "1" || v === "yes"
 }
 
-// Treat incoming YYYY-MM-DD as UTC day boundary.
-// @TODO: adjust for America/New_York if your DB stores "local day" semantics.
-function dayRangeUtc(dateOnly: string) {
-    const start = new Date(`${dateOnly}T00:00:00.000Z`)
-    const end = new Date(`${dateOnly}T23:59:59.999Z`)
-    return { start, end }
+function parseCsv(param: string | null) {
+    return (param ?? "")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
 }
 
+// Narrow UI ids to a known set
+type CalendarFilterId = "first" | "second" | "third" | "special" | "laid_over" | "vetoed"
+
+// Map UI filter ids -> Prisma CalendarType enum values
+const UI_ID_TO_CALENDAR_TYPE: Record<CalendarFilterId, CalendarType> = {
+    first: CalendarType.FIRST_READING,
+    second: CalendarType.COMMITTEE_REPORT,
+    third: CalendarType.THIRD_READING,
+    special: CalendarType.SPECIAL_ORDER,
+    laid_over: CalendarType.LAID_OVER,
+    vetoed: CalendarType.VETOED,
+}
+
+function isCalendarFilterId(v: string): v is CalendarFilterId {
+    return (
+        v === "first" ||
+        v === "second" ||
+        v === "third" ||
+        v === "special" ||
+        v === "laid_over" ||
+        v === "vetoed"
+    )
+}
+
+function mapHiddenIdsToTypes(hiddenIds: string[]): CalendarType[] {
+    const types: CalendarType[] = []
+
+    for (const id of hiddenIds) {
+        if (!isCalendarFilterId(id)) continue
+        types.push(UI_ID_TO_CALENDAR_TYPE[id])
+    }
+
+    return Array.from(new Set(types))
+}
+
+// Treat incoming YYYY-MM-DD as UTC day boundary.
+// @TODO: adjust for America/New_York if your DB stores "local day" semantics.
 function rangeUtc(startDateOnly: string, endDateOnly: string) {
     const start = new Date(`${startDateOnly}T00:00:00.000Z`)
     const end = new Date(`${endDateOnly}T23:59:59.999Z`)
@@ -66,6 +102,17 @@ export async function GET(request: NextRequest) {
         const hideUnanimous = parseBool(searchParams.get("hideUnanimous"), false)
         const flaggedOnly = parseBool(searchParams.get("flaggedOnly"), false)
 
+        // If not provided, default-hide first reading
+        const hideCalendarsParam = searchParams.get("hideCalendars")
+        // Only apply default if the param is missing (null), not if it's present-but-empty ("")
+        const hiddenIds = hideCalendarsParam === null ? ["first"] : parseCsv(hideCalendarsParam)
+        // const hiddenIds =
+        //     hideCalendarsParam && hideCalendarsParam.trim().length > 0
+        //         ? parseCsv(hideCalendarsParam)
+        //         : ["first"]
+
+        const hiddenTypes = mapHiddenIdsToTypes(hiddenIds)
+
         // Decide effective date range
         const today = new Date().toISOString().slice(0, 10) // YYYY-MM-DD (UTC)
 
@@ -96,12 +143,15 @@ export async function GET(request: NextRequest) {
 
         const where: Prisma.FloorCalendarWhereInput = {
             calendarDate: { gte: start, lte: end },
-            chamber: 'SENATE',
+            chamber: "SENATE",
+        }
+
+        if (hiddenTypes.length > 0) {
+            where.calendarType = { notIn: hiddenTypes }
         }
 
         const calendars = await prisma.floorCalendar.findMany({
             where,
-            // where: { id: 73 }, // for testing second reading calendar
             orderBy: { calendarDate: "desc" },
             include: {
                 committee: true,
@@ -117,7 +167,6 @@ export async function GET(request: NextRequest) {
                                 synopsis: true,
                                 sponsorDisplay: true,
                                 crossFileExternalId: true,
-
                                 isFlagged: true,
 
                                 currentCommittee: {
@@ -127,9 +176,7 @@ export async function GET(request: NextRequest) {
                                 },
 
                                 actions: {
-                                    // where: { isVote: true },
                                     orderBy: [{ actionDate: "desc" }, { sequence: "desc" }],
-                                    // take: 1,
                                     select: {
                                         id: true,
                                         committeeId: true,
@@ -142,7 +189,7 @@ export async function GET(request: NextRequest) {
                                         notVoting: true,
                                     },
                                 },
-                                
+
                                 votes: {
                                     include: {
                                         legislator: true,
@@ -185,6 +232,7 @@ export async function GET(request: NextRequest) {
                 endDate: endDateOnly,
                 hideUnanimous,
                 flaggedOnly,
+                hideCalendars: hiddenIds.join(","),
             },
             { status: 200 }
         )
@@ -193,6 +241,7 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }
 }
+
 
 
 

@@ -275,7 +275,18 @@ const toDate = (d: string | Date) => (d instanceof Date ? d : new Date(d))
 function sectionDateLabel(rawCalendars: FloorCalendar[], calendarType: CalendarType) {
     const dates = rawCalendars
         .filter((c) => c.calendarType === calendarType)
-        .map((c) => toDate(c.calendarDate))
+        .map((c) => {
+            if (c.calendarDate instanceof Date) {
+                return c.calendarDate
+            }
+
+            // Force YYYY-MM-DD to be treated as UTC
+            if (typeof c.calendarDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(c.calendarDate)) {
+                return new Date(`${c.calendarDate}T00:00:00.000Z`)
+            }
+
+            return new Date(c.calendarDate)
+        })
         .filter((d) => !Number.isNaN(d.getTime()))
         .sort((a, b) => a.getTime() - b.getTime())
 
@@ -286,13 +297,20 @@ function sectionDateLabel(rawCalendars: FloorCalendar[], calendarType: CalendarT
         month: "long",
         day: "numeric",
         year: "numeric",
+        timeZone: "UTC",
     })
 
     const first = dates[0]
     const last = dates[dates.length - 1]
 
-    // same day?
-    if (first.toDateString() === last.toDateString()) return fmt.format(first)
+    const sameDay =
+        first.getUTCFullYear() === last.getUTCFullYear() &&
+        first.getUTCMonth() === last.getUTCMonth() &&
+        first.getUTCDate() === last.getUTCDate()
+
+    if (sameDay) {
+        return fmt.format(first)
+    }
 
     return `${fmt.format(first)} – ${fmt.format(last)}`
 }
@@ -550,21 +568,64 @@ function renderPartyLineBadge(label: "Unanimous" | "Party Line" | "Party Split" 
     )
 }
 
-export async function CalendarReport({ calendarData }: { calendarData: CalendarDay }) {
+export async function CalendarReport({ calendarData, hideCalendars }: { calendarData: CalendarDay, hideCalendars?: string }) {
     // Show the filter by date, checkbox to show all bills or split votes only, show alert bills
 
     // @TODO fix this eventually. Need central/correct type decs
     const rawCalendars = ((calendarData as any).calendars ?? []) as FloorCalendar[]
-    const calendars = organizeFloorCalendars(rawCalendars)
+
+    const hiddenIds = (hideCalendars ?? "")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+
+    const hiddenTypes = new Set(
+        hiddenIds
+            .map((id) => {
+                const map: Record<string, CalendarType> = {
+                    first: "FIRST_READING",
+                    second: "COMMITTEE_REPORT",
+                    third: "THIRD_READING",
+                    special: "SPECIAL_ORDER",
+                    laid_over: "LAID_OVER",
+                    vetoed: "VETOED",
+                }
+                return map[id]
+            })
+            .filter(Boolean)
+    )
+
+    const visibleCalendars = hiddenTypes.size
+        ? rawCalendars.filter((c) => !hiddenTypes.has(c.calendarType))
+        : rawCalendars
+
+    const calendars = organizeFloorCalendars(visibleCalendars)
 
     // Need to find -- Second Reading, find vote with Committee ID. Prefer official if there are numbers, or unofficial if there aren't any numbers
     //                 Match house votes if this bill was in the house OR if it has a crossfile with motion
     
     // return <code><pre>{JSON.stringify(rawCalendars, null, 2)}</pre></code>
+    
+    const typeByTitle: Record<string, CalendarType> = {
+        "First Reading Calendar": "FIRST_READING",
+        "Second Reading Calendar": "COMMITTEE_REPORT",
+        "Third Reading Calendar": "THIRD_READING",
+        "Special Order Calendar": "SPECIAL_ORDER",
+        "Laid Over Bills Calendar": "LAID_OVER",
+        "Vetoed Bills Calendar": "VETOED",
+    }
 
     return (
         <>
             {calendars.sections.map(( section, index ) => {
+                const sectionType = typeByTitle[section.title]
+                const isExplicitlyHidden = sectionType ? hiddenTypes.has(sectionType) : false
+                const hasBills = section.groups.length > 0
+
+                if (isExplicitlyHidden && !hasBills) {
+                    return null
+                }
+
                 const isLast = index === calendars.sections.length - 1
 
                 return (
