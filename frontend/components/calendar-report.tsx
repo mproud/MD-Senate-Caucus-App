@@ -97,6 +97,8 @@ type CommitteeVoteEvent = {
     motion?: string | null
     details?: string | null
     date?: string | Date | null
+
+    voteResult?: string | null
 }
 
 type BillVote = {
@@ -870,7 +872,28 @@ export async function CalendarReport({ calendarData, hideCalendars }: { calendar
 
                                                         <TableCell className={`${cellBase} hidden xl:table-cell print:!table-cell ${COLS.action}`}>
                                                             <div className="line-clamp-2">
-                                                                {item.actionText}
+                                                                {(() => {
+                                                                    // If actionText exists, show it and do NOT show the committee action
+                                                                    if (item.actionText?.trim()) {
+                                                                        return (
+                                                                            <>
+                                                                                {item.actionText}
+                                                                            </>
+                                                                        )
+                                                                    }
+
+                                                                    // Otherwise fall back to committee action text
+                                                                    const committeeActionText =
+                                                                        committeeVote.action?.voteResult?.trim() ||
+                                                                        committeeVote.action?.motion?.trim() ||
+                                                                        committeeVote.action?.result?.trim()
+
+                                                                    return committeeActionText ? (
+                                                                        <>
+                                                                            {committeeActionText}
+                                                                        </>
+                                                                    ) : null
+                                                                })()}
                                                             </div>
                                                         </TableCell>
 
