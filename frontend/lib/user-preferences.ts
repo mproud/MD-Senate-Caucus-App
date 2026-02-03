@@ -10,11 +10,17 @@ export interface UserPreferences {
     digestTime: string // "09:00"
     digestDay: "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday"
     enabledAlertTypes: {
+        billIntroduced: boolean
         billStatusChange: boolean
-        committeeVote: boolean
-        floorVote: boolean
-        newCrossfile: boolean
+        billAddedToCalendar: boolean
+        billRemovedFromCalendar: boolean
+        calendarPublished: boolean
+        calendarUpdated: boolean
+        committeeReferral: boolean
+        committeeVoteRecorded: boolean
         hearingScheduled: boolean
+        hearingChanged: boolean
+        hearingCanceled: boolean
     }
 
     /**
@@ -39,11 +45,17 @@ const defaultPreferences: DefaultUserPreferences = {
     digestTime: "09:00",
     digestDay: "monday",
     enabledAlertTypes: {
+        billIntroduced: true,
         billStatusChange: true,
-        committeeVote: true,
-        floorVote: true,
-        newCrossfile: true,
+        billAddedToCalendar: true,
+        billRemovedFromCalendar: true,
+        calendarPublished: true,
+        calendarUpdated: true,
+        committeeReferral: true,
+        committeeVoteRecorded: true,
         hearingScheduled: true,
+        hearingChanged: true,
+        hearingCanceled: true,
     } satisfies EnabledAlertTypes,
 }
 
@@ -101,11 +113,17 @@ function normalizePreferences(
     const digestTime = pickString(r.digestTime) ?? defaultPreferences.digestTime
 
     const enabledAlertTypes = {
+        billIntroduced: pickBool(enabledRaw.billIntroduced) ?? defaultPreferences.enabledAlertTypes.billIntroduced,
         billStatusChange: pickBool(enabledRaw.billStatusChange) ?? defaultPreferences.enabledAlertTypes.billStatusChange,
-        committeeVote: pickBool(enabledRaw.committeeVote) ?? defaultPreferences.enabledAlertTypes.committeeVote,
-        floorVote: pickBool(enabledRaw.floorVote) ?? defaultPreferences.enabledAlertTypes.floorVote,
-        newCrossfile: pickBool(enabledRaw.newCrossfile) ?? defaultPreferences.enabledAlertTypes.newCrossfile,
+        billAddedToCalendar: pickBool(enabledRaw.billAddedToCalendar) ?? defaultPreferences.enabledAlertTypes.billAddedToCalendar,
+        billRemovedFromCalendar: pickBool(enabledRaw.billRemovedFromCalendar) ?? defaultPreferences.enabledAlertTypes.billRemovedFromCalendar,
+        calendarPublished: pickBool(enabledRaw.calendarPublished) ?? defaultPreferences.enabledAlertTypes.calendarPublished,
+        calendarUpdated: pickBool(enabledRaw.calendarUpdated) ?? defaultPreferences.enabledAlertTypes.calendarUpdated,
+        committeeReferral: pickBool(enabledRaw.committeeReferral) ?? defaultPreferences.enabledAlertTypes.committeeReferral,
+        committeeVoteRecorded: pickBool(enabledRaw.committeeVoteRecorded) ?? defaultPreferences.enabledAlertTypes.committeeVoteRecorded,
         hearingScheduled: pickBool(enabledRaw.hearingScheduled) ?? defaultPreferences.enabledAlertTypes.hearingScheduled,
+        hearingChanged: pickBool(enabledRaw.hearingChanged) ?? defaultPreferences.enabledAlertTypes.hearingChanged,
+        hearingCanceled: pickBool(enabledRaw.hearingCanceled) ?? defaultPreferences.enabledAlertTypes.hearingCanceled,        
     }
 
     // Preserve unknown top-level keys (except enabledAlertTypes, which we normalize)
