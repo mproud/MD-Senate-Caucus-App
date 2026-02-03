@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma"
 export interface UserPreferences {
     userId: string
     alertDeliveryMethod: "email" | "sms" | "both"
-    alertFrequency: "instant" | "daily_digest" | "weekly_digest"
+    alertFrequency: "realtime" | "daily_digest" | "weekly_digest"
     emailAddress: string
     phoneNumber: string
     digestTime: string // "09:00"
@@ -33,7 +33,7 @@ type DefaultUserPreferences = Omit<UserPreferences, "userId">
 
 const defaultPreferences: DefaultUserPreferences = {
     alertDeliveryMethod: "email",
-    alertFrequency: "instant",
+    alertFrequency: "realtime",
     emailAddress: "",
     phoneNumber: "",
     digestTime: "09:00",
@@ -88,7 +88,7 @@ function normalizePreferences(
         defaultPreferences.alertDeliveryMethod
 
     const alertFrequency =
-        pickEnum(r.alertFrequency, ["instant", "daily_digest", "weekly_digest"] as const) ??
+        pickEnum(r.alertFrequency, ["realtime", "daily_digest", "weekly_digest"] as const) ??
         defaultPreferences.alertFrequency
 
     const digestDay =

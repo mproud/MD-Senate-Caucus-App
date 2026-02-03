@@ -11,18 +11,23 @@ function stripDisallowedKeys(input: unknown): unknown {
 
 const EnabledAlertTypesSchema = z
     .object({
+        billIntroduced: z.boolean().optional(),
         billStatusChange: z.boolean().optional(),
-        committeeVote: z.boolean().optional(),
-        floorVote: z.boolean().optional(),
-        newCrossfile: z.boolean().optional(),
+        billAddedToCalendar: z.boolean().optional(),
+        billRemovedFromCalendar: z.boolean().optional(),
+        calendarPublished: z.boolean().optional(),
+        calendarUpdated: z.boolean().optional(),
+        committeeReferral: z.boolean().optional(),
+        committeeVoteRecorded: z.boolean().optional(),
         hearingScheduled: z.boolean().optional(),
+        hearingChanged: z.boolean().optional(),
+        hearingCanceled: z.boolean().optional(),
     })
-    .partial()
 
 const UserPreferencesUpdatesSchema = z
     .object({
         alertDeliveryMethod: z.enum(["email", "sms", "both"]).optional(),
-        alertFrequency: z.enum(["instant", "daily_digest", "weekly_digest"]).optional(),
+        alertFrequency: z.enum(["realtime", "daily_digest", "weekly_digest"]).optional(),
         phoneNumber: z.string().optional(),
         digestTime: z
             .string()
