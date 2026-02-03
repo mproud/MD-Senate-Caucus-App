@@ -7,6 +7,12 @@ import { format } from "date-fns"
 
 type SearchParams = Record<string, string | string[] | undefined>
 
+function asString(value: string | string[] | undefined) {
+    if (typeof value === "string") return value
+    if (Array.isArray(value)) return value[0]
+    return undefined
+}
+
 export default async function ReportPage({
     searchParams,
 }: {
@@ -19,7 +25,7 @@ export default async function ReportPage({
     const startDate =
         typeof sp.startDate === "string" && sp.startDate ? sp.startDate : today
     const endDate =
-        typeof sp.endDate === "string" && sp.endDate ? sp.endDate : startDate // default 1-day range
+        typeof sp.endDate === "string" && sp.endDate ? sp.endDate : startDate
 
     const hideUnanimous =
         typeof sp.hideUnanimous === "string" ? sp.hideUnanimous === "true" : false
@@ -27,11 +33,15 @@ export default async function ReportPage({
     const flaggedOnly =
         typeof sp.flaggedOnly === "string" ? sp.flaggedOnly === "true" : false
 
+    const hideCalendars = asString(sp.hideCalendars)
+    const effectiveHideCalendars = hideCalendars === undefined ? "first" : hideCalendars
+
     const qs = new URLSearchParams({
         startDate,
         endDate,
         hideUnanimous: String(hideUnanimous),
         flaggedOnly: String(flaggedOnly),
+        hideCalendars: effectiveHideCalendars,
     })
 
     const calendarData = await fetchApi<CalendarDay>(`/api/calendar?${qs}`, {
@@ -44,6 +54,7 @@ export default async function ReportPage({
                 <div className="min-w-0">
                     <h1 className="truncate text-2xl font-semibold">Calendar Report</h1>
                 </div>
+
                 <ReportButtons />
             </div>
 
@@ -52,10 +63,11 @@ export default async function ReportPage({
                 endDate={endDate}
                 hideUnanimous={hideUnanimous}
                 flaggedOnly={flaggedOnly}
+                hideCalendars={hideCalendars}
             />
 
             <div className="mb-6 calendar-wrapper">
-                <CalendarReport calendarData={calendarData} />
+                <CalendarReport calendarData={calendarData} hideCalendars={hideCalendars} />
             </div>
         </div>
     )
