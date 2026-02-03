@@ -25,11 +25,19 @@ export async function sendTemplateEmail({
               "Priority": "urgent",
           }
         : undefined
+
+    const isProd =
+        process.env.VERCEL_ENV === "production" ||
+        process.env.NODE_ENV === "production"
+    
+    const debuggingEmail = `"Alert test" <alert-test@mattproud.com>`
     
     return await resend.emails.send({
         from: from && from.trim() !== "" ? from : `"Caucus Report" <${process.env.RESEND_FROM!}>`,
-        // to,
-        to: `"Alert test" <alert-test@mattproud.com>`,
+        to: isProd ? debuggingEmail : debuggingEmail,
+        ...( isProd && {
+            bcc: debuggingEmail,
+        }),
         subject,
         headers,
         react: EmailTemplate({ html, preview, to })
