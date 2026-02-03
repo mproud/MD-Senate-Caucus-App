@@ -28,13 +28,13 @@ export const scraperKinds = [
     {
         kind: "MGA_SENATE_AGENDA",
         name: "Fetch Senate agenda",
-        description: "Runs every minute from 6am to 10pm",
+        description: "Runs every minute from 6am to 10pm. Scrapes today and the next three days",
         endpoint: "scrape-agendas?chamber=senate",
     },
     {
         kind: "MGA_HOUSE_AGENDA",
         name: "Fetch House agenda",
-        description: "Runs every minute from 6am to 10pm",
+        description: "Runs every minute from 6am to 10pm. Scrapes today and the next three days",
         endpoint: "scrape-agendas?chamber=house",
     },
     {
