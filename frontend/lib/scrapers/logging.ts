@@ -32,6 +32,7 @@ export async function finishScrapeRun(
         membershipsCount?: number
         billsCount?: number
         calendarsCount?: number
+        processedCount?: number
         error?: unknown
     },
 ) {
@@ -47,6 +48,7 @@ export async function finishScrapeRun(
             metadata: {
                 billsCount: opts.billsCount ?? null,
                 calendarsCount: opts.calendarsCount ?? null,
+                processedCount: opts.processedCount ?? null,
                 // and any optional other results...
             },
             error: opts.error ? String(opts.error) : undefined,
