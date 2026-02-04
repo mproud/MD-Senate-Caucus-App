@@ -338,6 +338,11 @@ function userWantsCalendarChamber(preferences: UserPreferences, event: any) {
     return pref === eventChamber
 }
 
+// Force sending an alert if it's a flagged bill
+function shouldForceSendFlagged(event: any) {
+    return event?.bill?.isFlagged === true
+}
+
 function hhmmToMinutes(hhmm: string) {
     const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm.trim())
     if (!m) {
@@ -1365,413 +1370,441 @@ export async function GET(request: Request) {
 
     const run = await startScrapeRun("ALERT_SENDER")
 
-    const now = new Date()
-    const timeZone = "America/New_York"
+    try {
 
-    const events = await prisma.billEvent.findMany({
-        where: {
-            alertsStatus: {
-                in: [BillEventAlertsStatus.PENDING, BillEventAlertsStatus.FAILED],
-            },
-            OR: [
-                { alertsNextAttemptAt: null },
-                { alertsNextAttemptAt: { lte: now } },
-            ],
-        },
-        include: {
-            bill: true,
-            committee: true,
-            floorCalendar: {
-                include: {
-                    items: true,
-                },
-            },
-        },
-        orderBy: [
-            { alertsStatus: "asc" },
-            { id: "asc" },
-            // { eventTime: "asc" },
-        ],
-        take: 50,
-    })
+        const now = new Date()
+        const timeZone = "America/New_York"
 
-    if (events.length === 0) {
-        await finishScrapeRun(run.id, {
-            success: true,
-        })
-
-        return NextResponse.json({
-            ok: true,
-            message: "No events pending alert processing",
-            processed: 0,
-        })
-    }
-
-    const users = await prisma.user.findMany({
-        where: {
-            email: {
-                not: "",
-            },
-            userSettings: {
-                not: Prisma.JsonNull,
-            },
-        },
-        select: {
-            id: true,
-            clerkId: true,
-            email: true,
-            userSettings: true,
-        },
-        take: Number(process.env.ALERTS_MAX_USERS ?? "5000"),
-    })
-
-    const unknownEventTypes = new Set<string>()
-    const preferenceKeyHints = new Set<string>()
-
-    const results = {
-        ok: true,
-        eventsFetched: events.length,
-        usersFetched: users.length,
-        eventTypeToPreferenceKey: EVENT_TYPE_TO_PREFERENCE_KEY,
-        eventTypeLabels: EVENT_TYPE_LABELS,
-        unmappedEventTypesSeenThisRun: [] as string[],
-        events: [] as Array<PerEventResult>,
-        digests: {
-            attempted: 0,
-            sent: 0,
-            failed: 0,
-        },
-    }
-
-    const digestAlertIdsTouched = new Set<number>()
-
-    for (const event of events) {
-        const perEvent: PerEventResult = {
-            billEventId: event.id,
-            billEventType: event.eventType,
-            status: "DONE",
-            attemptedDeliveries: 0,
-            createdDeliveries: 0,
-            sentInstant: 0,
-            queuedDigest: 0,
-            skipped: 0,
-            failed: 0,
-            error: undefined,
-        }
-
-        const key = eventTypeToPreferenceKey(event.eventType)
-        if (!key) {
-            unknownEventTypes.add(String(event.eventType))
-        } else {
-            preferenceKeyHints.add(String(key))
-        }
-
-        const claimed = await prisma.billEvent.updateMany({
+        const events = await prisma.billEvent.findMany({
             where: {
-                id: event.id,
                 alertsStatus: {
                     in: [BillEventAlertsStatus.PENDING, BillEventAlertsStatus.FAILED],
                 },
+                OR: [
+                    { alertsNextAttemptAt: null },
+                    { alertsNextAttemptAt: { lte: now } },
+                ],
             },
-            data: {
-                alertsStatus: BillEventAlertsStatus.PROCESSING,
-                alertsAttempts: { increment: 1 },
-                alertsLastError: null,
-                alertsNextAttemptAt: null,
+            include: {
+                bill: true,
+                committee: true,
+                floorCalendar: {
+                    include: {
+                        items: true,
+                    },
+                },
             },
+            orderBy: [
+                { alertsStatus: "asc" },
+                { id: "asc" },
+                // { eventTime: "asc" },
+            ],
+            take: 50,
         })
 
-        if (claimed.count === 0) {
-            continue
+        if (events.length === 0) {
+            await finishScrapeRun(run.id, {
+                success: true,
+            })
+
+            return NextResponse.json({
+                ok: true,
+                message: "No events pending alert processing",
+                processed: 0,
+            })
         }
 
-        try {
-            for (const user of users) {
-                const clerkId = user.clerkId
-                if (!clerkId) {
-                    perEvent.skipped += 1
-                    continue
-                }
+        const users = await prisma.user.findMany({
+            where: {
+                email: {
+                    not: "",
+                },
+                userSettings: {
+                    not: Prisma.JsonNull,
+                },
+            },
+            select: {
+                id: true,
+                clerkId: true,
+                email: true,
+                userSettings: true,
+            },
+            take: Number(process.env.ALERTS_MAX_USERS ?? "5000"),
+        })
 
-                const preferences = getUserPreferences(user.userSettings)
-                if (!userWantsEmail(preferences)) {
-                    perEvent.skipped += 1
-                    continue
-                }
+        const unknownEventTypes = new Set<string>()
+        const preferenceKeyHints = new Set<string>()
 
-                const enabledKeys = preferences.enabledAlertTypes && Object.keys(preferences.enabledAlertTypes).length > 0
-                if (!enabledKeys) {
-                    perEvent.skipped += 1
-                    continue
-                }
+        const results = {
+            ok: true,
+            eventsFetched: events.length,
+            usersFetched: users.length,
+            eventTypeToPreferenceKey: EVENT_TYPE_TO_PREFERENCE_KEY,
+            eventTypeLabels: EVENT_TYPE_LABELS,
+            unmappedEventTypesSeenThisRun: [] as string[],
+            events: [] as Array<PerEventResult>,
+            digests: {
+                attempted: 0,
+                sent: 0,
+                failed: 0,
+            },
+        }
 
-                if (!userWantsEvent(preferences, event.eventType)) {
-                    perEvent.skipped += 1
-                    continue
-                }
+        const digestAlertIdsTouched = new Set<number>()
 
-                if (event.eventType === "CALENDAR_PUBLISHED") {
-                    if (!userWantsCalendarChamber(preferences, event)) {
+        for (const event of events) {
+            const perEvent: PerEventResult = {
+                billEventId: event.id,
+                billEventType: event.eventType,
+                status: "DONE",
+                attemptedDeliveries: 0,
+                createdDeliveries: 0,
+                sentInstant: 0,
+                queuedDigest: 0,
+                skipped: 0,
+                failed: 0,
+                error: undefined,
+            }
+
+            const key = eventTypeToPreferenceKey(event.eventType)
+            if (!key) {
+                unknownEventTypes.add(String(event.eventType))
+            } else {
+                preferenceKeyHints.add(String(key))
+            }
+
+            const claimed = await prisma.billEvent.updateMany({
+                where: {
+                    id: event.id,
+                    alertsStatus: {
+                        in: [BillEventAlertsStatus.PENDING, BillEventAlertsStatus.FAILED],
+                    },
+                },
+                data: {
+                    alertsStatus: BillEventAlertsStatus.PROCESSING,
+                    alertsAttempts: { increment: 1 },
+                    alertsLastError: null,
+                    alertsNextAttemptAt: null,
+                },
+            })
+
+            if (claimed.count === 0) {
+                continue
+            }
+
+            try {
+                for (const user of users) {
+                    const clerkId = user.clerkId
+                    if (!clerkId) {
                         perEvent.skipped += 1
                         continue
                     }
-                }
 
-                perEvent.attemptedDeliveries += 1
-
-                const sendMode = frequencyToSendMode(preferences)
-                const digestCadence = frequencyToDigestCadence(preferences)
-                const alertType = eventTypeToAlertType(event.eventType)
-
-                const anchorAlert = await getOrCreateDeliveryAnchorAlert({
-                    clerkUserId: clerkId,
-                    target: user.email,
-                    alertType,
-                    eventTypeFilter: event.eventType,
-                    sendMode,
-                    digestCadence,
-                })
-
-                let deliveryId: number | null = null
-                try {
-                    const created = await prisma.alertDelivery.create({
-                        data: {
-                            alertId: anchorAlert.id,
-                            billEventId: event.id,
-                            status: AlertDeliveryStatus.QUEUED,
-                        },
-                        select: { id: true },
-                    })
-
-                    deliveryId = created.id
-                    perEvent.createdDeliveries += 1
-                } catch (err) {
-                    perEvent.skipped += 1
-                    continue
-                }
-
-                if (sendMode === AlertSendMode.INSTANT) {
-                    const eventTypeLabel = humanizeEventType(event.eventType)
-                    const billNumber = getBillNumberFromEvent(event)
-
-                    let subject = billNumber
-                        ? `${billNumber} - ${eventTypeLabel}`
-                        : eventTypeLabel
-
-                    if (
-                        event.eventType === "CALENDAR_PUBLISHED" &&
-                        event.summary?.trim()
-                    ) {
-                        subject = `${normalizeChamber(event.chamber!)} ${event.summary}`
+                    const preferences = getUserPreferences(user.userSettings)
+                    if (!userWantsEmail(preferences)) {
+                        perEvent.skipped += 1
+                        continue
                     }
 
-                    subject = `${importantSubjectPrefix(event)}${subject}`
+                    const enabledKeys = preferences.enabledAlertTypes && Object.keys(preferences.enabledAlertTypes).length > 0
+                    if (!enabledKeys) {
+                        perEvent.skipped += 1
+                        continue
+                    }
 
-                    const html = buildInstantEmailHtml({ event })
-                    const preview = buildInstantPreviewText({ event })
+                    // If a bill is flagged, user gets the alert anyway
+                    const forceFlagged = shouldForceSendFlagged(event)
 
-                    const { error } = await sendTemplateEmail({
-                        to: user.email,
-                        subject,
-                        html,
-                        preview,
-                        important: isFlaggedBill(event),
+                    if (!forceFlagged && !userWantsEvent(preferences, event.eventType)) {
+                        perEvent.skipped += 1
+                        continue
+                    }
+
+                    if (event.eventType === "CALENDAR_PUBLISHED") {
+                        if (!userWantsCalendarChamber(preferences, event)) {
+                            perEvent.skipped += 1
+                            continue
+                        }
+                    }
+
+                    perEvent.attemptedDeliveries += 1
+
+                    // const sendMode = frequencyToSendMode(preferences)
+                    // const digestCadence = frequencyToDigestCadence(preferences)
+                    
+                    // Force alerts on flagged bill instantly
+                    const sendMode = forceFlagged ? AlertSendMode.INSTANT : frequencyToSendMode(preferences)
+                    // const digestCadence = forceFlagged ? null : frequencyToDigestCadence(preferences)
+
+                    // But flagged bills still need to appear in the digest
+                    const digestCadence = frequencyToDigestCadence(preferences)
+
+                    const alertType = eventTypeToAlertType(event.eventType)
+
+                    const anchorAlert = await getOrCreateDeliveryAnchorAlert({
+                        clerkUserId: clerkId,
+                        target: user.email,
+                        alertType,
+                        eventTypeFilter: event.eventType,
+                        sendMode,
+                        digestCadence,
                     })
 
-                    if (error) {
-                        perEvent.failed += 1
+                    let deliveryId: number | null = null
+                    try {
+                        const created = await prisma.alertDelivery.create({
+                            data: {
+                                alertId: anchorAlert.id,
+                                billEventId: event.id,
+                                status: AlertDeliveryStatus.QUEUED,
+                            },
+                            select: { id: true },
+                        })
+
+                        deliveryId = created.id
+                        perEvent.createdDeliveries += 1
+                    } catch (err) {
+                        perEvent.skipped += 1
+                        continue
+                    }
+
+                    if (sendMode === AlertSendMode.INSTANT) {
+                        const eventTypeLabel = humanizeEventType(event.eventType)
+                        const billNumber = getBillNumberFromEvent(event)
+
+                        let subject = billNumber
+                            ? `${billNumber} - ${eventTypeLabel}`
+                            : eventTypeLabel
+
+                        if (
+                            event.eventType === "CALENDAR_PUBLISHED" &&
+                            event.summary?.trim()
+                        ) {
+                            subject = `${normalizeChamber(event.chamber!)} ${event.summary}`
+                        }
+
+                        subject = `${importantSubjectPrefix(event)}${subject}`
+
+                        const html = buildInstantEmailHtml({ event })
+                        const preview = buildInstantPreviewText({ event })
+
+                        const { error } = await sendTemplateEmail({
+                            to: user.email,
+                            subject,
+                            html,
+                            preview,
+                            important: isFlaggedBill(event),
+                        })
+
+                        if (error) {
+                            perEvent.failed += 1
+
+                            await prisma.alertDelivery.update({
+                                where: { id: deliveryId as number },
+                                data: {
+                                    status: AlertDeliveryStatus.FAILED,
+                                    error: capString(formatError(error)),
+                                },
+                            })
+
+                            await sleep(isRateLimitError(error) ? 2000 : 550)
+                            continue
+                        }
+
+                        perEvent.sentInstant += 1
 
                         await prisma.alertDelivery.update({
                             where: { id: deliveryId as number },
                             data: {
-                                status: AlertDeliveryStatus.FAILED,
-                                error: capString(formatError(error)),
+                                status: AlertDeliveryStatus.SENT,
+                                sentAt: new Date(),
+                                error: null,
                             },
                         })
 
-                        await sleep(isRateLimitError(error) ? 2000 : 550)
+                        await prisma.alert.update({
+                            where: { id: anchorAlert.id },
+                            data: { lastTriggeredAt: new Date() },
+                        })
+
+                        await sleep(550)
                         continue
                     }
 
-                    perEvent.sentInstant += 1
-
-                    await prisma.alertDelivery.update({
-                        where: { id: deliveryId as number },
-                        data: {
-                            status: AlertDeliveryStatus.SENT,
-                            sentAt: new Date(),
-                            error: null,
-                        },
-                    })
-
-                    await prisma.alert.update({
-                        where: { id: anchorAlert.id },
-                        data: { lastTriggeredAt: new Date() },
-                    })
-
-                    await sleep(550)
-                    continue
+                    perEvent.queuedDigest += 1
+                    digestAlertIdsTouched.add(anchorAlert.id)
                 }
 
-                perEvent.queuedDigest += 1
-                digestAlertIdsTouched.add(anchorAlert.id)
+                await prisma.billEvent.update({
+                    where: { id: event.id },
+                    data: {
+                        alertsStatus: BillEventAlertsStatus.DONE,
+                        alertsProcessedAt: new Date(),
+                        processedForAlerts: true,
+                    },
+                })
+
+                results.events.push(perEvent)
+            } catch (err) {
+                perEvent.status = "FAILED"
+                perEvent.error = capString(formatError(err))
+
+                const refreshed = await prisma.billEvent.findUnique({
+                    where: { id: event.id },
+                    select: { alertsAttempts: true },
+                })
+
+                const attempts = refreshed?.alertsAttempts ?? 1
+                const nextAttemptAt = computeNextAttemptAt({ attempts, now })
+
+                await prisma.billEvent.update({
+                    where: { id: event.id },
+                    data: {
+                        alertsStatus: BillEventAlertsStatus.FAILED,
+                        alertsLastError: capString(formatError(err)),
+                        alertsNextAttemptAt: nextAttemptAt,
+                    },
+                })
+
+                results.events.push(perEvent)
             }
+        }
 
-            await prisma.billEvent.update({
-                where: { id: event.id },
-                data: {
-                    alertsStatus: BillEventAlertsStatus.DONE,
-                    alertsProcessedAt: new Date(),
-                    processedForAlerts: true,
+        for (const alertId of Array.from(digestAlertIdsTouched)) {
+            const alert = await prisma.alert.findUnique({
+                where: { id: alertId },
+                include: {
+                    user: true,
                 },
             })
 
-            results.events.push(perEvent)
-        } catch (err) {
-            perEvent.status = "FAILED"
-            perEvent.error = capString(formatError(err))
-
-            const refreshed = await prisma.billEvent.findUnique({
-                where: { id: event.id },
-                select: { alertsAttempts: true },
-            })
-
-            const attempts = refreshed?.alertsAttempts ?? 1
-            const nextAttemptAt = computeNextAttemptAt({ attempts, now })
-
-            await prisma.billEvent.update({
-                where: { id: event.id },
-                data: {
-                    alertsStatus: BillEventAlertsStatus.FAILED,
-                    alertsLastError: capString(formatError(err)),
-                    alertsNextAttemptAt: nextAttemptAt,
-                },
-            })
-
-            results.events.push(perEvent)
-        }
-    }
-
-    for (const alertId of Array.from(digestAlertIdsTouched)) {
-        const alert = await prisma.alert.findUnique({
-            where: { id: alertId },
-            include: {
-                user: true,
-            },
-        })
-
-        if (!alert || !alert.user) {
-            continue
-        }
-
-        if (alert.sendMode !== AlertSendMode.DIGEST) {
-            continue
-        }
-
-        const prefs = getUserPreferences(alert.user.userSettings)
-        if (!userWantsEmail(prefs)) {
-            continue
-        }
-
-        if (!isDigestDue({ preferences: prefs, timeZone })) {
-            continue
-        }
-
-        if (alert.lastTriggeredAt) {
-            const ms = now.getTime() - alert.lastTriggeredAt.getTime()
-            const minGapMs = 30 * 60 * 1000
-            if (ms < minGapMs) {
+            if (!alert || !alert.user) {
                 continue
             }
-        }
 
-        const queued = await prisma.alertDelivery.findMany({
-            where: {
-                alertId,
-                status: AlertDeliveryStatus.QUEUED,
-            },
-            include: {
-                billEvent: {
-                    include: { bill: true },
+            if (alert.sendMode !== AlertSendMode.DIGEST) {
+                continue
+            }
+
+            const prefs = getUserPreferences(alert.user.userSettings)
+            if (!userWantsEmail(prefs)) {
+                continue
+            }
+
+            if (!isDigestDue({ preferences: prefs, timeZone })) {
+                continue
+            }
+
+            if (alert.lastTriggeredAt) {
+                const ms = now.getTime() - alert.lastTriggeredAt.getTime()
+                const minGapMs = 30 * 60 * 1000
+                if (ms < minGapMs) {
+                    continue
+                }
+            }
+
+            const queued = await prisma.alertDelivery.findMany({
+                where: {
+                    alertId,
+                    status: AlertDeliveryStatus.QUEUED,
                 },
-            },
-            orderBy: {
-                createdAt: "desc",
-            },
-            take: Number(process.env.ALERTS_MAX_DIGEST_ITEMS ?? "100"),
-        })
-
-        if (queued.length === 0) {
-            await prisma.alert.update({
-                where: { id: alertId },
-                data: { lastTriggeredAt: new Date() },
+                include: {
+                    billEvent: {
+                        include: { bill: true },
+                    },
+                },
+                orderBy: {
+                    createdAt: "desc",
+                },
+                take: Number(process.env.ALERTS_MAX_DIGEST_ITEMS ?? "100"),
             })
-            continue
-        }
 
-        results.digests.attempted += 1
+            if (queued.length === 0) {
+                await prisma.alert.update({
+                    where: { id: alertId },
+                    data: { lastTriggeredAt: new Date() },
+                })
+                continue
+            }
 
-        const subject = `Bill updates digest (${queued.length})`
-        const html = buildDigestEmailHtml({
-            items: queued.map((q) => ({ event: q.billEvent })),
-        })
-        const preview = buildDigestPreviewText({
-            items: queued.map((q) => ({ event: q.billEvent })),
-        })
+            results.digests.attempted += 1
 
-        // Figure out if there's a priority bill in the digest
-        const digestImportant = queued.some((q) => q.billEvent?.bill?.isFlagged === true)
+            const subject = `Bill updates digest (${queued.length})`
+            const html = buildDigestEmailHtml({
+                items: queued.map((q) => ({ event: q.billEvent })),
+            })
+            const preview = buildDigestPreviewText({
+                items: queued.map((q) => ({ event: q.billEvent })),
+            })
 
-        const { error } = await sendTemplateEmail({
-            to: alert.target,
-            subject,
-            html,
-            preview,
-            important: digestImportant,
-        })
+            // Figure out if there's a priority bill in the digest
+            const digestImportant = queued.some((q) => q.billEvent?.bill?.isFlagged === true)
 
-        if (error) {
-            results.digests.failed += 1
+            const { error } = await sendTemplateEmail({
+                to: alert.target,
+                subject,
+                html,
+                preview,
+                important: digestImportant,
+            })
+
+            if (error) {
+                results.digests.failed += 1
+
+                await prisma.alertDelivery.updateMany({
+                    where: { id: { in: queued.map((q) => q.id) } },
+                    data: {
+                        status: AlertDeliveryStatus.FAILED,
+                        error: capString(formatError(error)),
+                    },
+                })
+
+                await sleep(isRateLimitError(error) ? 2000 : 550)
+                continue
+            }
+
+            results.digests.sent += 1
 
             await prisma.alertDelivery.updateMany({
                 where: { id: { in: queued.map((q) => q.id) } },
                 data: {
-                    status: AlertDeliveryStatus.FAILED,
-                    error: capString(formatError(error)),
+                    status: AlertDeliveryStatus.SENT,
+                    sentAt: new Date(),
+                    error: null,
                 },
             })
 
-            await sleep(isRateLimitError(error) ? 2000 : 550)
-            continue
+            await prisma.alert.update({
+                where: { id: alertId },
+                data: { lastTriggeredAt: new Date() },
+            })
+
+            await sleep(550)
         }
 
-        results.digests.sent += 1
+        results.unmappedEventTypesSeenThisRun = Array.from(unknownEventTypes)
 
-        await prisma.alertDelivery.updateMany({
-            where: { id: { in: queued.map((q) => q.id) } },
-            data: {
-                status: AlertDeliveryStatus.SENT,
-                sentAt: new Date(),
-                error: null,
-            },
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const preferenceKeysUsedThisRun = Array.from(preferenceKeyHints)
+
+        await finishScrapeRun(run.id, {
+            success: true,
         })
 
-        await prisma.alert.update({
-            where: { id: alertId },
-            data: { lastTriggeredAt: new Date() },
+        return NextResponse.json(results)
+    } catch ( error ) {
+        console.error( `Alert sender error`, error )
+
+        await finishScrapeRun(run.id, {
+            success: false,
+            error,
         })
 
-        await sleep(550)
+        return NextResponse.json({
+            ok: false,
+            error: String( error )
+        }, { status: 500 })
+    } finally {
+        await prisma.$disconnect()
     }
-
-    results.unmappedEventTypesSeenThisRun = Array.from(unknownEventTypes)
-
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const preferenceKeysUsedThisRun = Array.from(preferenceKeyHints)
-
-    await finishScrapeRun(run.id, {
-        success: true,
-    })
-
-    return NextResponse.json(results)
 }
