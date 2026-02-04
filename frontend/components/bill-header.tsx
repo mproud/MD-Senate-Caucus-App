@@ -8,6 +8,7 @@ import { Button } from "./ui/button"
 import { AlertTriangle, Bell, BellOff, ExternalLink } from "lucide-react"
 import { useEffect, useState } from "react"
 import { useUser } from "@clerk/nextjs"
+import Link from "next/link"
 
 // @TODO fix the type at some point
 interface BillHeaderProps {
@@ -161,7 +162,11 @@ export function BillHeader({ bill }: BillHeaderProps) {
                                 </Badge>
                             )}
 
-                            {bill.crossFileExternalId && <Badge variant="secondary">Crossfile: {bill.crossFileExternalId}</Badge>}
+                            {bill.crossFileExternalId && (
+                                <Link href={`/bills/${bill.crossFileExternalId}`}>
+                                    <Badge variant="secondary">Crossfile: {bill.crossFileExternalId}</Badge>
+                                </Link>
+                            )}
                         </div>
 
                         <div className="flex items-center gap-3 mb-3 flex-wrap">
