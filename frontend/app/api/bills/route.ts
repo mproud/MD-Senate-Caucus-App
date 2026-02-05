@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 // import { activeSessionCode } from "@/lib/config"
 import { prisma } from "@/lib/prisma"
-import { Chamber, type Prisma } from "@prisma/client"
+import { Chamber, Prisma } from "@prisma/client"
 
 function parseChamber(input: string): Chamber | undefined {
     const trimmed = input.trim()
@@ -12,6 +12,40 @@ function parseChamber(input: string): Chamber | undefined {
         (v) => v.toLowerCase() === trimmed.toLowerCase(),
     ) as Chamber | undefined
 }
+
+function parseBillQuery(raw: string):
+    | { kind: "billNumber"; billNumber: string }
+    | { kind: "typeAndNumber"; billType: string; billNumberNumeric: number; paddedBillNumber?: string }
+    | null {
+    const s = raw.trim()
+    if (!s) return null
+
+    // Normalize: remove spaces, dashes, underscores between type and digits
+    // Examples:
+    // "HB 1" -> "HB1"
+    // "hb-0001" -> "hb0001"
+    const compact = s.replace(/[\s\-_]+/g, "")
+
+    // Match: letters (billType) + digits (number)
+    const m = compact.match(/^([a-z]+)(\d+)$/i)
+    if (!m) return null
+
+    const billType = m[1].toUpperCase()
+    const digits = m[2]
+    const billNumberNumeric = Number.parseInt(digits, 10)
+    if (!Number.isFinite(billNumberNumeric)) return null
+
+    // If user typed leading zeros, they may be intending the full billNumber formatting too.
+    // Example: HB0001 -> padded digits exist.
+    const paddedBillNumber = digits.length > 1 && digits.startsWith("0")
+        ? `${billType}${digits}`
+        : undefined
+
+    // If they provided BOTH type and digits, we can treat it as type+number.
+    // Additionally, we can optionally also match billNumber equals padded form.
+    return { kind: "typeAndNumber", billType, billNumberNumeric, paddedBillNumber }
+}
+
 
 export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
@@ -50,16 +84,56 @@ export async function GET(request: NextRequest) {
         { sessionCode: activeSessionCode },
     ]
 
+    // Replaced this with handling HB1 or HB0001 below
+    // if (q) {
+    //     and.push({
+    //         OR: [
+    //             { billNumber: { contains: q, mode: "insensitive" } },
+    //             { shortTitle: { contains: q, mode: "insensitive" } },
+    //             { longTitle: { contains: q, mode: "insensitive" } },
+    //             { synopsis: { contains: q, mode: "insensitive" } },
+    //         ],
+    //     })
+    // }
+
     if (q) {
-        and.push({
-            OR: [
-                { billNumber: { contains: q, mode: "insensitive" } },
-                { shortTitle: { contains: q, mode: "insensitive" } },
-                { longTitle: { contains: q, mode: "insensitive" } },
-                { synopsis: { contains: q, mode: "insensitive" } },
-            ],
-        })
+        const billQ = parseBillQuery(q)
+
+        if (billQ?.kind === "typeAndNumber") {
+            and.push({
+                OR: [
+                    // The structured match: HB + 1
+                    {
+                        AND: [
+                            { billType: { equals: billQ.billType, mode: "insensitive" } },
+                            { billNumberNumeric: { equals: billQ.billNumberNumeric } },
+                        ],
+                    },
+
+                    // If user typed HB0001, also allow matching the formatted billNumber directly
+                    ...(billQ.paddedBillNumber
+                        ? [{ billNumber: { equals: billQ.paddedBillNumber } }]
+                        : []),
+
+                    // Still allow text search so "HB 1 school" works (optional, keep if you want)
+                    { shortTitle: { contains: q, mode: "insensitive" } },
+                    { longTitle: { contains: q, mode: "insensitive" } },
+                    { synopsis: { contains: q, mode: "insensitive" } },
+                ],
+            })
+        } else {
+            // Default: text-ish search
+            and.push({
+                OR: [
+                    { billNumber: { contains: q, mode: "insensitive" } },
+                    { shortTitle: { contains: q, mode: "insensitive" } },
+                    { longTitle: { contains: q, mode: "insensitive" } },
+                    { synopsis: { contains: q, mode: "insensitive" } },
+                ],
+            })
+        }
     }
+
 
     if (chamber) {
         // enum match (no `mode`)
