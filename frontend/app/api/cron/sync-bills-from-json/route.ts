@@ -472,7 +472,8 @@ async function upsertBillAction(opts: {
             select: { id: true, isVote: true },
         })
 
-        return { actionId: created.id, wasNew: true, isVote: created.isVote }
+        // return { actionId: created.id, wasNew: true, isVote: created.isVote }
+        return { actionId: created.id, wasNew: true, isVote: created.isVote, counts }
     }
 
     // Update if vote fields changed (counts/result show up later sometimes)
@@ -520,7 +521,8 @@ async function upsertBillAction(opts: {
         })
     }
 
-    return { actionId: existing.id, wasNew: false, isVote }
+    // return { actionId: existing.id, wasNew: false, isVote }
+    return { actionId: existing.id, wasNew: false, isVote, counts }
 }
 
 // emit COMMITTEE_VOTE_RECORDED when we record a committee vote action
@@ -559,6 +561,57 @@ async function maybeCreateCommitteeVoteEvent(opts: {
             eventTime: actionDate,
             summary: `${description}`, // keep it simple, can be formatted nicer
             payload: { actionId }, // link to BillAction for UI
+        },
+    })
+}
+
+// emit FLOOR_VOTE_RECORDED when... you guessed it.. a floor vote is recorded
+async function maybeCreateFloorVoteEvent(opts: {
+    billId: number
+    chamber: Chamber
+    actionDate: Date
+    description: string
+    actionId: number
+    kind: 'SECOND' | 'THIRD'
+    counts: { yes: number | null; no: number | null }
+}) {
+    const { billId, chamber, actionDate, description, actionId, kind, counts } = opts
+
+    // Avoid duplicates: if an event already exists for this BillAction, skip
+    const exists = await prisma.billEvent.findFirst({
+        where: {
+            billId,
+            eventType: BillEventType.FLOOR_VOTE_RECORDED,
+            chamber,
+            committeeId: null,
+            payload: {
+                path: ["actionId"],
+                equals: actionId,
+            },
+        },
+        select: { id: true },
+    })
+
+    if (exists) return
+
+    // NOTE:
+    // This event means "floor vote happened" (from JSON).
+    // The PDF is often not available yet, so downstream vote processing should retry.
+    await prisma.billEvent.create({
+        data: {
+            billId,
+            eventType: BillEventType.FLOOR_VOTE_RECORDED,
+            chamber,
+            committeeId: null,
+            eventTime: actionDate,
+            summary: `${description}`,
+            payload: {
+                actionId,
+                kind,
+                counts,
+                pdfStatus: "PENDING",
+                source: "legislation.json",
+            },
         },
     })
 }
@@ -1044,6 +1097,19 @@ export async function GET( request: Request ) {
                         actionDate,
                         description: c.actionText,
                         actionId: up.actionId,
+                    })
+                }
+
+                // If this action represents a FLOOR vote, emit FLOOR_VOTE_RECORDED
+                if ((c.kind === 'SECOND' || c.kind === 'THIRD') && up.isVote) {
+                    await maybeCreateFloorVoteEvent({
+                        billId: bill.id,
+                        chamber: c.chamber,
+                        actionDate,
+                        description: c.actionText,
+                        actionId: up.actionId,
+                        kind: c.kind,
+                        counts: up.counts,
                     })
                 }
             }

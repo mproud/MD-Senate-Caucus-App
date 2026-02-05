@@ -83,6 +83,7 @@ export interface GlobalSettings {
     activeSessionCode: string
     sessionYear: number
     sessionType: string
+    scraperDays: number
 }
 
 interface SettingsResponse {
@@ -1186,7 +1187,7 @@ export const AdminContent = () => {
                                     <CardDescription>Configure the active legislative session for data fetching</CardDescription>
                                 </CardHeader>
                                 <CardContent className="space-y-6">
-                                    <div className="grid gap-4 md:grid-cols-2">
+                                    <div className="grid gap-4 gap-y-8 md:grid-cols-2">
                                         <div className="space-y-2">
                                             <Label htmlFor="sessionCode">Active Session Code</Label>
                                             <Select value={settings.activeSessionCode} onValueChange={handleSessionCodeChange}>
@@ -1205,12 +1206,34 @@ export const AdminContent = () => {
                                                 This determines which session's data is fetched from the MGA website
                                             </p>
                                         </div>
+
                                         <div className="space-y-2">
                                             <Label>Current Session Info</Label>
                                             <div className="flex gap-2">
                                                 <Badge variant="outline">{settings.sessionYear}</Badge>
                                                 <Badge variant="secondary">{settings.sessionType}</Badge>
                                             </div>
+                                        </div>
+
+
+                                        {/* Days ahead to scrape */}
+                                        <div className="space-y-2">
+                                            <Label htmlFor="scraperDays">Lookahead Window</Label>
+
+                                            <Input
+                                                id="scraperDays"
+                                                type="number"
+                                                disabled
+                                                value={`${settings.scraperDays}`}
+                                            />
+
+                                            <p className="text-sm text-muted-foreground">
+                                                Specify how many days into the future the scraper should check for new data or events
+                                            </p>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            {" "}
                                         </div>
                                     </div>
                                 </CardContent>
