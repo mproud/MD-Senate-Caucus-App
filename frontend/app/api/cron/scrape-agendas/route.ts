@@ -70,6 +70,7 @@ function parseAgendaHeader( header: string, headerId: string ): ParsedHeader | n
         { type: 'special_order_calendar', regex: /Special Order Calendar No\.\s*(\d+)/i },
         { type: "vetoed_bills_calendar", regex: /Calendar of Vetoed(?:\s+(Senate|House))?\s+Bills?\s+No\.\s*(\d+)/i },
         { type: 'first_reading_calendar', regex: /Introductory\s+(House|Senate)\s+Bills?\s+No\.\s*(\d+)/i },
+        { type: 'laid_over_calendar', regex: /Laid Over Calendar No\.\s*(\d+)/i },
     ] as const
 
     const consentRegex = /Consent(?: Calendar)? No\.\s*(\d+)/i
@@ -228,11 +229,14 @@ async function scrapeAgendaUrl( url: string ) {
             let status: string | null = null
             let startIdx = 0
 
-            const firstRowText = innerRows.eq(0).text().replace(/\s+/g, ' ').trim()
-            if (
-                firstRowText &&
-                /FAVORABLE|UNFAVORABLE|ADVERSE|LAID OVER|REFERRED/i.test(firstRowText)
-            ) {
+            const firstRow = innerRows.eq(0)
+            const firstRowText = firstRow.text().replace(/\s+/g, ' ').trim()
+
+            const isPureStatusRow =
+                firstRow.find('a').length === 0 &&
+                /^(FAVORABLE|UNFAVORABLE|ADVERSE|LAID OVER|REFERRED)$/i.test(firstRowText)
+
+            if (firstRowText && isPureStatusRow) {
                 status = firstRowText
                 startIdx = 1
             }
@@ -361,6 +365,7 @@ function mapCalendarType(type: string | undefined | null): CalendarType | null {
     if (t === 'special_order_calendar') return 'SPECIAL_ORDER'
     if (t === 'consent_calendar') return 'CONSENT'
     if (t === 'vetoed_bills_calendar') return 'VETOED'
+    if (t === 'laid_over_calendar') return 'LAID_OVER'
     return null
 }
 
