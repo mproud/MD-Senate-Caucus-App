@@ -181,6 +181,19 @@ const hasPartyVotes = (votes: ActionVote[] | null | undefined) => {
     )
 }
 
+function formatReading( kind: string ) {
+    switch (kind) {
+        case "FIRST":
+            return "First Reading";
+        case "SECOND":
+            return "Second Reading";
+        case "THIRD":
+            return "Third Reading";
+        default:
+            return ""; // fallback if kind is missing or unrecognized
+    }
+}
+
 async function BillContent({ billNumber, activeTab }: { billNumber: string, activeTab?: string }) {
     try {
         const bill = await fetchApi<BillExtended>(`/api/bills/${billNumber}`, {
@@ -563,17 +576,26 @@ async function BillContent({ billNumber, activeTab }: { billNumber: string, acti
                                     <VoteForm billNumber={billNumber} voteType="floor" />
                                 </CardHeader>
                                 <CardContent>
-                                    @TODO crawler needs to use actionCode to separate committee and floor votes automatically
                                     {bill.actions && bill.actions.length > 0 ? (
                                         <div className="space-y-4">
                                             {bill.actions
-                                                .filter((action) => action.actionCode === "FLOOR_VOTE")
+                                                .filter(
+                                                    (action) =>
+                                                        (action.actionCode === null && action.isVote === true) ||
+                                                        action.actionCode === "FLOOR_VOTE"
+                                                )
                                                 .sort((a, b) => new Date(b.actionDate).getTime() - new Date(a.actionDate).getTime())
                                                 .map((action) => (
                                                     <div key={action.id} className="border-b last:border-0 pb-6 last:pb-0">
                                                         <div className="flex items-start justify-between mb-3">
                                                             <div>
-                                                                <p className="font-medium">{action?.chamber} - {action?.voteResult} - {action?.motion}</p>
+                                                                {/* <p className="font-medium">{action?.chamber} - {action?.voteResult}</p> */}
+                                                                <p className="font-medium">
+                                                                    {action?.chamber?.charAt(0).toUpperCase() + action?.chamber?.slice(1).toLowerCase()}
+                                                                    {action?.dataSource?.kind ? ` - ${formatReading(action.dataSource.kind)}` : ""}
+                                                                    {action?.dataSource?.actionText || action?.voteResult ? ` - ${action.dataSource?.actionText || action.voteResult}` : ""}
+                                                                </p>
+
                                                                 <p className="text-sm text-muted-foreground">
                                                                     {new Date(action.actionDate).toLocaleDateString("en-US", {
                                                                         year: "numeric",
