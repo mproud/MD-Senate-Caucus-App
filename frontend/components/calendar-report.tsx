@@ -30,6 +30,7 @@ type FloorCalendar = {
     id: number
     calendarType: CalendarType
     calendarNumber: number | null // used as "Report No." for committee reports, and "Calendar Number" otherwise
+    calendarName?: string | null
     calendarDate: string | Date
     dataSource?: {
         header?: {
@@ -382,6 +383,10 @@ function organizeFloorCalendars(raw: FloorCalendar[] | undefined | null): { sect
             return consentNo != null
                 ? `${committee} - Report ${reportNo}, Consent Calendar ${consentNo}`
                 : `${committee} - Report ${reportNo}`
+        }
+
+        if ( c.calendarName ) {
+            return c.calendarName
         }
 
         return `Calendar Number ${c.calendarNumber ?? ""}`
