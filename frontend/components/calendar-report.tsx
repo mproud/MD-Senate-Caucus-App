@@ -814,7 +814,7 @@ export async function CalendarReport({ calendarData, hideCalendars }: { calendar
 
                                                         <TableCell className={`${cellBase} ${COLS.title}`}>
                                                             {/* 3-line clamp with ellipsis */}
-                                                            <div className="line-clamp-3 leading-snug">
+                                                            <div className="line-clamp-3 print:line-clamp-8 leading-snug">
                                                                 {item.bill.shortTitle}
                                                             </div>
                                                         </TableCell>
