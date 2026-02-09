@@ -10,6 +10,12 @@ export default function DashboardLayout({
     return (
         <>
             <div className="min-h-screen bg-background">
+            <div className="w-full bg-red-700 text-white border-b border-red-900">
+                <div className="mx-auto max-w-7xl px-4 py-2 text-center text-sm">
+                    <strong>Maintenance Notice</strong>{" "}
+                    Automated background tasks are temporarily suspended while we diagnose an issue with vote processing.
+                </div>
+            </div>
                 <Navbar />
 
                 <main className="container py-8">
