@@ -91,6 +91,45 @@ function isUnanimousVoteAction(action: {
     return yes > 0 && no === 0 && excused === 0 && notVoting === 0
 }
 
+function normalizeOutcome(s: string | null | undefined) {
+    return (s ?? "").trim().toLowerCase()
+}
+
+function isHiddenOutcomeText(voteResultOrDesc: string | null | undefined) {
+    const t = normalizeOutcome(voteResultOrDesc)
+    if (!t) return false
+
+    // Catch common variants
+    return (
+        t.includes("unfavorable") ||
+        t === "unfav" ||
+        t.includes("withdrawn") ||
+        t.includes("withdraw") // covers "Withdrawn", "Withdrawn by Sponsor", etc.
+    )
+}
+
+function getMostRelevantOutcomeForCalendar(bill: any): string | null {
+    // 1) Prefer current committee lastVoteAction
+    const lastVote = bill?.currentCommittee?.lastVoteAction
+    const lastVoteText =
+        lastVote?.voteResult ??
+        lastVote?.description ??
+        lastVote?.result ??
+        null
+
+    if (lastVoteText) return lastVoteText
+
+    // 2) Otherwise use latest action (already ordered desc in your query)
+    const latest = bill?.actions?.[0]
+    const latestText =
+        latest?.voteResult ??
+        latest?.description ??
+        latest?.result ??
+        null
+
+    return latestText ?? null
+}
+
 export async function GET(request: NextRequest) {
     try {
         const { searchParams } = request.nextUrl
@@ -235,6 +274,10 @@ export async function GET(request: NextRequest) {
                     if (!bill) return true
 
                     if (flaggedOnly && !bill.isFlagged) return false
+
+                    // Hide withdrawn or unfavorable bills
+                    const outcome = getMostRelevantOutcomeForCalendar(bill)
+                    if (isHiddenOutcomeText(outcome)) return false
 
                     if (hideUnanimous) {
                         const latestVote = bill.actions?.[0]
