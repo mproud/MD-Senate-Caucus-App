@@ -116,6 +116,184 @@ function toInt(n: unknown): number | null {
     return null
 }
 
+function extractCountsFromVoteAiResult(action: any): Required<VoteCounts> | null {
+    const vr = action?.dataSource?.voteAiResult?.vote
+    if (!vr) return null
+
+    // Prefer totalsRow if present (most reliable)
+    const t = vr.totalsRow ?? vr
+
+    const yesVotes = toInt(t.yeas) ?? 0
+    const noVotes = toInt(t.nays) ?? 0
+    const abstain = toInt(t.abstain) ?? 0
+    const excused = toInt(t.excused) ?? 0
+    const absent = toInt(t.absent) ?? 0
+
+    // your UI includes notVoting but AI payload likely doesn't; default to 0
+    const notVoting = toInt(t.notVoting) ?? 0
+
+    return { yesVotes, noVotes, abstain, excused, absent, notVoting }
+}
+
+function pickPreferredCommitteeVoteFromActions(
+    billActions: any[] | null | undefined
+): { action: any; counts: Required<VoteCounts> } | null {
+    const actions = Array.isArray(billActions) ? billActions : []
+    const committeeVotes = actions.filter((a) => a?.actionCode === "COMMITTEE_VOTE")
+
+    if (committeeVotes.length === 0) return null
+
+    // 1) COMMITTEE_VOTE with voteAiResult (use AI totals if possible; fall back to action counts)
+    const withAi = committeeVotes
+        .map((a) => {
+            const aiCounts = extractCountsFromVoteAiResult(a)
+            const actionCounts = extractCounts(a)
+            const counts = aiCounts && hasAnyCounts(aiCounts) ? aiCounts : actionCounts
+            return { action: a, counts }
+        })
+        .find((x) => x.action?.dataSource?.voteAiResult && hasAnyCounts(x.counts))
+
+    if (withAi) return withAi
+
+    // 2) COMMITTEE_VOTE manual entered with numbers
+    const manualWithNumbers = committeeVotes
+        .filter((a) => String(a?.source ?? "").toUpperCase() === "MANUAL")
+        .map((a) => ({ action: a, counts: extractCounts(a) }))
+        .find((x) => hasAnyCounts(x.counts))
+
+    if (manualWithNumbers) return manualWithNumbers
+
+    // 3) COMMITTEE_VOTE without voteAiResult (any), but prefer one that has counts
+    const withoutAiWithCounts = committeeVotes
+        .filter((a) => !a?.dataSource?.voteAiResult)
+        .map((a) => ({ action: a, counts: extractCounts(a) }))
+        .find((x) => hasAnyCounts(x.counts))
+
+    if (withoutAiWithCounts) return withoutAiWithCounts
+
+    // Last resort: return *something* so you can show 0-0 instead of "No recorded counts" if desired
+    const fallback = committeeVotes[0]
+    return fallback ? { action: fallback, counts: extractCounts(fallback) } : null
+}
+
+function getCommitteeVoteStatusText(action: any): string | null {
+    if (!action) return null
+
+    // Prefer the most human-friendly fields first
+    const direct =
+        action.description?.toString().trim() ||
+        action.voteResult?.toString().trim() ||
+        action.result?.toString().trim() ||
+        action.motion?.toString().trim()
+
+    if (direct) return direct
+
+    // If AI parsed a result string, use it as a last resort
+    const aiResult = action?.dataSource?.voteAiResult?.vote?.result
+    if (typeof aiResult === "string" && aiResult.trim()) return aiResult.trim()
+
+    return null
+}
+
+function pickPartyLineActionId(args: {
+    sectionType?: CalendarType
+    bill?: any
+    committeeActionId?: number | string | null
+}): number | string | null {
+    const { sectionType, bill, committeeActionId } = args
+
+    // For Third Reading, prefer the floor action id (the one bill.votes are tied to)
+    if (sectionType === "THIRD_READING") {
+        const actions = Array.isArray(bill?.actions) ? bill.actions : []
+        const floor = actions.find((a: any) =>
+            a?.chamber && (
+                a?.actionCode === "THIRD_READING" ||
+                a?.actionCode === "PASSAGE" ||
+                String(a?.voteResult ?? "").toLowerCase().includes("passed")
+            )
+        )
+        return floor?.id ?? null
+    }
+
+    // Otherwise, stick with committee vote action id (what you were doing)
+    return committeeActionId ?? null
+}
+
+function DebugBlock({ title, data }: { title: string; data: any }) {
+    return (
+        <details className="mt-2">
+            <summary className="cursor-pointer text-xs text-muted-foreground">{title}</summary>
+            <pre className="mt-2 max-w-[800px] overflow-auto rounded bg-muted p-2 text-[10px] leading-tight">
+                {JSON.stringify(data, null, 2)}
+            </pre>
+        </details>
+    )
+}
+
+function pickBestPartyLineVotes(args: {
+    bill?: any
+    sectionType?: CalendarType
+    votes?: BillVote[]
+    fallbackCommitteeActionId?: number | string | null
+}): { actionId: string | number | null; votes: BillVote[] } {
+    const { bill, sectionType, votes = [], fallbackCommitteeActionId } = args
+
+    const byActionId = new Map<string, BillVote[]>()
+    for (const v of votes) {
+        const k = String(v?.billActionId ?? "")
+        if (!k) continue
+        if (!byActionId.has(k)) byActionId.set(k, [])
+        byActionId.get(k)!.push(v)
+    }
+
+    // Helper: return votes for an actionId if present
+    const get = (id: any) => (id != null ? byActionId.get(String(id)) ?? [] : [])
+
+    // 1) If we have a fallback committee action id (what you already compute), prefer it if it has votes
+    const committeeVotes = get(fallbackCommitteeActionId)
+    if (committeeVotes.length > 0) {
+        return { actionId: fallbackCommitteeActionId ?? null, votes: committeeVotes }
+    }
+
+    // 2) For THIRD_READING, try to find the "Passed" / floor-ish actions and pick the one that actually has votes
+    if (sectionType === "THIRD_READING") {
+        const actions = Array.isArray(bill?.actions) ? bill.actions : []
+
+        // candidate action ids in preferred order
+        const candidateIds = actions
+            .filter((a: any) =>
+                a?.chamber &&
+                (
+                    a?.actionCode === "THIRD_READING" ||
+                    a?.actionCode === "PASSAGE" ||
+                    String(a?.voteResult ?? "").toLowerCase().includes("passed") ||
+                    String(a?.description ?? "").toLowerCase().includes("passed")
+                )
+            )
+            .map((a: any) => a.id)
+            .filter((id: any) => id != null)
+
+        for (const id of candidateIds) {
+            const vs = get(id)
+            if (vs.length > 0) return { actionId: id, votes: vs }
+        }
+    }
+
+    // 3) Otherwise: pick the actionId that has the most votes (works even if action metadata is messy)
+    let bestId: string | null = null
+    let bestVotes: BillVote[] = []
+    for (const [id, vs] of byActionId.entries()) {
+        if (vs.length > bestVotes.length) {
+            bestId = id
+            bestVotes = vs
+        }
+    }
+    if (bestId) return { actionId: bestId, votes: bestVotes }
+
+    // 4) Nothing matched
+    return { actionId: null, votes: [] }
+}
+
 function extractCounts(e: CommitteeVoteEvent | null | undefined): Required<VoteCounts> {
     const vc = (e?.voteCounts ?? {}) as VoteCounts
 
@@ -739,6 +917,9 @@ export async function CalendarReport({ calendarData, hideCalendars }: { calendar
 
                                         <TableBody>
                                             {group.items.map((item: any) => {
+                                                const DEBUG_BILL = "000000000" // Change this to a bill number if needed - debug party line split
+                                                const debugThisRow = item.billNumber === DEBUG_BILL
+
                                                 // pull billEvents + current committee id for this row/section
                                                 // const billEvents = (item.bill?.events ?? []) as CommitteeVoteEvent[]
                                                 const billActions = (item.bill?.actions ?? [])
@@ -804,6 +985,18 @@ export async function CalendarReport({ calendarData, hideCalendars }: { calendar
                                                     actionId != null
                                                         ? votes.filter((v: BillVote) => String(v.billActionId) === String(actionId))
                                                         : []
+
+                                                const partyLineActionId = pickPartyLineActionId({
+                                                    sectionType,
+                                                    bill: item.bill,
+                                                    committeeActionId: actionId,
+                                                })
+
+                                                const votesForPartyLine =
+                                                    partyLineActionId != null
+                                                        ? votes.filter((v: BillVote) => String(v.billActionId) === String(partyLineActionId))
+                                                        : []
+
                                                 
                                                 // Since things are inconsistent, try finding a few ways
                                                 const committeeVotes = billActions.filter(
@@ -823,7 +1016,20 @@ export async function CalendarReport({ calendarData, hideCalendars }: { calendar
                                                     // 4. Fallback
                                                     committeeVotes[0]
 
-                                                const partyLineLabel = getCommitteePartyLineLabel(committeeVotesForAction)
+                                                const preferredCommitteeVote = pickPreferredCommitteeVoteFromActions(billActions)
+                                                const chosenActionForStatus = committeeVote.action ?? preferredCommitteeVote?.action ?? null
+                                                const chosenStatusText = getCommitteeVoteStatusText(chosenActionForStatus)
+
+                                                // const partyLineLabel = getCommitteePartyLineLabel(committeeVotesForAction)
+
+                                                const partyLinePicked = pickBestPartyLineVotes({
+                                                    bill: item.bill,
+                                                    sectionType,
+                                                    votes,
+                                                    fallbackCommitteeActionId: actionId,
+                                                })
+
+                                                const partyLineLabel = getCommitteePartyLineLabel(partyLinePicked.votes)
 
                                                 const isFlagged = Boolean(item.bill?.isFlagged)
 
@@ -873,31 +1079,6 @@ export async function CalendarReport({ calendarData, hideCalendars }: { calendar
                                                             )}
                                                         </TableCell>
 
-                                                        {/* <TableCell className={`${cellBase} hidden lg:table-cell print:!table-cell ${COLS.vote}`}>
-                                                            <div className="text-sm">
-                                                                11-0
-                                                                <div className="mt-1 flex items-center gap-2">
-                                                                    <Badge variant="destructive">
-                                                                        8-2-0-1
-                                                                    </Badge>
-                                                                </div>
-                                                                --- {item.voteResult ? (
-                                                                    <div className="mt-1 flex items-center gap-2">
-                                                                        <Badge
-                                                                            variant={item.voteResult.result === "Passed" ? "default" : "destructive"}
-                                                                        >
-                                                                            {item.voteResult.result}
-                                                                        </Badge>
-                                                                        <span className="text-xs text-muted-foreground">
-                                                                            {item.voteResult.yeas}-{item.voteResult.nays}
-                                                                        </span>
-                                                                    </div>
-                                                                ) : (
-                                                                    <div className="mt-1 text-muted-foreground">--</div>
-                                                                )} ---
-                                                            </div>
-                                                        </TableCell> */}
-
                                                         <TableCell className={`${cellBase} hidden lg:table-cell print:!table-cell ${COLS.vote}`}>
                                                             <div className="text-sm">
                                                                 {committeeVote.action && (
@@ -914,14 +1095,22 @@ export async function CalendarReport({ calendarData, hideCalendars }: { calendar
                                                                         </div> */}
 
                                                                         {/* breakdown line (optional) */}
-                                                                        {committeeVote.counts && hasAnyCounts(committeeVote.counts) ? (
+                                                                        {/* {committeeVote.counts && hasAnyCounts(committeeVote.counts) ? (
                                                                             <div>
                                                                                 {formatCountsBreakdown(committeeVote.counts)}
                                                                             </div>
                                                                         ) : (
                                                                             <div className="mt-1 text-xs text-muted-foreground">No recorded counts</div>
-                                                                        )}
+                                                                        )} */}
 
+                                                                        {committeeVote.counts && hasAnyCounts(committeeVote.counts) ? (
+                                                                            <div>{formatCountsBreakdown(committeeVote.counts)}</div>
+                                                                        ) : preferredCommitteeVote && hasAnyCounts(preferredCommitteeVote.counts) ? (
+                                                                            <div>{formatCountsBreakdown(preferredCommitteeVote.counts)}</div>
+                                                                        ) : (
+                                                                            <div className="mt-1 text-xs text-muted-foreground">No recorded counts</div>
+                                                                        )}
+                                                                        
                                                                         {/* Optional: show motion/result if I can grab it? @TODO ---
                                                                         {(committeeVote.action.motion || committeeVote.action.result) && (
                                                                             <div className="mt-1 text-xs">
@@ -930,7 +1119,7 @@ export async function CalendarReport({ calendarData, hideCalendars }: { calendar
                                                                         )}*/}
                                                                     </>
                                                                 )}
-                                                                { ( ! committeeVote.action && selectedCommitteeVote ) && (
+                                                                {( ! committeeVote.action && selectedCommitteeVote ) && (
                                                                     <div>
                                                                         {selectedCommitteeVote?.yesVotes}-{selectedCommitteeVote?.noVotes}
                                                                     </div>
@@ -950,6 +1139,32 @@ export async function CalendarReport({ calendarData, hideCalendars }: { calendar
                                                                         {renderPartyLineBadge(partyLineLabel)}
                                                                     </>
                                                                 )}
+
+                                                                {debugThisRow && (
+                                                                    <DebugBlock
+                                                                        title="Party line debug"
+                                                                        data={{
+                                                                            sectionType,
+                                                                            billNumber: item.billNumber,
+                                                                            actionIdFromCommitteeVote: actionId,
+                                                                            partyLineActionId,
+                                                                            votesTotal: votes.length,
+                                                                            votesForPartyLineCount: votesForPartyLine.length,
+                                                                            votesForPartyLineSample: votesForPartyLine.slice(0, 5),
+                                                                            // show what floor/committee actions exist
+                                                                            actionsSummary: (billActions ?? []).map((a: any) => ({
+                                                                                id: a.id,
+                                                                                chamber: a.chamber,
+                                                                                actionCode: a.actionCode,
+                                                                                voteResult: a.voteResult,
+                                                                                description: a.description,
+                                                                                yesVotes: a.yesVotes,
+                                                                                noVotes: a.noVotes,
+                                                                            })),
+                                                                        }}
+                                                                    />
+                                                                )}
+
                                                             </div>
                                                         </TableCell>
 
@@ -965,17 +1180,14 @@ export async function CalendarReport({ calendarData, hideCalendars }: { calendar
                                                                         )
                                                                     }
 
-                                                                    // Otherwise fall back to committee action text
+                                                                    // Otherwise fall back to committee action text (from the chosen vote)
                                                                     const committeeActionText =
+                                                                        chosenStatusText ||
                                                                         committeeVote.action?.voteResult?.trim() ||
                                                                         committeeVote.action?.motion?.trim() ||
                                                                         committeeVote.action?.result?.trim()
 
-                                                                    return committeeActionText ? (
-                                                                        <>
-                                                                            {committeeActionText}
-                                                                        </>
-                                                                    ) : null
+                                                                    return committeeActionText ? <>{committeeActionText}</> : null
                                                                 })()}
                                                             </div>
                                                         </TableCell>
