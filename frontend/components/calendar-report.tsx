@@ -458,13 +458,13 @@ function organizeFloorCalendars(raw: FloorCalendar[] | undefined | null): { sect
 // @TODO these need to be responsive
 const COLS = {
     flag: "w-[28px]",
-    bill: "w-[92px]",
+    bill: "w-[92px] print:w-[80px]",
     sponsor: "w-[100px] lg:w-[140px] print:w-[100px]",
     title: "w-[350px] lg:w-[520px] print:w-[250px]",
     committee: "w-[90px] lg:w-[160px]",
     vote: "w-[100px]",
     action: "w-[100px] lg:w-[180px]",
-    notes: "w-[260px]",
+    notes: "w-[260px] print:text-sm",
 } as const
 
 const cellBase = "align-top whitespace-normal"
@@ -811,8 +811,8 @@ export async function CalendarReport({ calendarData, hideCalendars }: { calendar
                                                             </Link>
                                                         </TableCell>
 
-                                                        <TableCell className={`${cellBase} hidden md:table-cell print:!table-cell ${COLS.sponsor}`}>
-                                                            <div className="line-clamp-2">
+                                                        <TableCell className={`${cellBase} hidden md:table-cell print:table-cell ${COLS.sponsor}`}>
+                                                            <div className="line-clamp-4">
                                                                 {shortenSponsor(item.bill.sponsorDisplay)}
                                                             </div>
                                                         </TableCell>

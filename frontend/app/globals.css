@@ -206,6 +206,13 @@
     word-break: break-word;
   }
 
+  table.print-friendly td .line-clamp-2,
+  table.print-friendly td .line-clamp-3,
+  table.print-friendly td .line-clamp-4,
+  table.print-friendly td .line-clamp-5 {
+    overflow: hidden !important;
+  }
+
   thead { display: table-header-group; }
   tr { break-inside: avoid; page-break-inside: avoid; }
 
