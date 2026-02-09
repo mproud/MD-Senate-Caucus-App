@@ -67,6 +67,23 @@ type OrganizedSection = {
     groups: OrganizedGroup[]
 }
 
+type BillAction = {
+    id?: number | string
+    chamber?: string | null
+    actionCode?: string | null
+    committeeId?: number | string | null
+    source?: string | null
+    voteResult?: string | null
+    description?: string | null
+    yesVotes?: number | null
+    noVotes?: number | null
+    absent?: number | null
+    excused?: number | null
+    notVoting?: number | null
+    notes?: string | null
+    dataSource?: any
+}
+
 // Helpers to pick and format committee votes from billEvents
 type VoteCounts = {
     yesVotes?: number | null
@@ -922,7 +939,7 @@ export async function CalendarReport({ calendarData, hideCalendars }: { calendar
 
                                                 // pull billEvents + current committee id for this row/section
                                                 // const billEvents = (item.bill?.events ?? []) as CommitteeVoteEvent[]
-                                                const billActions = (item.bill?.actions ?? [])
+                                                const billActions = ((item.bill?.actions ?? []) as BillAction[])
                                                 const currentCommitteeId = item.committeeId ?? item.committee?.id ?? null
 
                                                 const bill = item.bill
