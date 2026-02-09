@@ -198,19 +198,19 @@ export async function GET(request: NextRequest) {
 
                                 actions: {
                                     orderBy: [{ actionDate: "desc" }, { sequence: "desc" }],
-                                    select: {
-                                        id: true,
-                                        chamber: true,
-                                        actionCode: true,
-                                        committeeId: true,
-                                        source: true,
-                                        voteResult: true,
-                                        yesVotes: true,
-                                        noVotes: true,
-                                        absent: true,
-                                        excused: true,
-                                        notVoting: true,
-                                    },
+                                    // select: {
+                                    //     id: true,
+                                    //     chamber: true,
+                                    //     actionCode: true,
+                                    //     committeeId: true,
+                                    //     source: true,
+                                    //     voteResult: true,
+                                    //     yesVotes: true,
+                                    //     noVotes: true,
+                                    //     absent: true,
+                                    //     excused: true,
+                                    //     notVoting: true,
+                                    // },
                                 },
 
                                 votes: {

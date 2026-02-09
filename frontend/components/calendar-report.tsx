@@ -804,6 +804,24 @@ export async function CalendarReport({ calendarData, hideCalendars }: { calendar
                                                     actionId != null
                                                         ? votes.filter((v: BillVote) => String(v.billActionId) === String(actionId))
                                                         : []
+                                                
+                                                // Since things are inconsistent, try finding a few ways
+                                                const committeeVotes = billActions.filter(
+                                                    (a) => a.actionCode === "COMMITTEE_VOTE"
+                                                )
+
+                                                const selectedCommitteeVote =
+                                                    // 1. Prefer one with notes
+                                                    committeeVotes.find((v) => v.notes) ||
+
+                                                    // 2. Otherwise one with voteAi
+                                                    committeeVotes.find((v) => v.dataSource?.voteAi) ||
+
+                                                    // 3. Otherwise manual
+                                                    committeeVotes.find((v) => v.dataSource?.manual) ||
+
+                                                    // 4. Fallback
+                                                    committeeVotes[0]
 
                                                 const partyLineLabel = getCommitteePartyLineLabel(committeeVotesForAction)
 
@@ -882,7 +900,7 @@ export async function CalendarReport({ calendarData, hideCalendars }: { calendar
 
                                                         <TableCell className={`${cellBase} hidden lg:table-cell print:!table-cell ${COLS.vote}`}>
                                                             <div className="text-sm">
-                                                                {committeeVote.action ? (
+                                                                {committeeVote.action && (
                                                                     <>
                                                                         {/* <div className="flex items-center gap-2">
                                                                             <span className="font-medium">
@@ -911,9 +929,17 @@ export async function CalendarReport({ calendarData, hideCalendars }: { calendar
                                                                             </div>
                                                                         )}*/}
                                                                     </>
-                                                                ) : (
-                                                                    <div className="text-muted-foreground">---</div>
                                                                 )}
+                                                                { ( ! committeeVote.action && selectedCommitteeVote ) && (
+                                                                    <div>
+                                                                        {selectedCommitteeVote?.yesVotes}-{selectedCommitteeVote?.noVotes}
+                                                                    </div>
+                                                                )}
+
+                                                                {( ! committeeVote.action && ! selectedCommitteeVote ) && (
+                                                                    <div className="text-muted-foreground">----</div>
+                                                                )}
+                                                                {/* <textarea>{JSON.stringify({ selectedCommitteeVote })}</textarea> */}
 
                                                                 {partyLineLabel && (
                                                                     <>
@@ -1002,6 +1028,9 @@ export async function CalendarReport({ calendarData, hideCalendars }: { calendar
                                                                             <p key={note.id}>{note.content}</p>
                                                                         ))
                                                                     }
+                                                                    {selectedCommitteeVote?.notes && (
+                                                                        <p>{selectedCommitteeVote.notes}</p>
+                                                                    )}
                                                                 </div>
                                                             </div>
                                                         </TableCell>
