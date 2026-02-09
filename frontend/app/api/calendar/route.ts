@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { Prisma, CalendarType } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { tree } from "next/dist/build/templates/app-page"
+import { getActiveSessionCode } from "@/lib/get-system-setting"
 
 function isValidIsoDateOnly(value: string) {
     return /^\d{4}-\d{2}-\d{2}$/.test(value)
@@ -142,9 +143,12 @@ export async function GET(request: NextRequest) {
 
         const { start, end } = rangeUtc(startDateOnly, endDateOnly)
 
+        const activeSessionCode = await getActiveSessionCode()
+
         const where: Prisma.FloorCalendarWhereInput = {
             calendarDate: { gte: start, lte: end },
             chamber: "SENATE",
+            sessionCode: activeSessionCode,
         }
 
         if (hiddenTypes.length > 0) {
@@ -153,7 +157,9 @@ export async function GET(request: NextRequest) {
 
         const calendars = await prisma.floorCalendar.findMany({
             where,
-            orderBy: { calendarDate: "desc" },
+            orderBy: [
+                { calendarDate: "desc" },
+            ],
             include: {
                 committee: true,
                 items: {

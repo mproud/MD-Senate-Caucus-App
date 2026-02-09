@@ -432,6 +432,29 @@ function organizeFloorCalendars(raw: FloorCalendar[] | undefined | null): { sect
         // - Committee reports: by reportNumber, then consentCalendarNumber
         // - Others: by calendarNumber
         const groups = [...map.values()].sort((a, b) => {
+            const aIsCommittee = a.reportNumber != null
+            const bIsCommittee = b.reportNumber != null
+
+            // Committee reports: sort by committee name first, then report #
+            if (aIsCommittee && bIsCommittee) {
+                const an = (a.committeeName ?? a.committeeAbbrev ?? a.heading).trim()
+                const bn = (b.committeeName ?? b.committeeAbbrev ?? b.heading).trim()
+
+                const byName = an.localeCompare(bn, undefined, { sensitivity: "base" })
+                if (byName !== 0) return byName
+
+                const ar = a.reportNumber ?? Number.MAX_SAFE_INTEGER
+                const br = b.reportNumber ?? Number.MAX_SAFE_INTEGER
+                if (ar !== br) return ar - br
+
+                const ac = a.consentCalendarNumber ?? Number.MAX_SAFE_INTEGER
+                const bc = b.consentCalendarNumber ?? Number.MAX_SAFE_INTEGER
+                if (ac !== bc) return ac - bc
+
+                return a.heading.localeCompare(b.heading)
+            }
+
+            // Non-committee calendars: keep numeric calendar ordering
             const ar = a.reportNumber ?? Number.MAX_SAFE_INTEGER
             const br = b.reportNumber ?? Number.MAX_SAFE_INTEGER
             if (ar !== br) return ar - br
@@ -440,7 +463,6 @@ function organizeFloorCalendars(raw: FloorCalendar[] | undefined | null): { sect
             const bc = b.consentCalendarNumber ?? Number.MAX_SAFE_INTEGER
             if (ac !== bc) return ac - bc
 
-            // Always return a number (stable fallback)
             return a.heading.localeCompare(b.heading)
         })
 
@@ -461,9 +483,9 @@ const COLS = {
     bill: "w-[92px] print:w-[80px]",
     sponsor: "w-[100px] lg:w-[140px] print:w-[100px]",
     title: "w-[350px] lg:w-[520px] print:w-[250px]",
-    committee: "w-[90px] lg:w-[160px]",
+    committee: "w-[95px] lg:w-[160px]",
     vote: "w-[100px]",
-    action: "w-[100px] lg:w-[180px]",
+    action: "w-[95px] lg:w-[180px]",
     notes: "w-[260px] print:text-sm",
 } as const
 
@@ -906,7 +928,7 @@ export async function CalendarReport({ calendarData, hideCalendars }: { calendar
                                                         </TableCell>
 
                                                         <TableCell className={`${cellBase} hidden xl:table-cell print:!table-cell ${COLS.action}`}>
-                                                            <div className="line-clamp-2">
+                                                            <div className="line-clamp-4">
                                                                 {(() => {
                                                                     // If actionText exists, show it and do NOT show the committee action
                                                                     if (item.actionText?.trim()) {
