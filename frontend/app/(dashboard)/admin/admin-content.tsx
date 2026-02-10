@@ -40,7 +40,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { sessionCodeOptions } from "@/lib/config"
 import { type ScrapeRun, scraperKinds } from "@/lib/scraper-client"
 import { TabEventHistory } from "./tab-event-history"
-import TabCaucuses from "./tab-caucuses"
+import { TabCaucusCommittees } from "./tab-caucus-committees"
 
 interface User {
     id: string
@@ -106,7 +106,7 @@ interface ScrapersResponse {
     recentRuns: ScrapeRun[]
 }
 
-export const AdminContent = () => {
+export const AdminContent = ({ activeTab }: { activeTab?: string }) => {
     const { user, isLoaded } = useUser()
     const router = useRouter()
     const [users, setUsers] = useState<User[]>([])
@@ -533,7 +533,7 @@ export const AdminContent = () => {
                 </div>
             </div>
 
-            <Tabs defaultValue="users" className="space-y-6">
+            <Tabs defaultValue={activeTab ?? "users"} className="space-y-6">
                 <TabsList>
                     <TabsTrigger value="users" className="flex items-center gap-2">
                         <Users className="h-4 w-4" />
@@ -1261,7 +1261,7 @@ export const AdminContent = () => {
                 </TabsContent>
 
                 <TabsContent value="caucuses" className="space-y-6">
-                    <TabCaucuses />
+                    <TabCaucusCommittees />
                 </TabsContent>
 
                 <TabsContent value="event-history" className="space-y-6">

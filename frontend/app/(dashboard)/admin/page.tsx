@@ -5,11 +5,12 @@ export const metadata: Metadata = {
     title: "Admin",
 }
 
-export default function AdminPage() {
+export default async function AdminPage({ searchParams }: { searchParams: Promise<{ activeTab?: string }> }) {
+    const { activeTab } = await searchParams
 
     return (
         <>
-            <AdminContent />
+            <AdminContent activeTab={activeTab} />
         </>
     )
 }
