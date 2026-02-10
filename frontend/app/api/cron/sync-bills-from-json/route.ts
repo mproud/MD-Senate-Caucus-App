@@ -1198,7 +1198,7 @@ export async function GET( request: Request ) {
                 })
             } else if (
                 existingBill.statusDesc !== statusDesc ||
-                ( existingBill.statusDesc == "In the Senate - Hearing canceled" && existingBill.id == 631039 )
+                ( existingBill.id == 163592 )
             ) {
                 const oldStatus = existingBill?.statusDesc ?? null
                 const newStatus = statusDesc
