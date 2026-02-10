@@ -150,33 +150,28 @@ export async function PUT(
         const { userId } = await auth()
         if (!userId) return json({ error: "Unauthorized" }, 401)
 
-        // If your BillNote is user-scoped, enforce ownership here:
-        // where: { id: parsed.data.noteId, userId }
+        const existing = await prisma.billNote.findFirst({
+            where: {
+                id: parsed.data.noteId,
+                billId: bill.id,
+            },
+            select: { id: true },
+        })
+
+        if (!existing) return json({ error: "Note not found" }, 404)
+
         const note = await prisma.billNote.update({
             where: { id: parsed.data.noteId },
             data: {
                 content: parsed.data.content,
             },
-            select: {
-                id: true,
-                billId: true,
-                content: true,
-                createdAt: true,
-                updatedAt: true,
-                // userId: true,
+            include: {
+                user: true,
             },
         })
 
-        // Optional safety: ensure note belongs to bill
-        if (note.billId !== bill.id) {
-            return json({ error: "Note does not belong to this bill" }, 400)
-        }
-
         return json({ success: true, note })
-    } catch (error: any) {
-        // Prisma "Record to update not found."
-        if (error?.code === "P2025") return json({ error: "Note not found" }, 404)
-
+    } catch (error) {
         console.error("PUT bill note error:", error)
         return json({ error: "Failed to update note" }, 500)
     }

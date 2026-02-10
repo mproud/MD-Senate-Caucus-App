@@ -709,7 +709,7 @@ async function BillContent({ billNumber, activeTab }: { billNumber: string, acti
                     </TabsContent>
 
                     <TabsContent value="notes" className="mt-6">
-                        @TODO pin/unpin notes (restricted permission)
+                        {/* @TODO pin/unpin notes (restricted permission) */}
                         <NotesPanel billNumber={billNumber} initialNotes={bill.notes} />
                     </TabsContent>
 

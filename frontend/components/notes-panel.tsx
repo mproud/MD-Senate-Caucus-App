@@ -26,6 +26,11 @@ export function NotesPanel({ billNumber, initialNotes }: NotesPanelProps) {
     const [newNoteBody, setNewNoteBody] = useState("")
     const [isSubmitting, setIsSubmitting] = useState(false)
 
+    const [editingNoteId, setEditingNoteId] = useState<number | null>(null)
+    const [editBody, setEditBody] = useState("")
+    const [isSavingEdit, setIsSavingEdit] = useState(false)
+    const [deletingNoteId, setDeletingNoteId] = useState<number | null>(null)
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
 
@@ -56,7 +61,6 @@ export function NotesPanel({ billNumber, initialNotes }: NotesPanelProps) {
 
             const newNote: BillNoteWithUser = await response.json()
 
-            // Optimistic update
             setNotes([newNote, ...notes])
             setNewNoteBody("")
 
@@ -71,6 +75,104 @@ export function NotesPanel({ billNumber, initialNotes }: NotesPanelProps) {
             setIsSubmitting(false)
         }
     }
+
+    const startEditing = (note: BillNoteWithUser) => {
+        setEditingNoteId(note.id)
+        setEditBody(note.content)
+    }
+
+    const cancelEditing = () => {
+        setEditingNoteId(null)
+        setEditBody("")
+    }
+
+    const handleSaveEdit = async (noteId: number) => {
+        if (!editBody.trim()) {
+            toast.error("Error", {
+                description: "Note body cannot be empty",
+            })
+            return
+        }
+
+        setIsSavingEdit(true)
+
+        try {
+            const response = await fetch(`/api/bills/${billNumber}/notes`, {
+                method: "PUT",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    noteId,
+                    content: editBody,
+                }),
+            })
+
+            if (!response.ok) {
+                const msg = await response.json().catch(() => null)
+                throw new Error(msg?.error ?? "Failed to update note")
+            }
+
+            const payload: { success: true, note: BillNoteWithUser } = await response.json()
+
+            setNotes((prev) => prev.map((n) => (n.id === noteId ? payload.note : n)))
+            setEditingNoteId(null)
+            setEditBody("")
+
+            toast("Note Updated", {
+                description: "Your changes were saved.",
+            })
+        } catch (error) {
+            toast.error("Error", {
+                description: error instanceof Error ? error.message : "Failed to update note",
+            })
+        } finally {
+            setIsSavingEdit(false)
+        }
+    }
+
+    const handleDelete = async (noteId: number) => {
+        setDeletingNoteId(noteId)
+
+        try {
+            const response = await fetch(`/api/bills/${billNumber}/notes?noteId=${noteId}`, {
+                method: "DELETE",
+            })
+
+            if (!response.ok) {
+                const msg = await response.json().catch(() => null)
+                throw new Error(msg?.error ?? "Failed to delete note")
+            }
+
+            setNotes((prev) => prev.filter((n) => n.id !== noteId))
+
+            if (editingNoteId === noteId) {
+                cancelEditing()
+            }
+
+            toast("Note Deleted", {
+                description: "The note has been removed.",
+            })
+        } catch (error) {
+            toast.error("Error", {
+                description: error instanceof Error ? error.message : "Failed to delete note",
+            })
+        } finally {
+            setDeletingNoteId(null)
+        }
+    }
+
+    const visibleNotes = notes
+        .slice()
+        .filter((note: BillNoteWithUser) => note.visibility !== "HIDDEN")
+        .sort((a, b) => {
+            const aPinned = a.visibility === "PINNED"
+            const bPinned = b.visibility === "PINNED"
+
+            if (aPinned !== bPinned) return aPinned ? -1 : 1
+
+            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        })
 
     return (
         <div className="space-y-6">
@@ -107,7 +209,7 @@ export function NotesPanel({ billNumber, initialNotes }: NotesPanelProps) {
             </Card>
 
             <div className="space-y-4">
-                {notes.length === 0 ? (
+                {visibleNotes.length === 0 ? (
                     <Card key="no-notes">
                         <CardContent className="py-8">
                             <div className="text-center text-muted-foreground">
@@ -116,64 +218,100 @@ export function NotesPanel({ billNumber, initialNotes }: NotesPanelProps) {
                         </CardContent>
                     </Card>
                 ) : (
-                    notes
-                        .slice() // avoid mutating the original notes array
-                        .filter((note: BillNoteWithUser) => note.visibility !== "HIDDEN")
-                        .sort((a, b) => {
-                            const aPinned = a.visibility === "PINNED"
-                            const bPinned = b.visibility === "PINNED"
+                    visibleNotes.map((note: BillNoteWithUser) => {
+                        const isPinned = note.visibility === "PINNED"
+                        const isEditing = editingNoteId === note.id
+                        const isDeleting = deletingNoteId === note.id
 
-                            if (aPinned !== bPinned) return aPinned ? -1 : 1
-
-                            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-                        })
-                        .map((note: BillNoteWithUser) => {
-                            const isPinned = note.visibility === "PINNED"
-
-                            return (
-                                <Card
-                                    key={note.id}
-                                    className={
-                                    isPinned
-                                        ? "border-muted-foreground/40 bg-muted/70"
-                                        : undefined
-                                    }
-                                >
-                                    <CardHeader>
-                                        <div className="flex items-start justify-between gap-4">
-                                            {/* Left side: date + author */}
-                                            <div className="flex-1">
-                                                <CardDescription>
-                                                    {new Date(note.createdAt).toLocaleDateString("en-US", {
+                        return (
+                            <Card
+                                key={note.id}
+                                className={isPinned ? "border-muted-foreground/40 bg-muted/70" : undefined}
+                            >
+                                <CardHeader>
+                                    <div className="flex items-start justify-between gap-4">
+                                        <div className="flex-1">
+                                            <CardDescription>
+                                                {new Date(note.createdAt).toLocaleDateString("en-US", {
                                                     year: "numeric",
                                                     month: "long",
                                                     day: "numeric",
                                                     hour: "2-digit",
                                                     minute: "2-digit",
-                                                    })}
+                                                })}
 
-                                                    {note.userId && note.user?.name && <> - {note.user.name}</>}
-                                                </CardDescription>
-                                            </div>
+                                                {note.userId && note.user?.name && <> - {note.user.name}</>}
+                                            </CardDescription>
+                                        </div>
 
-                                            {/* Right side: pin */}
+                                        <div className="flex items-center gap-2 shrink-0">
                                             {isPinned && (
-                                                <Badge
-                                                    variant="secondary"
-                                                    className="flex items-center gap-1 shrink-0"
-                                                >
+                                                <Badge variant="secondary" className="flex items-center gap-1">
                                                     <Pin className="h-3 w-3" />
                                                     <span className="sr-only">Pinned</span>
                                                 </Badge>
                                             )}
+
+                                            {isEditing ? (
+                                                <>
+                                                    <Button
+                                                        variant="default"
+                                                        size="sm"
+                                                        onClick={() => handleSaveEdit(note.id)}
+                                                        disabled={isSavingEdit}
+                                                    >
+                                                        {isSavingEdit ? "Saving..." : "Save"}
+                                                    </Button>
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={cancelEditing}
+                                                        disabled={isSavingEdit}
+                                                    >
+                                                        Cancel
+                                                    </Button>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => startEditing(note)}
+                                                        disabled={isDeleting}
+                                                    >
+                                                        Edit
+                                                    </Button>
+                                                    <Button
+                                                        variant="destructive"
+                                                        size="sm"
+                                                        onClick={() => handleDelete(note.id)}
+                                                        disabled={isDeleting}
+                                                    >
+                                                        {isDeleting ? "Deleting..." : "Delete"}
+                                                    </Button>
+                                                </>
+                                            )}
                                         </div>
-                                    </CardHeader>
-                                    <CardContent>
+                                    </div>
+                                </CardHeader>
+
+                                <CardContent>
+                                    {isEditing ? (
+                                        <div className="space-y-3">
+                                            <Textarea
+                                                value={editBody}
+                                                onChange={(e) => setEditBody(e.target.value)}
+                                                rows={4}
+                                                disabled={isSavingEdit}
+                                            />
+                                        </div>
+                                    ) : (
                                         <p className="text-sm leading-relaxed whitespace-pre-wrap">{note.content}</p>
-                                    </CardContent>
-                                </Card>
-                            )
-                        })
+                                    )}
+                                </CardContent>
+                            </Card>
+                        )
+                    })
                 )}
             </div>
         </div>
