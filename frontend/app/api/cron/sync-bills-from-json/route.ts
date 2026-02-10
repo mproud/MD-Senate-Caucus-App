@@ -141,12 +141,12 @@ function isWithdrawnStatus(status: string | null | undefined): boolean {
 function parseHearingStatus(status: string | null, sessionYear: number): HearingStatusInfo {
     const norm = normalizeStatusForCompare(status)
 
-    if (!norm) {
+    if ( ! norm) {
         return { isHearingRelated: false, isCanceled: false, hearingAt: null, normalized: null }
     }
 
     // MGA statuses we care about generally begin with "Hearing"
-    const isHearingRelated = norm.startsWith('hearing')
+    const isHearingRelated = norm.includes('hearing')
     if (!isHearingRelated) {
         return { isHearingRelated: false, isCanceled: false, hearingAt: null, normalized: norm }
     }
@@ -498,7 +498,7 @@ async function resolveCommitteeIdByName(name: string | null | undefined, chamber
 function parseVoteCounts(text: string): { yes: number | null; no: number | null } {
     const t = text.replace(/\s+/g, ' ').trim()
     // Common patterns seen: "Yeas 45 Nays 0", "45-0", "45 yeas, 0 nays"
-    console.log('Parse Vote Counts', { text })
+    // console.log('Parse Vote Counts', { text })
     const yeas = t.match(/Yeas?\s*(\d+)/i)
     const nays = t.match(/Nays?\s*(\d+)/i)
     if (yeas || nays) {
@@ -572,7 +572,7 @@ async function upsertBillAction(opts: {
     })
 
     const { isVote, voteResult } = classifyVote(description, kind)
-    console.log('Bill Action', { opts })
+    // console.log('Bill Action', { opts })
     const counts = isVote ? parseVoteCounts(description) : { yes: null, no: null }
 
     if (!existing) {
@@ -844,6 +844,9 @@ export async function GET( request: Request ) {
             }
 
             const billNumber = String( item.BillNumber ).trim()
+
+            // @TEMP - skip other bills to debug this one.
+            if ( billNumber !== "SB0364" ) continue
 
             const { sessionYear, sessionCode } = deriveSessionYearAndCode(item)
 
@@ -1196,10 +1199,7 @@ export async function GET( request: Request ) {
                         },
                     }
                 })
-            } else if (
-                existingBill.statusDesc !== statusDesc ||
-                ( existingBill.id == 163592 )
-            ) {
+            } else if ( existingBill.statusDesc !== statusDesc ) {
                 const oldStatus = existingBill?.statusDesc ?? null
                 const newStatus = statusDesc
 
@@ -1251,14 +1251,7 @@ export async function GET( request: Request ) {
                 // Only do hearing logic if the change touches hearing-related statuses
                 const touchesHearing = oldHearing.isHearingRelated || newHearing.isHearingRelated
 
-                console.log( 'Hearing Related', {
-                    oldHearing,
-                    newHearing,
-                    touchesHearing,
-                })
-
                 if (touchesHearing && hearingInfoChanged(oldHearing, newHearing)) {
-                    console.log('Hearing related -- 1261')
                     // 1) HEARING_CHANGED for any hearing-related change
                     await prisma.billEvent.create({
                         data: {
