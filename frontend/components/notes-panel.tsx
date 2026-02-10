@@ -109,8 +109,13 @@ export function NotesPanel({ billNumber, initialNotes }: NotesPanelProps) {
             })
 
             if (!response.ok) {
-                const msg = await response.json().catch(() => null)
-                throw new Error(msg?.error ?? "Failed to update note")
+                const msg: unknown = await response.json().catch(() => null)
+
+                if (msg && typeof msg === "object" && "error" in msg && typeof (msg as any).error === "string") {
+                    throw new Error((msg as any).error)
+                }
+
+                throw new Error("Failed to update note")
             }
 
             const payload: { success: true, note: BillNoteWithUser } = await response.json()
@@ -140,8 +145,13 @@ export function NotesPanel({ billNumber, initialNotes }: NotesPanelProps) {
             })
 
             if (!response.ok) {
-                const msg = await response.json().catch(() => null)
-                throw new Error(msg?.error ?? "Failed to delete note")
+                const msg: unknown = await response.json().catch(() => null)
+
+                if (msg && typeof msg === "object" && "error" in msg && typeof (msg as any).error === "string") {
+                    throw new Error((msg as any).error)
+                }
+
+                throw new Error("Failed to delete note")
             }
 
             setNotes((prev) => prev.filter((n) => n.id !== noteId))
