@@ -1210,7 +1210,7 @@ export async function CalendarReport({ calendarData, hideCalendars }: { calendar
                                                         </TableCell>
 
                                                         <TableCell className={`${cellBase} hidden xl:table-cell print:!table-cell ${COLS.notes}`}>
-                                                            <div className="line-clamp-5">
+                                                            <div className="x_line-clamp-5">
                                                                 {item.bill.crossFileExternalId && (
                                                                     <>
                                                                         <span className="font-sm">

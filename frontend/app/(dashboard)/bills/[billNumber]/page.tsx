@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { VoteForm } from "@/components/vote-form"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
+import { VotesPanel } from "@/components/votes-panel"
 import { ExternalLink } from "lucide-react"
 import { VoteBreakdownModal } from "@/components/vote-breakdown-modal"
 
@@ -200,6 +201,16 @@ async function BillContent({ billNumber, activeTab }: { billNumber: string, acti
             cache: "no-store",
         })
 
+        const committeeActions =
+            (bill.actions ?? []).filter((action) => action.actionCode === "COMMITTEE_VOTE" || action.actionCode === "COMMITEE_VOTE")
+
+        const floorActions =
+            (bill.actions ?? []).filter(
+                (action) =>
+                    (action.actionCode === null && action.isVote === true) ||
+                    action.actionCode === "FLOOR_VOTE"
+            )
+
         // Notes are included in the now massive bill query...
         // const notes = await fetchApi<Note[]>(`/api/bills/${billNumber}/notes`, {
         //     cache: "no-store",
@@ -362,7 +373,17 @@ async function BillContent({ billNumber, activeTab }: { billNumber: string, acti
                                     </Button>
                                 </CardHeader>
                                 <CardContent>
-                                    {bill.actions && bill.actions.length > 0 ? (
+                                    <p className="hidden">@TODO the edit link needs to go to the new committee vote form</p>
+                                    
+                                    {committeeActions.length > 0 ? (
+                                        <VotesPanel billNumber={billNumber} actions={committeeActions} kind="committee" />
+                                    ) : (
+                                        <p className="text-sm text-muted-foreground text-center py-8">No committee votes available for this bill</p>
+                                    )}
+
+                                    {/* <hr/><hr/><hr/> @HERE above is new, below is old */}
+
+                                    {bill.actions && bill.actions.length > 0 && bill.actions.length > 1500 ? (
                                         <div className="space-y-4">
                                             {bill.actions
                                                 .filter((action) => ( action.actionCode === "COMMITTEE_VOTE" || action.actionCode === "COMMITEE_VOTE" ))
@@ -513,7 +534,7 @@ async function BillContent({ billNumber, activeTab }: { billNumber: string, acti
                                             )}
                                         </div>
                                     ) : (
-                                        <p className="text-sm text-muted-foreground text-center py-8">No committee votes available for this bill</p>
+                                        <p className="text-sm text-muted-foreground text-center py-8 hidden">No committee votes available for this bill</p>
                                     )}
 
                                     {/* {bill.committeeVotes && bill.committeeVotes.length > 0 ? (
@@ -576,7 +597,15 @@ async function BillContent({ billNumber, activeTab }: { billNumber: string, acti
                                     <VoteForm billNumber={billNumber} voteType="floor" />
                                 </CardHeader>
                                 <CardContent>
-                                    {bill.actions && bill.actions.length > 0 ? (
+                                    {floorActions.length > 0 ? (
+                                        <VotesPanel billNumber={billNumber} actions={floorActions} kind="floor" />
+                                    ) : (
+                                        <p className="text-sm text-muted-foreground text-center py-8">No floor votes available for this bill</p>
+                                    )}
+
+                                    {/* <hr/><hr/><hr/> @HERE above is new, below is old */}
+                                    
+                                    {bill.actions && bill.actions.length > 0 && bill.actions.length > 15000 ? (
                                         <div className="space-y-4">
                                             {bill.actions
                                                 .filter(
@@ -651,7 +680,7 @@ async function BillContent({ billNumber, activeTab }: { billNumber: string, acti
                                             )}
                                         </div>
                                     ) : (
-                                        <p className="text-sm text-muted-foreground text-center py-8">No floor votes available for this bill</p>
+                                        <p className="text-sm text-muted-foreground text-center py-8 hidden">No floor votes available for this bill</p>
                                     )}
 
                                     {/* {bill.floorVotes && bill.floorVotes.length > 0 ? (

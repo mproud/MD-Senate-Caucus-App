@@ -33,12 +33,13 @@ type CommitteeWithMembers = Prisma.CommitteeGetPayload<{
 interface RecordVoteContentProps {
     bill: Bill
     committee: CommitteeWithMembers
+    actionId?: string
 }
 
 const Loading = () => null
 
 export default function RecordVoteContent( props: RecordVoteContentProps ) {
-    const { bill, committee } = props
+    const { bill, committee, actionId } = props
 
     const router = useRouter()
     const [memberVotes, setMemberVotes] = useState<MemberVote[]>([])
@@ -60,6 +61,23 @@ export default function RecordVoteContent( props: RecordVoteContentProps ) {
             }))
         )
     }, [committee])
+
+    useEffect(() => {
+        if (!actionId) return
+        if (!bill) return
+
+        const id = Number(actionId)
+        if (!Number.isInteger(id) || id <= 0) return
+
+        const existing = (bill as any)?.actions?.find((a: any) => a.id === id)
+        if (!existing) return
+
+        setVoteResult(existing.voteResult ?? "Favorable")
+        setNotes(existing.notes ?? "")
+
+        // If you later store memberVotes in dataSource, you can hydrate here
+        // For now, we only hydrate counts/notes/result @TODO maybe??
+    }, [actionId, bill])
 
     const setVote = (memberId: number, vote: VoteValue) => {
         setMemberVotes((prev) =>
@@ -187,10 +205,24 @@ export default function RecordVoteContent( props: RecordVoteContentProps ) {
                 }),
             }
 
+            // const response = await fetch(`/api/bills/${bill.billNumber}/votes`, {
+            //     method: "POST",
+            //     headers: { "Content-Type": "application/json" },
+            //     body: JSON.stringify(voteData),
+            // })
+            const isEditing = Boolean(actionId)
+
             const response = await fetch(`/api/bills/${bill.billNumber}/votes`, {
-                method: "POST",
+                method: isEditing ? "PUT" : "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(voteData),
+                body: JSON.stringify(
+                    isEditing
+                        ? {
+                            actionId: Number(actionId),
+                            ...voteData,
+                        }
+                        : voteData
+                ),
             })
 
             if (response.ok) {
@@ -213,7 +245,9 @@ export default function RecordVoteContent( props: RecordVoteContentProps ) {
     return (
         <>
             <div className="mb-8">
-                <h1 className="text-3xl font-bold tracking-tight">Record Committee Vote</h1>
+                <h1 className="text-3xl font-bold tracking-tight">
+                    {actionId ? "Edit Committee Vote" : "Record Committee Vote"}
+                </h1>
                 <p className="text-muted-foreground mt-2">
                     Manually record a committee vote before the MGA website updates
                 </p>

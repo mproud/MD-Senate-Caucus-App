@@ -31,8 +31,15 @@ type CommitteeWithMembers = Prisma.CommitteeGetPayload<{
     }
 }>
 
-export default async function RecordVotePage({ searchParams }: { searchParams: Promise<{ billNumber?: string }>}) {
-    const { billNumber } = await searchParams
+export default async function RecordVotePage({
+    searchParams
+}: {
+    searchParams: Promise<{
+        billNumber?: string
+        actionId?: string
+    }>
+}) {
+    const { billNumber, actionId } = await searchParams
 
     if ( ! billNumber ) {
         return <FindBillForm />
@@ -59,6 +66,7 @@ export default async function RecordVotePage({ searchParams }: { searchParams: P
             <RecordVoteContent
                 bill={bill}
                 committee={committee}
+                actionId={actionId}
             />
         </>
     )

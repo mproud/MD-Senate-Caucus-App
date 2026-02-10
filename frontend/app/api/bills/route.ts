@@ -142,10 +142,10 @@ export async function GET(request: NextRequest) {
 
     if (status) {
         // This is just a string for now, search
-        and.push({ statusDesc: { contains: status, mode: "insensitive" } })
+        // and.push({ statusDesc: { contains: status, mode: "insensitive" } })
         
         // To use the machine status code instead...
-        // and.push({ statusCode: { equals: status } })
+        and.push({ statusCode: { equals: status } })
     }
 
     if (committee) {

@@ -48,9 +48,14 @@ type CommitteesApiResponse = {
 interface VoteFormProps {
     billNumber: string
     voteType: "committee" | "floor"
+    mode?: "create" | "edit"
+    action?: any
+    onSaved?: () => void
+    trigger?: React.ReactNode
 }
 
-export function VoteForm({ billNumber, voteType }: VoteFormProps) {
+// export function VoteForm({ billNumber, voteType }: VoteFormProps) {
+export function VoteForm({ billNumber, voteType, mode = "create", action, onSaved, trigger }: VoteFormProps) {
     const [open, setOpen] = useState(false)
     const [loading, setLoading] = useState(false)
     const router = useRouter()
@@ -74,6 +79,28 @@ export function VoteForm({ billNumber, voteType }: VoteFormProps) {
         excused: "",
         details: "",
     })
+
+    useEffect(() => {
+        if (!open) return
+        if (mode !== "edit" || !action) return
+
+        const dateStr = action.actionDate ? new Date(action.actionDate).toISOString().split("T")[0] : new Date().toISOString().split("T")[0]
+
+        setFormData({
+            date: dateStr,
+            committeeId: action.committeeId ?? null,
+            committeeChamber: action.chamber ?? null,
+            chamber: (action.chamber ?? "HOUSE") as "HOUSE" | "SENATE",
+            voteTypeFloor: (action.motion ?? (action.dataSource?.voteType ?? "Third Reading")) as any,
+            result: action.voteResult ?? "",
+            yeas: action.yesVotes != null ? String(action.yesVotes) : "",
+            nays: action.noVotes != null ? String(action.noVotes) : "",
+            absent: action.absent != null ? String(action.absent) : "",
+            notVoting: action.notVoting != null ? String(action.notVoting) : "",
+            excused: action.excused != null ? String(action.excused) : "",
+            details: action.notes ?? "",
+        })
+    }, [open, mode, action])
 
     const [committees, setCommittees] = useState<Committee[]>([])
     const [committeesLoading, setCommitteesLoading] = useState(false)
@@ -183,31 +210,67 @@ export function VoteForm({ billNumber, voteType }: VoteFormProps) {
                           notVoting: formData.notVoting ? Number.parseInt(formData.notVoting) : undefined,
                       }
 
+            // const response = await fetch(`/api/bills/${billNumber}/votes`, {
+            //     method: "POST",
+            //     headers: { "Content-Type": "application/json" },
+            //     body: JSON.stringify(voteData),
+            // })
+            const payload =
+                mode === "edit"
+                    ? {
+                        actionId: action?.id,
+                        ...voteData,
+                        details: formData.details || undefined,
+                    }
+                    : voteData
+
             const response = await fetch(`/api/bills/${billNumber}/votes`, {
-                method: "POST",
+                method: mode === "edit" ? "PUT" : "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(voteData),
+                body: JSON.stringify(payload),
             })
 
             if (!response.ok) throw new Error("Failed to add vote")
 
+            // setOpen(false)
+            // setCommitteePickerOpen(false)
+            // setFormData({
+            //     date: new Date().toISOString().split("T")[0],
+            //     committeeId: null,
+            //     committeeChamber: null,
+            //     chamber: "HOUSE",
+            //     voteTypeFloor: "Third Reading",
+            //     result: "",
+            //     yeas: "",
+            //     nays: "",
+            //     absent: "",
+            //     notVoting: "",
+            //     excused: "",
+            //     details: "",
+            // })
+            // router.refresh()
             setOpen(false)
             setCommitteePickerOpen(false)
-            setFormData({
-                date: new Date().toISOString().split("T")[0],
-                committeeId: null,
-                committeeChamber: null,
-                chamber: "HOUSE",
-                voteTypeFloor: "Third Reading",
-                result: "",
-                yeas: "",
-                nays: "",
-                absent: "",
-                notVoting: "",
-                excused: "",
-                details: "",
-            })
+
+            if (mode === "create") {
+                setFormData({
+                    date: new Date().toISOString().split("T")[0],
+                    committeeId: null,
+                    committeeChamber: null,
+                    chamber: "HOUSE",
+                    voteTypeFloor: "Third Reading",
+                    result: "",
+                    yeas: "",
+                    nays: "",
+                    absent: "",
+                    notVoting: "",
+                    excused: "",
+                    details: "",
+                })
+            }
+
             router.refresh()
+            if (onSaved) onSaved()
         } catch (error) {
             console.error("Error adding vote:", error)
             alert("Failed to add vote. Please try again.")
@@ -219,11 +282,16 @@ export function VoteForm({ billNumber, voteType }: VoteFormProps) {
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-                <Button size="sm" variant="outline">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add {voteType === "committee" ? "Committee" : "Floor"} Vote
-                </Button>
+                {trigger ? (
+                    trigger
+                ) : (
+                    <Button size="sm" variant="outline">
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add {voteType === "committee" ? "Committee" : "Floor"} Vote
+                    </Button>
+                )}
             </DialogTrigger>
+
             <DialogContent className="max-w-md">
                 <form onSubmit={handleSubmit}>
                     <DialogHeader>
