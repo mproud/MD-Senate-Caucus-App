@@ -137,6 +137,8 @@ export async function GET(request: NextRequest) {
         const startDateParam = searchParams.get("startDate")
         const endDateParam = searchParams.get("endDate")
 
+        const chamberParam = searchParams.get("chamber")
+
         // (optional) single-day param
         const dateParam = searchParams.get("date")
 
@@ -184,10 +186,18 @@ export async function GET(request: NextRequest) {
 
         const activeSessionCode = await getActiveSessionCode()
 
-        const where: Prisma.FloorCalendarWhereInput = {
-            calendarDate: { gte: start, lte: end },
+        const where: Prisma.FloorCalendarWhereInput = {            
+             // @NOTE 10 FEB 26 - trying to fix dates??
+            OR: [
+                { createdAt: { gte: start, lte: end }},
+                { calendarDate: { gte: start, lte: end }}, 
+            ],
             chamber: "SENATE",
             sessionCode: activeSessionCode,
+        }
+
+        if ( chamberParam && chamberParam?.toUpperCase() == "HOUSE" ) {
+            where.chamber = "HOUSE"
         }
 
         if (hiddenTypes.length > 0) {
@@ -197,7 +207,8 @@ export async function GET(request: NextRequest) {
         const calendars = await prisma.floorCalendar.findMany({
             where,
             orderBy: [
-                { calendarDate: "desc" },
+                // { calendarDate: "desc" }, @NOTE 10 FEB 26 - trying to fix dates??
+                { createdAt: "desc" },
             ],
             include: {
                 committee: true,
