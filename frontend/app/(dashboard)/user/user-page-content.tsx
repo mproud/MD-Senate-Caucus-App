@@ -125,6 +125,13 @@ const alertTypes: AlertType[] = [
         description: "When a previously scheduled hearing is canceled",
         default: false,
     },
+    {
+        kind: "WITHDRAWN",
+        key: "withdrawn",
+        label: "Withdrawn",
+        description: "When a bill has been withdrawn",
+        default: false,
+    },
 ]
 
 export function UserSettingsPageContent( props: UserSettingsPageProps ) {

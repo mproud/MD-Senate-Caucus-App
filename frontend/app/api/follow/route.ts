@@ -51,6 +51,7 @@ const BillEventTypeSchema = z.enum([
     "HEARING_CANCELED",
     "CALENDAR_PUBLISHED",
     "CALENDAR_UPDATED",
+    "WITHDRAWN",
 ])
 
 const CreateAlertBodySchema = z.object({

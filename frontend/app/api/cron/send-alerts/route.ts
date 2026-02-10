@@ -237,6 +237,7 @@ const EVENT_TYPE_LABELS: Record<string, string> = {
     HEARING_CANCELED: "Hearing canceled",
     CALENDAR_PUBLISHED: "Calendar published",
     CALENDAR_UPDATED: "Calendar updated",
+    WITHDRAWN: "Withdrawn",
 }
 
 function humanizeEventType(eventType: string, summary?: string): string {
@@ -431,6 +432,7 @@ const EVENT_TYPE_TO_PREFERENCE_KEY: Partial<Record<BillEventType, keyof EnabledA
     HEARING_SCHEDULED: "hearingScheduled",
     HEARING_CHANGED: "hearingScheduled",
     HEARING_CANCELED: "hearingScheduled",
+    WITHDRAWN: "withdrawn",
 }
 
 function eventTypeToPreferenceKey(eventType: BillEventType): keyof EnabledAlertTypes | null {
@@ -478,6 +480,8 @@ function eventTypeToAlertType(eventType: BillEventType): AlertType {
         case "CALENDAR_PUBLISHED":
         case "CALENDAR_UPDATED":
             return AlertType.CALENDAR
+        case "WITHDRAWN":
+            return AlertType.WITHDRAWN
         default:
             return AlertType.CUSTOM
     }
