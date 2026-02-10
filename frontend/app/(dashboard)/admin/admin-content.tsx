@@ -31,7 +31,8 @@ import { Badge } from "@/components/ui/badge"
 import {
     UserPlus, Trash2, Mail, Shield, Clock, Users, ShieldAlert, Settings, Save, ListTodo,
     UserCheck, Database, XCircle, Loader2, CheckCircle2, Play, AlertTriangle, RotateCw, CloudSync, 
-    History} from "lucide-react"
+    History,
+    Lectern} from "lucide-react"
 import { useUser } from "@clerk/nextjs"
 import { useRouter } from "next/navigation"
 import clsx from "clsx"
@@ -39,6 +40,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { sessionCodeOptions } from "@/lib/config"
 import { type ScrapeRun, scraperKinds } from "@/lib/scraper-client"
 import { TabEventHistory } from "./tab-event-history"
+import TabCaucuses from "./tab-caucuses"
 
 interface User {
     id: string
@@ -555,10 +557,17 @@ export const AdminContent = () => {
                             </Badge>
                         )}
                     </TabsTrigger>
+
                     <TabsTrigger value="settings" className="flex items-center gap-2">
                         <Settings className="h-4 w-4" />
                         Settings
                     </TabsTrigger>
+
+                    <TabsTrigger value="caucuses" className="flex items-center gap-2">
+                        <Lectern className="h-4 w-4" />
+                        Caucuses
+                    </TabsTrigger>
+
                     <TabsTrigger value="event-history" className="flex items-center gap-2">
                         <History className="h-4 w-4" />
                         Event History
@@ -1249,6 +1258,10 @@ export const AdminContent = () => {
                     ) : (
                         <div className="text-center py-8 text-muted-foreground">Failed to load settings</div>
                     )}
+                </TabsContent>
+
+                <TabsContent value="caucuses" className="space-y-6">
+                    <TabCaucuses />
                 </TabsContent>
 
                 <TabsContent value="event-history" className="space-y-6">
