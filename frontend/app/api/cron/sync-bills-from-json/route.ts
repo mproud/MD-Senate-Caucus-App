@@ -1196,7 +1196,10 @@ export async function GET( request: Request ) {
                         },
                     }
                 })
-            } else if ( existingBill.statusDesc !== statusDesc ) {
+            } else if (
+                existingBill.statusDesc !== statusDesc ||
+                ( existingBill.statusDesc == "In the Senate - Hearing canceled" && existingBill.id == 631039 )
+            ) {
                 const oldStatus = existingBill?.statusDesc ?? null
                 const newStatus = statusDesc
 
@@ -1248,7 +1251,14 @@ export async function GET( request: Request ) {
                 // Only do hearing logic if the change touches hearing-related statuses
                 const touchesHearing = oldHearing.isHearingRelated || newHearing.isHearingRelated
 
+                console.log( 'Hearing Related', {
+                    oldHearing,
+                    newHearing,
+                    touchesHearing,
+                })
+
                 if (touchesHearing && hearingInfoChanged(oldHearing, newHearing)) {
+                    console.log('Hearing related -- 1261')
                     // 1) HEARING_CHANGED for any hearing-related change
                     await prisma.billEvent.create({
                         data: {
@@ -1278,6 +1288,7 @@ export async function GET( request: Request ) {
 
                     // 2) HEARING_CANCELED when it becomes canceled (and it wasn't already canceled)
                     if (newHearing.isHearingRelated && newHearing.isCanceled && !oldHearing.isCanceled) {
+                        console.log('Hearing related -- 1291')
                         await prisma.billEvent.create({
                             data: {
                                 billId: bill.id,
@@ -1307,6 +1318,7 @@ export async function GET( request: Request ) {
                         (!!newHearing.hearingAt || !oldHearing.isHearingRelated || oldHearing.isCanceled)
 
                     if (becameScheduled) {
+                        console.log('Hearing related -- 1321')
                         await prisma.billEvent.create({
                             data: {
                                 billId: bill.id,
