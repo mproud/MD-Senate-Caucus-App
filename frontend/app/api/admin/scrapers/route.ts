@@ -32,23 +32,25 @@ export async function GET() {
             latestByKind.set(scraper.kind, latestRun)
         }
 
-        // Build summary for each scraper kind
-        const scraperSummaries = scraperKinds.map((scraper) => {
-            const latestRun = latestByKind.get(scraper.kind)
-            const allKindRuns = allRuns.filter((r) => r.kind === scraper.kind)
+        const scraperSummaries = await Promise.all(
+            scraperKinds.map(async (scraper) => {
+                const latestRun = latestByKind.get(scraper.kind)
+                const allKindRuns = await getScrapeRunsByKind(scraper.kind)
 
-            return {
-                ...scraper,
-                latestRun,
-                totalRuns: allKindRuns.length,
-                successRate:
-                    allKindRuns.length > 0
-                    ? Math.round((allKindRuns.filter((r) => r.success).length / allKindRuns.length) * 100)
-                    : 0,
+                return {
+                    ...scraper,
+                    latestRun,
+                    totalRuns: allKindRuns.length,
+                    successRate:
+                        allKindRuns.length > 0
+                            ? Math.round((allKindRuns.filter((r) => r.success).length / allKindRuns.length) * 100)
+                            : 0
                 }
-        })
+            })
+        )
 
         return NextResponse.json({
+            scraperKinds,
             scrapers: scraperSummaries,
             recentRuns: allRuns.slice(0, 50),
         })
