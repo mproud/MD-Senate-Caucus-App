@@ -50,6 +50,7 @@ enum AlertType {
   COMMITTEE_ACTION
   HEARING
   CUSTOM
+  WITHDRAWN
 }
 
 /// How alerts should be delivered -- default to email but just in case...
