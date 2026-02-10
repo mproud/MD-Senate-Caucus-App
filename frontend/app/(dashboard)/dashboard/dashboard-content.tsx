@@ -233,7 +233,7 @@ export const DashboardContent = () => {
 
             {loading ? (
                 <div className="mt-8">
-                    <Card>
+                    <Card className="hidden">
                         <CardHeader>
                             <CardTitle>At A Glance</CardTitle>
                             <CardDescription>Recent changes to bills you're following</CardDescription>
@@ -254,7 +254,7 @@ export const DashboardContent = () => {
             ) : (
                 ( followingBills ) && (
                     <div className="mt-8">
-                        <Card>
+                        <Card className="hidden">
                             <CardHeader>
                                 <CardTitle>At A Glance</CardTitle>
                             <CardDescription>Recent changes to bills you're following</CardDescription>

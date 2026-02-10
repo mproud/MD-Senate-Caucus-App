@@ -187,7 +187,7 @@ export function BillHeader({ bill }: BillHeaderProps) {
                     </div>
 
                     <div className="flex items-center gap-2">
-                        <Button
+                        {/* <Button
                             variant={isFollowing ? "default" : "outline"}
                             size="sm"
                             onClick={handleFollowToggle}
@@ -204,7 +204,7 @@ export function BillHeader({ bill }: BillHeaderProps) {
                                     Follow
                                 </>
                             )}
-                        </Button>
+                        </Button> */}
 
                         { isAdmin && (
                             <Button
