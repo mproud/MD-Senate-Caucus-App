@@ -72,6 +72,7 @@ type LegislatorLookup = {
     id: number
     fullName: string
     firstName: string | null
+    middleName: string | null
     lastName: string | null
     // chamber: 'HOUSE' | 'SENATE'
     terms: { chamber: Chamber }[]
@@ -108,6 +109,109 @@ function deriveIsLocal(item: RawBill): boolean {
     return broadSubjects.some((s) => s?.Name?.includes('Local Bills'))
 }
 
+type HearingStatusInfo = {
+    isHearingRelated: boolean
+    isCanceled: boolean
+    // best-effort parse; ok if null
+    hearingAt: Date | null
+    // normalized string we can compare when Date parse fails
+    normalized: string | null
+}
+
+function normalizeStatusForCompare(s: string | null | undefined): string | null {
+    if (!s) return null
+    const t = String(s).trim()
+    if (!t) return null
+    return t.replace(/\s+/g, ' ').trim().toLowerCase()
+}
+
+function isWithdrawnStatus(status: string | null | undefined): boolean {
+    const norm = normalizeStatusForCompare(status)
+    if (!norm) return false
+
+    // Covers common variants like "Withdrawn", "Withdrawn by Sponsor", "Bill Withdrawn"
+    return /\bwithdrawn\b/.test(norm)
+}
+
+// Best-effort parse of MGA status strings like:
+// - "Hearing 2/19 at 1:00pm"
+// - "Hearing 02/19 1:00 PM"
+// - "Hearing Canceled"
+// If we can't parse a datetime, we still mark it hearing-related if it starts with "Hearing".
+function parseHearingStatus(status: string | null, sessionYear: number): HearingStatusInfo {
+    const norm = normalizeStatusForCompare(status)
+
+    if (!norm) {
+        return { isHearingRelated: false, isCanceled: false, hearingAt: null, normalized: null }
+    }
+
+    // MGA statuses we care about generally begin with "Hearing"
+    const isHearingRelated = norm.startsWith('hearing')
+    if (!isHearingRelated) {
+        return { isHearingRelated: false, isCanceled: false, hearingAt: null, normalized: norm }
+    }
+
+    const isCanceled = /\bcancel+l?ed\b/.test(norm) // matches canceled/cancelled
+
+    // Try to parse date/time: "hearing 2/19 at 1:00pm"
+    // We'll assume the sessionYear as the year.
+    // Support optional "at" and optional space before am/pm.
+    const m = norm.match(
+        /hearing\s+(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?(?:\s*(?:at)?\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm))?/i
+    )
+
+    if (!m) {
+        return { isHearingRelated: true, isCanceled, hearingAt: null, normalized: norm }
+    }
+
+    const month = Number(m[1])
+    const day = Number(m[2])
+    const yearFromStr = m[3] ? Number(m[3].length === 2 ? `20${m[3]}` : m[3]) : sessionYear
+
+    // If time isn't present, leave hearingAt null (still hearing-related)
+    const hourRaw = m[4] ? Number(m[4]) : null
+    const minute = m[5] ? Number(m[5]) : 0
+    const ampm = m[6] ? String(m[6]).toLowerCase() : null
+
+    if (!hourRaw || !ampm) {
+        return { isHearingRelated: true, isCanceled, hearingAt: null, normalized: norm }
+    }
+
+    // convert to 24h
+    let hour = hourRaw % 12
+    if (ampm === 'pm') hour += 12
+
+    // Use local time; if you want ET explicitly you’d handle tz elsewhere
+    const hearingAt = new Date(yearFromStr, month - 1, day, hour, minute, 0, 0)
+
+    // Invalid date guard
+    if (Number.isNaN(hearingAt.getTime())) {
+        return { isHearingRelated: true, isCanceled, hearingAt: null, normalized: norm }
+    }
+
+    return { isHearingRelated: true, isCanceled, hearingAt, normalized: norm }
+}
+
+function hearingInfoChanged(a: HearingStatusInfo, b: HearingStatusInfo): boolean {
+    // If either side isn't hearing-related, treat as change only if the other is hearing-related
+    if (a.isHearingRelated !== b.isHearingRelated) return true
+
+    // both non-hearing => not hearing-change
+    if (!a.isHearingRelated && !b.isHearingRelated) return false
+
+    // canceled flag change is a hearing change
+    if (a.isCanceled !== b.isCanceled) return true
+
+    // If both have datetimes, compare timestamp
+    if (a.hearingAt && b.hearingAt) return a.hearingAt.getTime() !== b.hearingAt.getTime()
+
+    // If one has datetime and the other doesn't, treat as change
+    if (!!a.hearingAt !== !!b.hearingAt) return true
+
+    // Fallback to normalized string compare if needed
+    return (a.normalized ?? null) !== (b.normalized ?? null)
+}
+
 
 /**
  * Build an in-memory index of active legislators, grouped by last name.
@@ -122,6 +226,7 @@ async function buildLegislatorIndex(): Promise<LegislatorIndex> {
             id: true,
             fullName: true,
             firstName: true,
+            middleName: true,
             lastName: true,
             terms: {
                 select: {
@@ -133,12 +238,30 @@ async function buildLegislatorIndex(): Promise<LegislatorIndex> {
 
     const index: LegislatorIndex = {}
 
+    // Update this to handle two part last names
+    // for (const leg of legislators) {
+    //     const key = (leg.lastName || '').trim().toLowerCase()
+    //     if ( ! key ) continue
+    //     if ( ! index[key] ) index[key] = []
+    //     index[key].push( leg )
+    // }
+
     for (const leg of legislators) {
-        const key = (leg.lastName || '').trim().toLowerCase()
-        if ( ! key ) continue
-        if ( ! index[key] ) index[key] = []
-        index[key].push( leg )
+        const rawLast = (leg.lastName || "").trim()
+        if (!rawLast) continue
+
+        const lastLower = rawLast.toLowerCase()
+        if (!index[lastLower]) index[lastLower] = []
+        index[lastLower].push(leg)
+
+        const middle = (leg.middleName || "").trim()
+        if (middle) {
+            const composite = `${middle} ${rawLast}`.replace(/\s+/g, " ").trim().toLowerCase()
+            if (!index[composite]) index[composite] = []
+            index[composite].push(leg)
+        }
     }
+
 
     return index
 }
@@ -1018,6 +1141,40 @@ export async function GET( request: Request ) {
                 }
             }
 
+            // Handle if a bill is withdrawn already (this may be temporary to process past events)
+            const isWithdrawnNow = isWithdrawnStatus(statusDesc)
+
+            if (isWithdrawnNow) {
+                const withdrawnExists = await prisma.billEvent.findFirst({
+                    where: {
+                        billId: bill.id,
+                        eventType: BillEventType.WITHDRAWN
+                    },
+                    select: { id: true }
+                })
+
+                if (!withdrawnExists) {
+                    await prisma.billEvent.create({
+                        data: {
+                            billId: bill.id,
+                            eventType: BillEventType.WITHDRAWN,
+                            chamber: originChamber,
+                            eventTime: new Date(item.StatusCurrentAsOf || Date.now()),
+                            summary: `${billNumber}: Withdrawn`,
+                            payload: {
+                                oldStatus: existingBill?.statusDesc ?? null,
+                                newStatus: statusDesc,
+                                sessionYear,
+                                sessionCode,
+                                backfilled: true,
+                                source: "legislation.json"
+                            }
+                        }
+                    })
+                }
+            }
+            // End withdrawn patch
+
 
             // @HERE
 
@@ -1040,6 +1197,9 @@ export async function GET( request: Request ) {
                     }
                 })
             } else if ( existingBill.statusDesc !== statusDesc ) {
+                const oldStatus = existingBill?.statusDesc ?? null
+                const newStatus = statusDesc
+
                 await prisma.billEvent.create({
                     data: {
                         billId: bill.id,
@@ -1059,6 +1219,112 @@ export async function GET( request: Request ) {
                         // processedForAlerts defaults to false
                     },
                 })
+
+                const wasWithdrawn = isWithdrawnStatus(oldStatus)
+                const isWithdrawn = isWithdrawnStatus(newStatus)
+
+                if (isWithdrawn && !wasWithdrawn) {
+                    await prisma.billEvent.create({
+                        data: {
+                            billId: bill.id,
+                            eventType: BillEventType.WITHDRAWN,
+                            chamber: originChamber,
+                            eventTime: new Date(),
+                            summary: `${billNumber}: Withdrawn`,
+                            payload: {
+                                oldStatus,
+                                newStatus,
+                                sessionYear,
+                                sessionCode
+                            }
+                        }
+                    })
+                }
+
+                // Hearing-specific events (in addition)
+                const oldHearing = parseHearingStatus(oldStatus, sessionYear)
+                const newHearing = parseHearingStatus(newStatus, sessionYear)
+
+                // Only do hearing logic if the change touches hearing-related statuses
+                const touchesHearing = oldHearing.isHearingRelated || newHearing.isHearingRelated
+
+                if (touchesHearing && hearingInfoChanged(oldHearing, newHearing)) {
+                    // 1) HEARING_CHANGED for any hearing-related change
+                    await prisma.billEvent.create({
+                        data: {
+                            billId: bill.id,
+                            eventType: BillEventType.HEARING_CHANGED,
+                            chamber: originChamber,
+                            eventTime: newHearing.hearingAt ?? oldHearing.hearingAt ?? new Date(),
+                            summary: `${billNumber}: Hearing status changed`,
+                            payload: {
+                                oldStatus,
+                                newStatus,
+                                oldHearing: {
+                                    isCanceled: oldHearing.isCanceled,
+                                    hearingAt: oldHearing.hearingAt ? oldHearing.hearingAt.toISOString() : null,
+                                    normalized: oldHearing.normalized,
+                                },
+                                newHearing: {
+                                    isCanceled: newHearing.isCanceled,
+                                    hearingAt: newHearing.hearingAt ? newHearing.hearingAt.toISOString() : null,
+                                    normalized: newHearing.normalized,
+                                },
+                                sessionYear,
+                                sessionCode,
+                            },
+                        },
+                    })
+
+                    // 2) HEARING_CANCELED when it becomes canceled (and it wasn't already canceled)
+                    if (newHearing.isHearingRelated && newHearing.isCanceled && !oldHearing.isCanceled) {
+                        await prisma.billEvent.create({
+                            data: {
+                                billId: bill.id,
+                                eventType: BillEventType.HEARING_CANCELED,
+                                chamber: originChamber,
+                                eventTime: new Date(),
+                                summary: `${billNumber}: Hearing canceled`,
+                                payload: {
+                                    oldStatus,
+                                    newStatus,
+                                    sessionYear,
+                                    sessionCode,
+                                },
+                            },
+                        })
+                    }
+
+                    // 3) HEARING_SCHEDULED when it becomes a scheduled hearing (not canceled) and we now have a hearing status
+                    // Covers:
+                    // - no hearing -> hearing ...
+                    // - hearing canceled -> hearing <date/time>
+                    // - hearing ... -> hearing ... (date/time changed) doesn't need SCHEDULED, only CHANGED
+                    const becameScheduled =
+                        newHearing.isHearingRelated &&
+                        !newHearing.isCanceled &&
+                        // treat as "scheduled" if we have a datetime OR we at least moved into a non-cancel hearing status
+                        (!!newHearing.hearingAt || !oldHearing.isHearingRelated || oldHearing.isCanceled)
+
+                    if (becameScheduled) {
+                        await prisma.billEvent.create({
+                            data: {
+                                billId: bill.id,
+                                eventType: BillEventType.HEARING_SCHEDULED,
+                                chamber: originChamber,
+                                eventTime: newHearing.hearingAt ?? new Date(),
+                                summary: `${billNumber}: Hearing scheduled`,
+                                payload: {
+                                    oldStatus,
+                                    newStatus,
+                                    hearingAt: newHearing.hearingAt ? newHearing.hearingAt.toISOString() : null,
+                                    sessionYear,
+                                    sessionCode,
+                                },
+                            },
+                        })
+                    }
+                }
             }
 
             // Record vote/actions for origin + opposite chamber
