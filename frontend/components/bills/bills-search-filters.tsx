@@ -102,6 +102,7 @@ export function BillsSearchFilters({
     }
 
     const chambers = ["Senate", "House"]
+
     const statuses = [
         "First Reading",
         "Second Reading",
@@ -110,6 +111,13 @@ export function BillsSearchFilters({
         "Failed",
         "In Committee",
         "Signed by Governor",
+    ]
+
+    const extendedStatuses = [
+        { key: "FIRST_READING", label: "First Reading" },
+        { key: "SECOND_READING", label: "Second Reading" },
+        { key: "THIRD_READING", label: "Third Reading" },
+        { key: "PASSED", label: "Passed" },
     ]
 
     return (
