@@ -29,7 +29,7 @@ export async function getLatestScrapeRun( kind?: string ) {
 export async function getAllScrapeRuns() {
     return prisma.scrapeRun.findMany({
         orderBy: [{ startedAt: "desc" }],
-        take: 50,
+        take: 100,
     })
 }
 
