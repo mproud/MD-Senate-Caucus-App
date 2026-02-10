@@ -3,6 +3,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { formatLongDate } from "@/lib/utils"
 import { useUser } from "@clerk/nextjs"
 import { Bill, BillEvent } from "@prisma/client"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 
@@ -72,7 +73,17 @@ export const TabEventHistory = () => {
                                 {events.map((event) => {
                                     return (
                                         <TableRow key={event.id}>
-                                            <TableCell>{event.billId} { event.bill ? `(${event.bill?.billNumber})` : "-"}</TableCell>
+                                            <TableCell>
+                                                {event.billId}
+                                                { event.bill && (
+                                                    <>
+                                                        {" "}(
+                                                            <Link href={`/bills/${event.bill?.billNumber}`} target="_blank">
+                                                                {event.bill?.billNumber}
+                                                            </Link>
+                                                        )
+                                                    </>
+                                                )}</TableCell>
                                             <TableCell>{event.eventType}</TableCell>
                                             <TableCell>{formatLongDate(event.createdAt)}</TableCell>
                                             <TableCell>{event.chamber}</TableCell>
