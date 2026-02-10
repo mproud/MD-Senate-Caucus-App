@@ -1228,7 +1228,7 @@ export const AdminContent = () => {
                                             />
 
                                             <p className="text-sm text-muted-foreground">
-                                                Specify how many days into the future the scraper should check for new data or events
+                                                Specify how many additional days into the future the scraper should check for agendas and items.
                                             </p>
                                         </div>
 
