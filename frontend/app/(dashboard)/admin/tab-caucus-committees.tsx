@@ -130,7 +130,7 @@ export const TabCaucusCommittees = () => {
         try {
             const res = await fetch("/api/admin/caucus-committees")
             if (!res.ok) return
-            const data = (await res.json()) as CaucusCommitteesResponse
+            const data = (await res.json()) as Partial<CaucusCommitteesResponse>
             const next: Committee[] = data.committees || []
             setCommittees(next)
 
