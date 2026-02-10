@@ -50,7 +50,7 @@ export async function GET() {
 
         return NextResponse.json({
             scrapers: scraperSummaries,
-            recentRuns: allRuns.slice(0, 20),
+            recentRuns: allRuns.slice(0, 50),
         })
     } catch (error) {
         console.error("Failed to fetch scrapers:", error)
