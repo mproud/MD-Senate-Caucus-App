@@ -10,10 +10,10 @@ export default function DashboardLayout({
     return (
         <>
             <div className="min-h-screen bg-background">
-                <div className="w-full bg-red-700 text-white border-b border-red-900 print:hidden">
+                <div className="w-full bg-orange-300 text-black border-b border-red-900 print:hidden">
                     <div className="mx-auto max-w-7xl px-4 py-2 text-center text-sm">
                         <strong>Maintenance Notice:</strong>{" "}
-                        Automated vote processing has been temporarily suspended to diagnose an issue.
+                        Automated vote processing has been fixed and will be manually running to verify the issue has been resolved.
                     </div>
                 </div>
 
