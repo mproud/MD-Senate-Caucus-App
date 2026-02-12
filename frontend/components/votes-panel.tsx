@@ -8,6 +8,7 @@ import { VoteBreakdownModal } from "@/components/vote-breakdown-modal"
 import { VoteForm } from "@/components/vote-form"
 import { toast } from "sonner"
 import Link from "next/link"
+import { VoteBreakdownModalV2 } from "./vote-breakdown-modal-v2"
 
 type Party = "Democrat" | "Republican"
 
@@ -173,9 +174,19 @@ export function VotesPanel({
     return (
         <div className="space-y-4">
             {sorted.map((action) => {
-                const voteAi = (action.dataSource as any)?.voteAi
-                const status = voteAi?.status as string | undefined
-                const attempts = voteAi?.attempts as number | undefined
+                // const voteAi = (action.dataSource as any)?.voteAi
+                // const status = voteAi?.status as string | undefined
+                // const attempts = voteAi?.attempts as number | undefined
+
+                // V2 AI Vote Processing
+                const voteProcessing = (action.dataSource as any)?.voteProcessing
+                const status = voteProcessing?.status as string | undefined
+                const attempts = voteProcessing?.attempts as number | undefined
+
+                // Figure out what approach to use instead of "kind == committee"
+                if ( voteProcessing ) {
+                    // ????
+                }
 
                 const showAiRefetch = status === "FAILED" || status === "DONE"
 
@@ -227,9 +238,14 @@ export function VotesPanel({
                             </div>
 
                             <div className="flex items-center gap-2 flex-wrap justify-end">
-                                <VoteBreakdownModal action={action} />
+                                
+                                { kind === "committee" ? (
+                                    <VoteBreakdownModal action={action} />
+                                ): (
+                                    <VoteBreakdownModalV2 action={action} />
+                                )}
 
-                                {aiLabel && (
+                                {kind === "committee" && aiLabel && (
                                     <Button asChild size="sm" variant="outline">
                                         <Link href={`/record-vote?billNumber=${billNumber}&actionId=${action.id}`}>
                                             Edit Committee Vote
