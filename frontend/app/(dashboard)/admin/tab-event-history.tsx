@@ -78,7 +78,7 @@ export const TabEventHistory = () => {
                                                 { event.bill && (
                                                     <>
                                                         {" "}(
-                                                            <Link href={`/bills/${event.bill?.billNumber}`} target="_blank">
+                                                            <Link href={`/bills/${event.bill?.billNumber}?activeTab=votes`} target="_blank">
                                                                 {event.bill?.billNumber}
                                                             </Link>
                                                         )
