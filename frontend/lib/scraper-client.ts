@@ -51,7 +51,13 @@ export const scraperKinds = [
     },
     {
         kind: "PROCESS_COMMITTEE_VOTES",
-        name: "Process Committee and Floor Vote Sheets",
+        name: "Process Committee Vote Sheets",
+        description: "Runs every five minutes from 7am to 10pm",
+        endpoint: "process-votes-ai",
+    },
+    {
+        kind: "PROCESS_FLOOR_VOTES",
+        name: "Process Floor Vote Sheets",
         description: "Runs every five minutes from 7am to 10pm",
         endpoint: "process-votes-ai-v2",
     },

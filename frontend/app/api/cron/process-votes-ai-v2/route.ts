@@ -1982,7 +1982,7 @@ export const GET = async ( request: Request) => {
     const hardMaximum = 25
     const safeLimit = Number.isFinite(limit) ? Math.min( Math.max(limit, 1), hardMaximum ) : 25
 
-    const run = await startScrapeRun('PROCESS_COMMITTEE_VOTES')
+    const run = await startScrapeRun('PROCESS_FLOOR_VOTES')
 
     try {
         // Handle when a single bill action is requested
