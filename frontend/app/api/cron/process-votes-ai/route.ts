@@ -175,35 +175,55 @@ async function createCommitteeVoteRecordedEvent(args: {
         select: { id: true }
     })
 
+    let id = null
+
     if (existing) {
         console.log("Existing Event found", { existing })
-        return existing.id
+        id = existing.id
+    } else {
+        // NEW: make summary a bit more specific using committee name
+        const summary = committee.name
+            ? `Committee vote recorded from MGA site (${committee.name})`
+            : "Committee vote recorded from MGA site"
+
+        const created = await args.tx.billEvent.create({
+            data: {
+                billId: args.billId,
+                committeeId: args.committeeId,
+                chamber: committee.chamber, // NEW: populate chamber from committee
+                eventType: BillEventType.COMMITTEE_VOTE_RECORDED,
+                summary,
+                payload: {
+                    actionId: args.billActionId,
+                    source: "ai-vote",
+                    pdf: args.pdfUrl
+                } as Prisma.JsonObject
+            },
+            select: { id: true }
+        })
+
+        console.log("Create new bill event", { created })
+        id = created.id
     }
 
-    // NEW: make summary a bit more specific using committee name
-    const summary = committee.name
-        ? `Committee vote recorded from MGA site (${committee.name})`
-        : "Committee vote recorded from MGA site"
-
-    const created = await args.tx.billEvent.create({
+    // Create a new event just for updating the results
+    await args.tx.billEvent.create({
         data: {
             billId: args.billId,
             committeeId: args.committeeId,
-            chamber: committee.chamber, // NEW: populate chamber from committee
-            eventType: BillEventType.COMMITTEE_VOTE_RECORDED,
-            summary,
+            chamber: committee.chamber,
+            eventType: BillEventType.COMMITTEE_VOTE_RESULTS_RECORDED,
+            summary: "Vote totals processed from PDF",
             payload: {
-                actionId: args.billActionId,
                 source: "ai-vote",
+                actionId: args.billActionId,
+                originalEventId: id,
                 pdf: args.pdfUrl
-            } as Prisma.JsonObject
-        },
-        select: { id: true }
+            },
+        }
     })
 
-    console.log("Create new bill event", { created })
-
-    return created.id
+    return id
 }
 
 
@@ -357,7 +377,10 @@ async function loadCommitteeRoster(committeeId: number) {
     const members = await prisma.committeeMember.findMany({
         where: {
             committeeId,
-            OR: [{ endDate: null }, { endDate: { gt: now } }]
+            OR: [
+                { endDate: null },
+                { endDate: { gt: now } }
+            ],
         },
         include: {
             legislator: true,
@@ -570,11 +593,41 @@ function validateAiVotePayload(args: {
     const computed = computeCountsFromMemberVotes(normalized.vote.memberVotes)
     const totals = normalized.vote.totalsRow
 
+    const expectedLength =
+        Number(totals.yeas) +
+        Number(totals.nays) +
+        Number(totals.abstain) +
+        Number(totals.excused) +
+        Number(totals.absent)
+
+    const uniqueCount = seen.size
+
     if (computed.yeas !== totals.yeas) errors.push(`Totals mismatch: computed yeas=${computed.yeas} but totalsRow yeas=${totals.yeas}`)
     if (computed.nays !== totals.nays) errors.push(`Totals mismatch: computed nays=${computed.nays} but totalsRow nays=${totals.nays}`)
     if (computed.abstain !== totals.abstain) errors.push(`Totals mismatch: computed abstain=${computed.abstain} but totalsRow abstain=${totals.abstain}`)
     if (computed.excused !== totals.excused) errors.push(`Totals mismatch: computed excused=${computed.excused} but totalsRow excused=${totals.excused}`)
     if (computed.absent !== totals.absent) errors.push(`Totals mismatch: computed absent=${computed.absent} but totalsRow absent=${totals.absent}`)
+
+    const underVoteCount = expectedLength - uniqueCount
+    if (underVoteCount > 0) {
+        // Build a set of all legislators seen in memberVotes
+        const votedIds = new Set(normalized.vote.memberVotes.map(v => v.memberId))
+
+        // Filter the roster to only those that aren't in memberVotes
+        const missingFromMemberVotes = args.roster.filter( r => !votedIds.has( r.memberId ))
+
+        console.log('Missing Members', { missingFromMemberVotes, length: args.roster.length })
+
+        errors.push(`Undervote detected: missing ${underVoteCount} memberVotes relative to totals`)
+
+        if (missingFromMemberVotes.length === 0) {
+            errors.push(`Unable to list missing legislators because all rosterIds appear present, but uniqueCount is still short. Check for non-roster ids or parsing errors.`)
+        } else if (missingFromMemberVotes.length <= 25) {
+            errors.push(`Missing legislators: ${missingFromMemberVotes.join(", ")}`)
+        } else {
+            errors.push(`Missing legislators (first 25): ${missingFromMemberVotes.join(", ")}. Total missing from roster: ${missingFromMemberVotes.length}`)
+        }
+    }
 
     return { errors, normalized }
 }
@@ -985,7 +1038,13 @@ async function saveAiVoteFailure(args: {
 /*
     Process a single BillAction ID using AI.
 */
-async function processVoteBillActionAi(billActionId: number) {
+async function processVoteBillActionAi( billActionId: number, options?: { force?: boolean }) {
+    const force = options?.force ?? false
+
+    if (force) {
+        console.log(`Force processing billActionId=${billActionId}`)
+    }
+
     const action = await prisma.billAction.findUnique({
         where: { id: billActionId },
         include: {
@@ -1012,7 +1071,7 @@ async function processVoteBillActionAi(billActionId: number) {
     const existingAi = ds.voteAi
     const attempts = (existingAi?.attempts ?? 0) + 1
 
-    if (!isDueToRun(existingAi, now)) {
+    if (!isDueToRun(existingAi, now) && ! force ) {
         return { billActionId, status: "SKIPPED" as const, reason: "Not due yet" }
     }
 
@@ -1192,6 +1251,12 @@ export async function GET(request: Request) {
         const url = new URL(request.url)
         const billActionIdParam = url.searchParams.get("billActionId")
         const limitParam = url.searchParams.get("limit")
+        const forceParam = url.searchParams.get("force")
+
+        const force =
+            forceParam === "1" ||
+            forceParam === "true" ||
+            forceParam === "yes"
 
         if (billActionIdParam) {
             const billActionId = Number(billActionIdParam)
@@ -1199,7 +1264,7 @@ export async function GET(request: Request) {
                 return NextResponse.json({ error: "Invalid billActionId" }, { status: 400 })
             }
 
-            const result = await processVoteBillActionAi(billActionId)
+            const result = await processVoteBillActionAi( billActionId, { force })
 
             return NextResponse.json({
                 mode: "single",

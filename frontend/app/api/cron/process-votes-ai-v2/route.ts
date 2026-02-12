@@ -868,7 +868,7 @@ const extractVotesWithAi = async ({ url, action }: { url: string; action: BillAc
         "Fix rules:",
         `- Output exactly ${validateAttempt1Result.expectedLength} entries`,
         "",
-        "Re-scan the PDF headings and find the missing name(s). They should be under Voting Yea.",
+        "Re-scan the PDF headings and find the missing name(s).",
         "",
         "Fix these issues and output corrected JSON:",
         ...validateAttempt1Result.errors.map(e => `- ${e}`)
