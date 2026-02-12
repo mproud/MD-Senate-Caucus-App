@@ -469,7 +469,7 @@ function formatCountsShort(counts: Required<VoteCounts> | null): string {
 function formatCountsBreakdown(counts: Required<VoteCounts> | null): string | null {
     if (!counts) return null
     // full breakdown like 8-2-0-1 (yea-nay-abstain-absent) + optionally excused/notVoting if you want
-    const core = `${counts.yesVotes}-${counts.noVotes}` // -${counts.abstain}-${counts.absent}`
+    const core = `${counts.yesVotes}-${counts.noVotes}-${counts.excused}-${counts.absent}`
     // const extras =
     //     counts.excused > 0 || counts.notVoting > 0
     //         ? ` (E:${counts.excused} NV:${counts.notVoting})`
