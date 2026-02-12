@@ -346,6 +346,8 @@ export function VotesPanel({
                         </div>
 
                         {action.notes && <p className="text-sm leading-relaxed">{action.notes}</p>}
+
+                        <p className="text-xs text-gray-600">{action.id}</p>
                     </div>
                 )
             })}
