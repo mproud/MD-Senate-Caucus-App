@@ -62,6 +62,9 @@ type ScrapedCommitteeMembership = {
     role: string                // "CHAIR" | "VICE_CHAIR" | "MEMBER"
 }
 
+// Store debugging output
+const debugging: any[] = []
+
 function normalizeSuffixToken(token: string): string {
     return token.replace(/\./g, "").toUpperCase()
 }
@@ -349,7 +352,7 @@ async function scrapeCommitteesFromIndex(
 async function scrapeCommitteeMembership(
     committeeCode: string
 ): Promise<ScrapedCommitteeMembership[]> {
-    const url = `${MGA_BASE}/Committees/Details?cmte=${committeeCode}`
+    const url = `${MGA_BASE}/Committees/Details?cmte=${encodeURIComponent(committeeCode)}`
     const $ = await fetchHtml(url)
 
     const memberships: ScrapedCommitteeMembership[] = []
@@ -605,13 +608,16 @@ async function upsertCommitteeMemberships(scraped: ScrapedCommitteeMembership[])
     // IMPORTANT: Loop all committees in DB so we can end-date memberships
     // even if a committee is missing from the scrape result
     const committees = await prisma.committee.findMany({
-        select: { id: true, externalId: true }
+        select: { id: true, externalId: true, name: true }
     })
 
     for (const committee of committees) {
         if (!committee.externalId) {
             continue
         }
+
+        console.log(`> Process committee ${committee.name}`)
+        // debugging.push({ name: committee.name, committee, scraped })
 
         const committeeCode = committee.externalId.toLowerCase()
         const scrapedMemberships = byCommitteeCode[committeeCode] ?? []
@@ -823,6 +829,7 @@ export const GET = async ( request: Request ) => {
             legislators: legislatorsCount,
             committees: committeesCount,
             memberships: membershipsCount,
+            debugging,
         })
     } catch (err) {
         console.error("MGA scraper error", err);
