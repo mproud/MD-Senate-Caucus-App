@@ -287,8 +287,7 @@ export async function GET(request: NextRequest) {
                     if (flaggedOnly && !bill.isFlagged) return false
 
                     // Hide withdrawn or unfavorable bills
-                    const outcome = getMostRelevantOutcomeForCalendar(bill)
-                    if (isHiddenOutcomeText(outcome)) return false
+                    if ( isHiddenOutcomeText( item.actionText ) ) return false
 
                     if (hideUnanimous) {
                         const latestVote = bill.actions?.[0]
