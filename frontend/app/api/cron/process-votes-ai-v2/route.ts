@@ -570,7 +570,7 @@ function computeNextAttemptAt(attempts: number) {
 }
 
 // Normalize the Floor Vote response from OpenAI
-export function normalizeVotePayload( payload: VotePayload ): VotePayload {
+function normalizeVotePayload( payload: VotePayload ): VotePayload {
     const { vote } = payload
 
     const normalizedMemberVotes = (vote.memberVotes ?? []).map(mv => ({
