@@ -24,10 +24,6 @@
     },
 
     {
-      "path": "/api/cron/process-votes-ai?limit=5",
-      "schedule": "*/5 0-3,12-23 * * *"
-    },
-    {
       "path": "/api/cron/process-votes-ai-v2?limit=5",
       "schedule": "*/5 0-3,12-23 * * *"
     },
