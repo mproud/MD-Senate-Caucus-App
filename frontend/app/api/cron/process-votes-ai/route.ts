@@ -391,13 +391,27 @@ async function loadCommitteeRoster(committeeId: number) {
 
     const committeeName = members[0]?.committee?.name ?? ""
 
+    // const roster = members.map(m => {
+    //     return {
+    //         memberId: m.id,
+    //         legislatorId: m.legislatorId,
+    //         memberName: m.legislator.fullName,
+    //         memberLastName: m.legislator.lastName ?? "",
+    //         memberFirstName: m.legislator.firstName ?? ""
+    //     }
+    // })
+
     const roster = members.map(m => {
+        const role = String(m.role ?? "").toLowerCase()
+        const isChair = role.includes("chair")
+
         return {
             memberId: m.id,
             legislatorId: m.legislatorId,
             memberName: m.legislator.fullName,
             memberLastName: m.legislator.lastName ?? "",
-            memberFirstName: m.legislator.firstName ?? ""
+            memberFirstName: m.legislator.firstName ?? "",
+            isChair
         }
     })
 
@@ -565,7 +579,7 @@ function normalizeAiVotePayload(payload: AiVotePayload) {
 */
 function validateAiVotePayload(args: {
     payload: AiVotePayload
-    roster: Array<{ memberId: number }>
+    roster: Array<{ memberId: number; isChair?: boolean }>
 }) {
     const errors: string[] = []
     const normalized = normalizeAiVotePayload(args.payload)
@@ -584,8 +598,15 @@ function validateAiVotePayload(args: {
         }
     }
 
+    const rosterMeta = new Map<number, { isChair: boolean }>()
+    for (const r of args.roster) {
+        rosterMeta.set(r.memberId, { isChair: !!r.isChair })
+    }
+
     for (const id of rosterIds) {
         if (!seen.has(id)) {
+            const meta = rosterMeta.get(id)
+            if (meta?.isChair) continue
             errors.push(`Missing roster memberId in memberVotes: ${id}`)
         }
     }
@@ -614,9 +635,11 @@ function validateAiVotePayload(args: {
         const votedIds = new Set(normalized.vote.memberVotes.map(v => v.memberId))
 
         // Filter the roster to only those that aren't in memberVotes
-        const missingFromMemberVotes = args.roster.filter( r => !votedIds.has( r.memberId ))
+        const missingFromMemberVotes = args.roster
+            .filter(r => !votedIds.has(r.memberId))
+            .filter(r => !r.isChair)
 
-        console.log('Missing Members', { missingFromMemberVotes, length: args.roster.length })
+        console.log('Missing Members', { memberVotes: args.roster, missingFromMemberVotes, length: args.roster.length })
 
         errors.push(`Undervote detected: missing ${underVoteCount} memberVotes relative to totals`)
 
@@ -751,7 +774,7 @@ async function extractVotesWithAi(args: {
     chamber: string | null
     committeeId: number
     committeeName: string
-    roster: Array<{ memberId: number; legislatorId: number; memberName: string; memberFirstName: string; memberLastName: string }>
+    roster: Array<{ memberId: number; legislatorId: number; memberName: string; memberFirstName: string; memberLastName: string; isChair?: boolean }>
     actionDateISO: string
 }) {
     const client = getOpenAiClient()
@@ -766,10 +789,12 @@ async function extractVotesWithAi(args: {
         "Yea, Nay, Abstain, Excused, Absent.",
         "Each row has exactly one checkmark in exactly one of those columns.",
         "At the bottom there is a row labeled Totals with the totals for each column.",
+        "Important note: The chair doesn't always vote. If the chair has no checkmark, do NOT output a memberVotes entry for the chair.",
+        "Do NOT adjust totals to include the chair. The Totals row should reflect only the marks shown on the PDF.",
         "",
         "CRITICAL REQUIREMENTS:",
-        "1) You MUST read the Totals row and fill vote.totalsRow exactly.",
-        "2) You MUST output exactly one memberVotes entry for every roster member listed.",
+        "1) You MUST read the Totals row and fill vote.totalsRow exactly as shown on the PDF.",
+        "2) You MUST output exactly one memberVotes entry for every roster member listed, EXCEPT you may omit the chair if the chair has no checkmark.",
         "3) memberId and legislatorId must come from the roster list only.",
         "4) No duplicates. No non-roster members.",
         "5) The computed totals from memberVotes MUST match vote.totalsRow exactly.",

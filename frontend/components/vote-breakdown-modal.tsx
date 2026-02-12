@@ -143,6 +143,7 @@ export function VoteBreakdownModal({ action }: Props) {
                 <DialogHeader>
                     <DialogTitle>
                         {action.committee?.name ?? "Committee Vote"} • {formattedDate}
+                        <span className="text-xs font-normal mt-2 block">Important note: The chair will not be displayed in this list if they chose not to vote.</span>
                     </DialogTitle>
                 </DialogHeader>
 
