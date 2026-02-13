@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { getActiveSessionCode } from "@/lib/get-system-setting"
 import { prisma } from "@/lib/prisma"
-import { Committee } from "@prisma/client"
+import { Committee, Legislator } from "@prisma/client"
 import { fetchApi } from "@/lib/api"
 
 interface BillsPageProps {
@@ -39,6 +39,10 @@ type CommitteeResponse = {
     committees: Committee[]
 }
 
+type LegislatorsResponse = {
+    legislators: Legislator[]
+}
+
 export default async function BillsPage({ searchParams }: BillsPageProps) {
     const params = await searchParams
     const q = params.q || ""
@@ -50,6 +54,10 @@ export default async function BillsPage({ searchParams }: BillsPageProps) {
     const page = Number.parseInt(params.page || "1", 10)
 
     const { committees } = await fetchApi<CommitteeResponse>(`/api/committees`, {
+        cache: "no-store",
+    })
+
+    const { legislators } = await fetchApi<LegislatorsResponse>(`/api/legislators`, {
         cache: "no-store",
     })
 
@@ -70,6 +78,7 @@ export default async function BillsPage({ searchParams }: BillsPageProps) {
 				initialSubject={subject}
 				initialStatus={status}
                 committees={committees}
+                legislators={legislators}
 			/>
 
 			<div className="mt-6">
