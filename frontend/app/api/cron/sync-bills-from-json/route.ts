@@ -831,8 +831,12 @@ export async function GET( request: Request ) {
         console.log('Fetching legislation.json...')
         const raw: RawBill[] = await fetchJson<RawBill[]>(LEGISLATION_JSON_URL)
 
+        console.log('Raw Count', raw.length)
+
         console.log('Building legislator index...')
-        const legislatorIndex = await buildLegislatorIndex()
+        const legislatorIndex = await buildLegislatorIndex() // @TODO this is returning a middle initial
+
+        // console.log('Legislator Index', legislatorIndex )
 
         let billsCount = 0
 
@@ -846,7 +850,8 @@ export async function GET( request: Request ) {
             const billNumber = String( item.BillNumber ).trim()
 
             // @TEMP - skip other bills to debug this one.
-            if ( billNumber !== "SB0364" ) continue
+            // if ( billNumber !== "SB0364" ) continue
+            ////////////
 
             const { sessionYear, sessionCode } = deriveSessionYearAndCode(item)
 
@@ -890,6 +895,8 @@ export async function GET( request: Request ) {
                     statusDesc: true,
                 },
             })
+
+            console.log('Existing Bill', existingBill?.id )
             
             const bill = await prisma.bill.upsert({
                 where: { externalId },
