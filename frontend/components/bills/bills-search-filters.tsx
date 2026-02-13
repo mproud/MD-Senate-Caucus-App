@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -10,8 +10,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Search, ChevronDown, RotateCcw } from "lucide-react"
-import { getUniqueSponsors, getUniqueCommittees, getUniqueSubjects } from "@/lib/mock-data"
-import { Committee } from "@prisma/client"
+import { Committee, Legislator } from "@prisma/client"
 
 interface BillsSearchFiltersProps {
     initialQuery: string
@@ -21,6 +20,12 @@ interface BillsSearchFiltersProps {
     initialSubject: string
     initialStatus: string
     committees: Committee[]
+    legislators: Legislator[]
+}
+
+type SponsorOption = {
+    id: number
+    label: string
 }
 
 export function BillsSearchFilters({
@@ -31,6 +36,7 @@ export function BillsSearchFilters({
     initialSubject,
     initialStatus,
     committees,
+    legislators,
 }: BillsSearchFiltersProps) {
     const router = useRouter()
 
@@ -45,10 +51,6 @@ export function BillsSearchFilters({
     const [sponsorSearch, setSponsorSearch] = useState("")
     const [subjectSearch, setSubjectSearch] = useState("")
 
-    // const availableCommittees = getUniqueCommittees()
-    // const filteredCommittees = availableCommittees.filter((c) => c.toLowerCase().includes(committeeSearch.toLowerCase()))
-
-    const availableSponsors: any[] = []
     const availableSubjects: any[] = []
 
     const filteredCommittees = committees
@@ -74,7 +76,73 @@ export function BillsSearchFilters({
             })()
             : ""
 
-    const filteredSponsors = availableSponsors.filter((s) => s.toLowerCase().includes(sponsorSearch.toLowerCase()))
+    const sponsorOptions: SponsorOption[] = useMemo(() => {
+        const normalizeChamberPrefix = (terms: any): string => {
+            const chamber = terms?.[0]?.chamber
+            if (chamber === "SENATE") return "Sen."
+            if (chamber === "HOUSE") return "Del."
+            return ""
+        }
+
+        const getDisplayName = (l: any): string => {
+            const fullName = l?.fullName
+            if (typeof fullName === "string" && fullName.trim()) return fullName.trim()
+
+            const firstName = l?.firstName
+            const middleName = l?.middleName
+            const lastName = l?.lastName
+            const parts = [firstName, middleName, lastName]
+                .filter(Boolean)
+                .map((p: string) => p.trim())
+            return parts.join(" ").trim()
+        }
+
+        const toLabel = (l: any): string => {
+            const prefix = normalizeChamberPrefix(l?.terms)
+            const name = getDisplayName(l)
+            const party = (l?.party ?? "").toString().trim()
+            const district = (l?.district ?? "").toString().trim()
+            const suffixParts = []
+            if (party) suffixParts.push(party.charAt(0))
+            if (district) suffixParts.push(district)
+            const suffix = suffixParts.length ? ` (${suffixParts.join("-")})` : ""
+            const spacer = prefix ? " " : ""
+            return `${prefix}${spacer}${name}${suffix}`.trim()
+        }
+
+        const options = (legislators ?? [])
+            .filter((l: any) => typeof l?.id === "number")
+            .map((l: any) => ({
+                id: l.id as number,
+                label: toLabel(l),
+            }))
+            .filter((o) => o.label)
+
+        const seen = new Set<number>()
+        const orderedUnique: SponsorOption[] = []
+
+        for (const o of options) {
+            if (seen.has(o.id)) continue
+            seen.add(o.id)
+            orderedUnique.push(o)
+        }
+
+        return orderedUnique
+    }, [legislators])
+
+
+    const selectedSponsorLabel = useMemo(() => {
+        if (!sponsor) return ""
+        const sponsorId = Number(sponsor)
+        if (!Number.isFinite(sponsorId)) return sponsor
+        const found = sponsorOptions.find((s) => s.id === sponsorId)
+        return found ? found.label : sponsor
+    }, [sponsor, sponsorOptions])
+
+    const filteredSponsors = sponsorOptions.filter((s) =>
+        s.label.toLowerCase().includes(sponsorSearch.toLowerCase())
+    )
+
     const filteredSubjects = availableSubjects.filter((s) => s.toLowerCase().includes(subjectSearch.toLowerCase()))
 
     const handleSubmit = (e?: React.FormEvent) => {
@@ -84,7 +152,7 @@ export function BillsSearchFilters({
         if (query.trim()) params.set("q", query.trim())
         if (chamber) params.set("chamber", chamber)
         if (committee) params.set("committee", committee)
-        if (sponsor) params.set("sponsor", sponsor)
+        if (sponsor) params.set("sponsorId", sponsor)
         if (subject) params.set("subject", subject)
         if (status) params.set("status", status)
 
@@ -124,7 +192,6 @@ export function BillsSearchFilters({
         <Card>
             <CardContent className="pt-6">
                 <form onSubmit={handleSubmit}>
-                    {/* Search Input */}
                     <div className="mb-4">
                         <Label htmlFor="search" className="sr-only">
                             Search
@@ -141,9 +208,7 @@ export function BillsSearchFilters({
                         </div>
                     </div>
 
-                    {/* Filter Row */}
                     <div className="flex flex-wrap gap-3">
-                        {/* Chamber Filter */}
                         <Popover>
                             <PopoverTrigger asChild>
                                 <Button variant="outline" className="min-w-[120px] justify-between bg-transparent">
@@ -174,7 +239,6 @@ export function BillsSearchFilters({
                             </PopoverContent>
                         </Popover>
 
-                        {/* Committee Filter */}
                         <Popover>
                             <PopoverTrigger asChild>
                                 <Button variant="outline" className="min-w-[180px] justify-between bg-transparent">
@@ -213,15 +277,14 @@ export function BillsSearchFilters({
                             </PopoverContent>
                         </Popover>
 
-                        {/* Sponsor Filter */}
                         <Popover>
                             <PopoverTrigger asChild>
-                                <Button variant="outline" className="min-w-[140px] justify-between bg-transparent">
-                                    <span className="truncate max-w-[100px]">{sponsor || "Sponsor"}</span>
+                                <Button variant="outline" className="min-w-[200px] justify-between bg-transparent">
+                                    <span className="truncate max-w-[160px]">{selectedSponsorLabel || "Sponsor"}</span>
                                     <ChevronDown className="ml-2 h-4 w-4 flex-shrink-0" />
                                 </Button>
                             </PopoverTrigger>
-                            <PopoverContent className="w-64 p-2" align="start">
+                            <PopoverContent className="w-80 p-2" align="start">
                                 <div className="mb-2">
                                     <Input
                                         placeholder="Search sponsors..."
@@ -240,20 +303,20 @@ export function BillsSearchFilters({
                                     </Button>
                                     {filteredSponsors.map((s) => (
                                         <Button
-                                            key={s}
-                                            variant={sponsor === s ? "secondary" : "ghost"}
+                                            key={s.id}
+                                            variant={Number(sponsor) === s.id ? "secondary" : "ghost"}
                                             className="w-full justify-start text-sm truncate"
-                                            onClick={() => setSponsor(s)}
+                                            onClick={() => setSponsor(String(s.id))}
+                                            title={s.label}
                                         >
-                                            {s}
+                                            {s.label}
                                         </Button>
                                     ))}
                                 </div>
                             </PopoverContent>
                         </Popover>
 
-                        {/* Subject Filter */}
-                        <Popover>
+                        {/* <Popover>
                             <PopoverTrigger asChild>
                                 <Button variant="outline" className="min-w-[120px] justify-between bg-transparent">
                                     <span className="truncate max-w-[80px]">{subject || "Subject"}</span>
@@ -289,9 +352,8 @@ export function BillsSearchFilters({
                                     ))}
                                 </div>
                             </PopoverContent>
-                        </Popover>
+                        </Popover> */}
 
-                        {/* Status Filter */}
                         <Popover>
                             <PopoverTrigger asChild>
                                 <Button variant="outline" className="min-w-[120px] justify-between bg-transparent">
@@ -322,7 +384,6 @@ export function BillsSearchFilters({
                             </PopoverContent>
                         </Popover>
 
-                        {/* Action Buttons */}
                         <div className="flex gap-2 ml-auto">
                             <Button type="button" variant="outline" onClick={handleReset}>
                                 <RotateCcw className="h-4 w-4 mr-2" />
