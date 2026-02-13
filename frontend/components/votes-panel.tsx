@@ -143,27 +143,31 @@ export function VotesPanel({
 
     const triggerAiRefetch = async (action: any) => {
         const voteAi = (action.dataSource as any)?.voteAi
+        const voteProcessing = (action.dataSource as any)?.voteProcessing
         const status = voteAi?.status as string | undefined
 
         if (status !== "FAILED" && status !== "DONE") {
             return
         }
 
+        console.log('VoteAI', voteAi, voteProcessing)
+
         setRefetchingId(action.id)
         try {
-            const res = await fetch(`/api/bills/${billNumber}/votes/ai-refetch`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ actionId: action.id }),
-            })
+            // const res = await fetch(`/api/bills/${billNumber}/votes/ai-refetch`, {
+            //     method: "POST",
+            //     headers: { "Content-Type": "application/json" },
+            //     body: JSON.stringify({ actionId: action.id }),
+            // })
 
-            if (!res.ok) {
-                const msg: unknown = await res.json().catch(() => null)
-                throw new Error(getApiErrorMessage(msg) ?? "Failed to trigger AI refetch")
-            }
+            // if (!res.ok) {
+            //     const msg: unknown = await res.json().catch(() => null)
+            //     throw new Error(getApiErrorMessage(msg) ?? "Failed to trigger AI refetch")
+            // }
 
             toast("AI Refetch Triggered", { description: "AI vote refetch has been queued." })
-            router.refresh()
+
+            // router.refresh()
         } catch (e) {
             toast.error("Error", { description: e instanceof Error ? e.message : "Failed to trigger AI refetch" })
         } finally {
