@@ -393,7 +393,7 @@ export function VotesPanel({
 
                         {action.notes && <p className="text-sm leading-relaxed">{action.notes}</p>}
 
-                        <div className="flex justify-between items-start gap-4 text-xs text-gray-600">
+                        <div className="flex justify-between items-end gap-4 text-xs text-gray-600">
                             {action.id}
                             { ( voteProcessing && voteProcessing?.lastError ) && (
                                 <span className="text-right">
