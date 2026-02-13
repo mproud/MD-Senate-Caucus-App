@@ -201,6 +201,13 @@ export function VotesPanel({
                     // ????
                 }
 
+                // Show "--" if there are no votes instead of just 0
+                let haveVotes = false
+                if ( action.yesVotes || action.noVotes ) {
+                    haveVotes = true
+                }
+                
+
                 const showAiRefetch = status === "FAILED" || status === "DONE"
 
                 const aiVariant =
@@ -357,24 +364,31 @@ export function VotesPanel({
                         <div className="flex gap-6 mb-3 flex-wrap">
                             <div>
                                 <span className="font-medium">Yes: </span>
-                                <span className="text-green-600 dark:text-green-400">{action.yesVotes || 0}</span>
+                                <span className="text-green-600 dark:text-green-400">{action.yesVotes || ( haveVotes ? 0 : "--")}</span>
                             </div>
                             <div>
                                 <span className="font-medium">No: </span>
-                                <span className="text-red-600 dark:text-red-400">{action.noVotes || 0}</span>
+                                <span className="text-red-600 dark:text-red-400">{action.noVotes || ( haveVotes ? 0 : "--")}</span>
                             </div>
                             <div>
                                 <span className="text-sm font-medium">Not Voting: </span>
-                                <span className="text-sm text-gray-600 dark:text-gray-400">{action.notVoting || 0}</span>
+                                <span className="text-sm text-gray-600 dark:text-gray-400">{action.notVoting || ( haveVotes ? 0 : "--")}</span>
                             </div>
                             <div>
                                 <span className="text-sm font-medium">Excused: </span>
-                                <span className="text-sm text-gray-600 dark:text-gray-400">{action.excused || 0}</span>
+                                <span className="text-sm text-gray-600 dark:text-gray-400">{action.excused || ( haveVotes ? 0 : "--")}</span>
                             </div>
                             <div>
                                 <span className="text-sm font-medium">Absent: </span>
-                                <span className="text-sm text-gray-600 dark:text-gray-400">{action.absent || 0}</span>
+                                <span className="text-sm text-gray-600 dark:text-gray-400">{action.absent || ( haveVotes ? 0 : "--")}</span>
                             </div>
+                            { ! haveVotes && (
+                                <div>
+                                    <span className="text-sm text-gray-600 dark:text-gray-400 italic">
+                                        No vote recorded yet
+                                    </span>
+                                </div>
+                            )}
                         </div>
 
                         {action.notes && <p className="text-sm leading-relaxed">{action.notes}</p>}

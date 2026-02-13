@@ -227,6 +227,10 @@ function getBillEventDataSource(value: unknown): BillEventDataSource {
     return value as BillEventDataSource
 }
 
+function normalizeText(s: string) {
+    return s.replace(/\s+/g, " ").trim().toLowerCase()
+}
+
 function normalizeVoteText(s: unknown): string {
     return String(s ?? "").replace(/\s+/g, " ").trim()
 }
@@ -310,6 +314,20 @@ const findCandidateVoteActions = async ( limit: number ) => {
         take: limit
     })
 }
+
+// Get the vote from a text string (Ex: Third Reading Passed (YES-NO))
+function extractVoteTotals(actionText: string) {
+    // Matches (135-0) or even ( 135 - 0 )
+    const match = actionText.match(/\(\s*(\d+)\s*-\s*(\d+)\s*\)/)
+
+    if ( ! match ) return null
+
+    return {
+        yea: parseInt(match[1], 10),
+        nay: parseInt(match[2], 10),
+    }
+}
+
 
 /*
     Create a BillEvent after floor votes are recorded
@@ -509,6 +527,63 @@ function findVotePdfLinksOnBillPage( billUrl: string, html: string) {
     })
 
     return Array.from(new Set(output))
+}
+
+// Find any bill votes on the page, even if they're not linked yet
+function findVotesOnBillPage( html: string, action: BillAction ) {
+    const $ = cheerio.load(html)
+
+    const targetChamber = normalizeText(action.chamber ?? "")
+    const targetMotion = normalizeText(action.motion ?? "")
+    const targetResult = normalizeText(action.voteResult ?? "")
+
+    const matches: Array<{
+        chamber: string
+        calendarDate: string
+        legislativeDate: string
+        actionText: string
+        proceedingsText: string
+        rowHtml: string
+        yesVotes?: number
+        noVotes?: number
+    }> = []
+
+    $("#detailsHistory tbody tr").each((_, tr) => {
+        const tds = $(tr).find("td")
+        if (tds.length < 4) return
+
+        const chamberText = normalizeText( $(tds[0]).text() )
+        const calendarDate = $(tds[1]).text().trim()
+        const legislativeDate = $(tds[2]).text().trim()
+        const actionTextRaw = $(tds[3]).text() // includes text inside <a>, etc.
+        const actionText = normalizeText( actionTextRaw )
+
+        // Get the votes if they're in the row
+        const votes = extractVoteTotals( actionTextRaw )
+
+        // skip the "blank chamber/date" rows (like "Text - Third - ...")
+        if ( ! chamberText ) return
+
+        // Bail if it's not the right chamber
+        if ( chamberText !== targetChamber ) return
+
+        // Check for both the motion and the result
+        if ( ! actionText.includes(targetMotion) ) return
+        if ( ! actionText.includes(targetResult) ) return
+
+        matches.push({
+            chamber: $(tds[0]).text().trim(),
+            calendarDate,
+            legislativeDate,
+            actionText: $(tds[3]).text().replace(/\s+/g, " ").trim(),
+            proceedingsText: $(tds[4]).text().replace(/\s+/g, " ").trim(),
+            rowHtml: $.html(tr),
+            yesVotes: votes?.yea ?? undefined,
+            noVotes: votes?.nay ?? undefined,
+        })
+    })
+
+    return matches.at(-1)
 }
 
 // Convert a possibly-relative href to an absolute URL
@@ -899,6 +974,8 @@ const saveVoteFailure = async ( args: {
     errorMessage: string
     status: VoteProcessingStatus
     nextAttemptAtISO: string
+    yesVotes?: number
+    noVotes?: number
 }) => {
     const now = new Date()
 
@@ -909,6 +986,12 @@ const saveVoteFailure = async ( args: {
         nextAttemptAt: args.nextAttemptAtISO,
         lastError: args.errorMessage
     }
+
+    // Only update vote totals if they're not there already
+    const existing = await prisma.billAction.findUnique({
+        where: { id: args.billActionId },
+        select: { yesVotes: true, noVotes: true }
+    })
 
     await prisma.billAction.update({
         where: { id: args.billActionId },
@@ -921,7 +1004,11 @@ const saveVoteFailure = async ( args: {
                     voteUrl: args.voteUrl ?? (args.dataSource.mga?.voteUrl ?? undefined)
                 },
                 voteProcessing: nextVoteProcessing
-            }
+            },
+
+            // Only update if they're not already in the row
+            ...(args.yesVotes != null && existing?.yesVotes == null ? { yesVotes: args.yesVotes } : {}),
+            ...(args.noVotes != null && existing?.noVotes == null ? { noVotes: args.noVotes } : {})
         }
     })
 
@@ -1153,6 +1240,7 @@ const processBillAction = async (
         // Parse the HTML to find the vote link
         const billHtml = await fetchRawHtml( billUrl )
         const rawVoteLinks = findVotePdfLinksOnBillPage( billUrl, billHtml )
+        const voteRow = findVotesOnBillPage( billHtml, action )
 
         // @TODO this needs to handle committee votes eventually too
         const picked = pickBestVotePdfUrl({
@@ -1165,6 +1253,10 @@ const processBillAction = async (
         if ( ! picked ) {
             const nextAttemptAt = computeNextAttemptAt(attempts)
 
+            console.log('>>>> Picked', { voteRow })
+
+            // If there were votes found in the row, send them up to the database to update
+
             const retry = await saveVoteFailure({
                 billActionId: action.id,
                 dataSource: ds,
@@ -1173,7 +1265,10 @@ const processBillAction = async (
                 attempts,
                 errorMessage: "No vote PDF found on bill details page yet",
                 status: "FAILED",
-                nextAttemptAtISO: nextAttemptAt.toISOString()
+                nextAttemptAtISO: nextAttemptAt.toISOString(),
+
+                yesVotes: voteRow?.yesVotes ?? undefined,
+                noVotes: voteRow?.noVotes ?? undefined,
             })
 
             return {
