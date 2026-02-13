@@ -4,7 +4,7 @@ import { BillsSearchFilters } from "@/components/bills/bills-search-filters"
 import { Card, CardContent } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { getActiveSessionCode } from "@/lib/get-system-setting"
-import { prisma } from "@/lib/prisma"
+// import { prisma } from "@/lib/prisma"
 import { Committee, Legislator } from "@prisma/client"
 import { fetchApi } from "@/lib/api"
 
