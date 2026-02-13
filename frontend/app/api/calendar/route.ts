@@ -219,6 +219,7 @@ export async function GET(request: NextRequest) {
                             select: {
                                 id: true,
                                 billNumber: true,
+                                chamber: true,
                                 shortTitle: true,
                                 longTitle: true,
                                 synopsis: true,

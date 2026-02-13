@@ -347,7 +347,12 @@ function looksLikeCommitteeVote(e: CommitteeVoteEvent): boolean {
 
 
 function pickHouseFloorVote(bill: any) {
-    if (!bill?.actions?.length) return null
+    if ( ! bill?.actions?.length ) {
+        console.log('>> No Actions <<', { billNumber: bill?.billNumber })
+        return null
+    }
+
+    console.log('Bill Actions', { billNumber: bill.billNumber, actions: bill.actions })
 
     return bill.actions.find((a: any) =>
         a.chamber === "HOUSE" &&
@@ -934,7 +939,7 @@ export async function CalendarReport({ calendarData, hideCalendars }: { calendar
 
                                         <TableBody>
                                             {group.items.map((item: any) => {
-                                                const DEBUG_BILL = "000000000" // Change this to a bill number if needed - debug party line split
+                                                const DEBUG_BILL = "000000" // Change this to a bill number if needed - debug party line split
                                                 const debugThisRow = item.billNumber === DEBUG_BILL
 
                                                 // pull billEvents + current committee id for this row/section
@@ -946,9 +951,9 @@ export async function CalendarReport({ calendarData, hideCalendars }: { calendar
 
                                                 // Case 1: Bill started in HOUSE and already passed there
                                                 const houseVote =
-                                                    bill?.originChamber === "HOUSE"
+                                                    bill.chamber === "HOUSE"
                                                         ? pickHouseFloorVote(bill)
-                                                        : null
+                                                        : console.log('Not origin house', bill.billNumber, bill.chamber )
 
                                                 // Case 2: Senate bill with a crossfile that passed the House
                                                 const crossfileHouseVote =
@@ -1085,6 +1090,15 @@ export async function CalendarReport({ calendarData, hideCalendars }: { calendar
                                                             <div className="line-clamp-3 print:line-clamp-8 leading-snug">
                                                                 {item.bill.shortTitle}
                                                             </div>
+
+                                                            {debugThisRow && (
+                                                                <DebugBlock
+                                                                    title="Actions Debug"
+                                                                    data={{
+                                                                        bill: item.bill,
+                                                                    }}
+                                                                />
+                                                            )}
                                                         </TableCell>
 
                                                         <TableCell className={`${cellBase} hidden md:table-cell print:!table-cell ${COLS.committee}`}>
@@ -1223,7 +1237,7 @@ export async function CalendarReport({ calendarData, hideCalendars }: { calendar
                                                                 {houseFloorVote && (
                                                                     <>
                                                                         <span className="text-xs">
-                                                                            House Vote: ({houseFloorVote.yesVotes}-{houseFloorVote.noVotes})
+                                                                            House Vote: {houseFloorVote.yesVotes}-{houseFloorVote.noVotes}
                                                                         </span>
                                                                         <br />
                                                                     </>
