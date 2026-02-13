@@ -24,11 +24,11 @@
     },
 
     {
-      "path": "/api/cron/process-votes-ai?limit=5",
+      "path": "/api/cron/process-votes-ai?limit=25",
       "schedule": "*/5 0-3,12-23 * * *"
     },
     {
-      "path": "/api/cron/process-votes-ai-v2?limit=5",
+      "path": "/api/cron/process-votes-ai-v2?limit=25",
       "schedule": "*/5 0-3,12-23 * * *"
     },
 
