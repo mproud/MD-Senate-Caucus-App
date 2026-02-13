@@ -73,6 +73,13 @@ type AiVotePayload = {
     billActionId: number
 }
 
+interface VotePDFLinksResponse {
+    voteText: string
+    href: string
+    parentText: string
+    chamber: string
+}
+
 type MgaVoteMeta = {
     billUrl?: string
     voteUrl?: string
@@ -327,7 +334,41 @@ function toAbsoluteUrl(baseUrl: string, href: string) {
 /*
     Discover vote-related PDF links on the bill details page.
 */
-function findVotePdfLinksOnBillPage(html: string) {
+function findVotePdfLinksOnBillPage( billUrl: string, html: string) {
+    const $ = cheerio.load(html)
+
+    const output: VotePDFLinksResponse[] = []
+
+    $("table#detailsHistory a[href]").each((_, el) => {
+        const href = String($(el).attr("href") ?? "").trim()
+        if ( ! href ) return
+
+        const lower = href.toLowerCase()
+        const isPdf = lower.endsWith(".pdf")
+
+        const isVotePdf =
+            lower.includes("/votes/") ||
+            lower.includes("/votes_comm/") ||
+            lower.includes("/votes_comm")
+
+        if ( isPdf && isVotePdf ) {
+            const voteText = $(el).text().trim()
+            const parentText = $(el).parent().text().trim()
+            const row = $(el).closest("tr")
+            const chamber = row.find("td").first().text().trim()
+
+            output.push({
+                voteText,
+                href: toAbsoluteUrl( billUrl, href ),
+                parentText,
+                chamber,
+            })
+        }
+    })
+
+    return Array.from(new Set(output))
+}
+function legacy__findVotePdfLinksOnBillPage(html: string) {
     const $ = cheerio.load(html)
 
     const urls: string[] = []
@@ -354,18 +395,48 @@ function findVotePdfLinksOnBillPage(html: string) {
 /*
     Pick the best vote PDF from a list of discovered vote PDF URLs.
 */
-function pickBestVotePdfUrl(args: { voteUrls: string[]; committeeId: number | null }) {
-    if (args.voteUrls.length === 0) return null
+function pickBestVotePdfUrl({
+    chamber,
+    rawVoteLinks,
+    committeeId,
+    committee,
+    billUrl,
+}: {
+    chamber: string
+    rawVoteLinks?: VotePDFLinksResponse[]
+    committeeId: number
+    committee: string
+    billUrl: string
+}): { voteText: string; href: string; parentText: string; chamber: string } | null {
+    if ( ! rawVoteLinks ) return null
 
-    if (args.committeeId) {
-        const comm = args.voteUrls.find(u => u.toLowerCase().includes("/votes_comm"))
-        if (comm) return comm
+    if ( rawVoteLinks.length === 0 ) return null
+
+    if ( ! committeeId || ! committee ) return null
+
+    const simpleCommitteeName = committee?.replace("Committee", "").trim()
+
+    const match = rawVoteLinks.find(u => {
+        const isCorrectChamber =
+            u.parentText?.toLowerCase().includes(chamber.toLowerCase())
+
+        const isCommitteeVote =
+            u.href?.toLowerCase().includes("/votes_comm")
+
+        if ( ! isCorrectChamber || ! isCommitteeVote ) return false
+
+        const committeeName = u.voteText.split("Committee - ")[1]?.trim()
+
+        return committeeName === simpleCommitteeName
+    })
+
+    if ( ! match ) return null
+
+    return {
+        ...match,
+        chamber,
+        href: toAbsoluteUrl( billUrl, match.href ),
     }
-
-    const floor = args.voteUrls.find(u => u.toLowerCase().includes("/votes/"))
-    if (floor) return floor
-
-    return args.voteUrls[0]
 }
 
 /*
@@ -1129,22 +1200,25 @@ async function processVoteBillActionAi( billActionId: number, options?: { force?
 
     try {
         const billHtml = await fetchRawHtml(billUrl)
-        const rawVoteLinks = findVotePdfLinksOnBillPage(billHtml)
-        const voteLinks = rawVoteLinks.map(href => toAbsoluteUrl(billUrl, href))
+        const rawVoteLinks = findVotePdfLinksOnBillPage( billUrl, billHtml )
+        // const voteLinks = rawVoteLinks.map(href => toAbsoluteUrl(billUrl, href))
 
         const voteUrl = pickBestVotePdfUrl({
-            voteUrls: voteLinks,
-            committeeId: action.committeeId
+            billUrl,
+            rawVoteLinks,
+            chamber: action.chamber ?? "",
+            committeeId: action.committeeId,
+            committee: action.committee?.name ?? "",
         })
 
-        if (!voteUrl) {
+        if ( ! voteUrl ) {
             const nextAttemptAt = computeNextAttemptAt(attempts)
 
             const retry = await saveAiVoteFailure({
                 billActionId: action.id,
                 ds,
                 billUrl,
-                voteUrl: null,
+                voteUrl,
                 attempts,
                 errorMessage: "No vote PDF found on bill details page yet",
                 status: "FAILED",
@@ -1155,8 +1229,8 @@ async function processVoteBillActionAi( billActionId: number, options?: { force?
                 billActionId,
                 status: "ERROR" as const,
                 billUrl,
-                voteUrl: null,
-                discoveredVoteUrls: voteLinks,
+                voteUrl,
+                discoveredVoteUrls: rawVoteLinks,
                 error: "No vote PDF found on bill details page yet",
                 retry
             }
@@ -1166,7 +1240,7 @@ async function processVoteBillActionAi( billActionId: number, options?: { force?
 
         const aiPayload = await extractVotesWithAi({
             billActionId: action.id,
-            voteUrl,
+            voteUrl: voteUrl.href,
             billNumber: action.bill.billNumber,
             sessionCode: action.bill.sessionCode,
             chamber: action.chamber ?? null,
@@ -1182,7 +1256,7 @@ async function processVoteBillActionAi( billActionId: number, options?: { force?
             billId: action.billId,
             billActionId: action.id,
             ds,
-            voteUrl,
+            voteUrl: voteUrl.href,
             billUrl,
             payload: aiPayload,
             attempts
@@ -1193,7 +1267,7 @@ async function processVoteBillActionAi( billActionId: number, options?: { force?
             status: "OK" as const,
             billUrl,
             voteUrl,
-            discoveredVoteUrls: voteLinks,
+            discoveredVoteUrls: rawVoteLinks,
             saved
         }
     } catch (err) {
@@ -1277,11 +1351,17 @@ export async function GET(request: Request) {
         const billActionIdParam = url.searchParams.get("billActionId")
         const limitParam = url.searchParams.get("limit")
         const forceParam = url.searchParams.get("force")
+        const dryRunParam = url.searchParams.get("dryRun")
 
         const force =
             forceParam === "1" ||
             forceParam === "true" ||
             forceParam === "yes"
+
+        const dryRun =
+            dryRunParam === "1" ||
+            dryRunParam === "true" ||
+            dryRunParam === "yes"
 
         if (billActionIdParam) {
             const billActionId = Number(billActionIdParam)
@@ -1302,6 +1382,15 @@ export async function GET(request: Request) {
 
         const candidates = await findCandidateVoteActions(safeLimit)
         const now = new Date()
+
+        if ( dryRun ) {
+            return NextResponse.json({
+                mode: "batch",
+                requestedLimit: safeLimit,
+                totalCandidates: candidates.length,
+                candidates,
+            })
+        }
 
         const dueIds = candidates
             .filter(row => {

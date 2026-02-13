@@ -95,7 +95,7 @@ type VoteState = {
     lastError?: string[] | string
 }
 
-interface votePDFLinksResponse {
+interface VotePDFLinksResponse {
     voteText: string
     href: string
     parentText: string
@@ -479,7 +479,7 @@ function computeCountsFromMemberVotes(memberVotes: MemberVote[]): VoteCounts {
 function findVotePdfLinksOnBillPage( billUrl: string, html: string) {
     const $ = cheerio.load(html)
 
-    const output: votePDFLinksResponse[] = []
+    const output: VotePDFLinksResponse[] = []
 
     $("table#detailsHistory a[href]").each((_, el) => {
         const href = String($(el).attr("href") ?? "").trim()
@@ -528,7 +528,7 @@ function pickBestVotePdfUrl({
     actionCode,
 }: {
     chamber: string
-    rawVoteLinks?: votePDFLinksResponse[]
+    rawVoteLinks?: VotePDFLinksResponse[]
     billUrl: string
     actionCode: string
 }): { voteText: string; href: string; parentText: string; chamber: string } | null {
@@ -1067,19 +1067,27 @@ const saveVoteResult = async ({
 // Process a single bill action
 const processBillAction = async (
     billActionId: number,
-    options?: { force?: boolean },
+    options?: {
+        force?: boolean
+        dryRun?: boolean
+    },
 ) => {
     const force = options?.force ?? false
+    const dryRun = options?.dryRun ?? false
 
     if (force) {
         console.log(`Force processing billActionId=${billActionId}`)
+    }
+
+    if ( dryRun ) {
+        console.log(`Dry run processing billActionId=${billActionId}`)
     }
 
     const action = await prisma.billAction.findUnique({
         where: { id: billActionId },
         include: {
             bill: true,
-            committee: true
+            committee: true,
         }
     })
 
@@ -1170,6 +1178,8 @@ const processBillAction = async (
 
             return {
                 billActionId,
+                motion: ds.kind,
+                chamber: ds.chamber,
                 status: "ERROR" as const,
                 billUrl,
                 voteUrl: null,
@@ -1972,11 +1982,17 @@ export const GET = async ( request: Request) => {
     const billActionIdParam = url.searchParams.get("billActionId")
     const limitParam = url.searchParams.get("limit")
     const forceParam = url.searchParams.get("force")
+    const dryRunParam = url.searchParams.get("dryRun")
 
     const force =
         forceParam === "1" ||
         forceParam === "true" ||
         forceParam === "yes"
+
+    const dryRun =
+        dryRunParam === "1" ||
+        dryRunParam === "true" ||
+        dryRunParam === "yes"
 
     const limit = limitParam ? Number(limitParam) : 25
     const hardMaximum = 25
@@ -2009,11 +2025,14 @@ export const GET = async ( request: Request) => {
         const now = new Date()
 
         // bail for debugging
-        // return NextResponse.json({
-        //     mode: "batch",
-        //     requestedLimit: safeLimit,
-        //     candidates: candidates.length,
-        // })
+        if ( dryRun ) {
+            return NextResponse.json({
+                mode: "batch",
+                requestedLimit: safeLimit,
+                totalCandidates: candidates.length,
+                candidates,
+            })
+        }
 
         // Filter candidates to find out which ones are due now
         const dueIds = candidates
