@@ -34,8 +34,8 @@ export async function sendTemplateEmail({
     
     return await resend.emails.send({
         from: from && from.trim() !== "" ? from : `"Caucus Report" <${process.env.RESEND_FROM!}>`,
-        to: debuggingEmail,
-        // to: isProd ? to : debuggingEmail,
+        // to: debuggingEmail,
+        to: isProd ? to : debuggingEmail,
         // ...( isProd && {
         //     bcc: debuggingEmail,
         // }),

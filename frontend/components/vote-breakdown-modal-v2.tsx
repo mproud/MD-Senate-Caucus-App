@@ -166,7 +166,7 @@ export const VoteBreakdownModalV2 = ({ action }: { action: VoteBreakdownAction }
                     disabled={!hasBreakdown}
                     title={hasBreakdown ? "View vote breakdown" : "No legislator breakdown available"}
                 >
-                    View breakdown <span className="text-xs">(v2)</span>
+                    View breakdown
                 </Button>
             </DialogTrigger>
 

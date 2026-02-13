@@ -141,29 +141,38 @@ export function VotesPanel({
         }
     }
 
-    const triggerAiRefetch = async (action: any) => {
-        const voteAi = (action.dataSource as any)?.voteAi
+    const triggerAiRefetch = async ( action: any ) => {
+        // const voteAi = (action.dataSource as any)?.voteAi
         const voteProcessing = (action.dataSource as any)?.voteProcessing
-        const status = voteAi?.status as string | undefined
+        // const aiStatus = voteAi?.status as string | undefined
+        // const voteStatus = voteProcessing?.status as string | undefined
 
-        if (status !== "FAILED" && status !== "DONE") {
-            return
-        }
-
-        console.log('VoteAI', voteAi, voteProcessing)
+        // if (status !== "FAILED" && status !== "DONE") {
+        //     return
+        // }
 
         setRefetchingId(action.id)
         try {
-            // const res = await fetch(`/api/bills/${billNumber}/votes/ai-refetch`, {
-            //     method: "POST",
-            //     headers: { "Content-Type": "application/json" },
-            //     body: JSON.stringify({ actionId: action.id }),
-            // })
+            // const url = `/api/bills/${billNumber}/votes/ai-refetch`
+            // const url = `/api/cron/process-votes-ai?billActionId=${action.id}&force=true`
+            // const url = `/api/cron/process-votes-ai-v2?billActionId=${action.id}&force=true`
 
-            // if (!res.ok) {
-            //     const msg: unknown = await res.json().catch(() => null)
-            //     throw new Error(getApiErrorMessage(msg) ?? "Failed to trigger AI refetch")
-            // }
+            const basePath = voteProcessing
+                ? "/api/cron/process-votes-ai-v2"
+                : "/api/cron/process-votes-ai"
+
+            const url = `${basePath}?billActionId=${action.id}&force=true`
+
+            const res = await fetch(url, {
+                method: "GET",
+                headers: { "Content-Type": "application/json" },
+                // body: JSON.stringify({ actionId: action.id }),
+            })
+
+            if (!res.ok) {
+                const msg: unknown = await res.json().catch(() => null)
+                throw new Error(getApiErrorMessage(msg) ?? "Failed to trigger AI refetch")
+            }
 
             toast("AI Refetch Triggered", { description: "AI vote refetch has been queued." })
 
@@ -178,7 +187,7 @@ export function VotesPanel({
     return (
         <div className="space-y-4">
             {sorted.map((action) => {
-                // const voteAi = (action.dataSource as any)?.voteAi
+                const voteAi = (action.dataSource as any)?.voteAi
                 // const status = voteAi?.status as string | undefined
                 // const attempts = voteAi?.attempts as number | undefined
 
@@ -284,16 +293,19 @@ export function VotesPanel({
                                     })()
                                 )}
 
-                                {showAiRefetch && (
+                                {/* {showAiRefetch && ( */}
                                     <Button
                                         size="sm"
                                         variant="outline"
                                         disabled={refetchingId === action.id}
-                                        onClick={() => triggerAiRefetch(action)}
+                                        onClick={() => {
+                                            console.log('Click', action.id)
+                                            triggerAiRefetch(action)
+                                        }}
                                     >
                                         {refetchingId === action.id ? "Refetching..." : "Refetch AI"}
                                     </Button>
-                                )}
+                                {/* )} */}
 
                                 { !aiLabel && (
                                     <VoteForm
@@ -367,7 +379,31 @@ export function VotesPanel({
 
                         {action.notes && <p className="text-sm leading-relaxed">{action.notes}</p>}
 
-                        <p className="text-xs text-gray-600">{action.id}</p>
+                        <div className="flex justify-between items-start gap-4 text-xs text-gray-600">
+                            {action.id}
+                            { ( voteProcessing && voteProcessing?.lastError ) && (
+                                <span className="text-right">
+                                    Error: {voteProcessing?.lastError}<br/>
+                                    Last attempt at:{" "}
+                                    {voteProcessing.lastAttemptAt &&
+                                        new Date(voteProcessing.lastAttemptAt).toLocaleString()}<br />
+                                    Next attempt at:{" "}
+                                    {voteProcessing.nextAttemptAt &&
+                                        new Date(voteProcessing.nextAttemptAt).toLocaleString()}
+                                </span>
+                            )}
+                            { ( voteAi && voteAi?.lastError ) && (
+                                <span className="text-right">
+                                    Error: {voteAi?.lastError}<br/>
+                                    Last attempt at:{" "}
+                                    {voteAi.lastAttemptAt &&
+                                        new Date(voteAi.lastAttemptAt).toLocaleString()}<br />
+                                    Next attempt at:{" "}
+                                    {voteAi.nextAttemptAt &&
+                                        new Date(voteAi.nextAttemptAt).toLocaleString()}
+                                </span>
+                            )}
+                        </div>
                     </div>
                 )
             })}
