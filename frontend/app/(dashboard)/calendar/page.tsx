@@ -1,7 +1,7 @@
-import { CalendarReport } from "@/components/calendar-report"
 import { fetchApi } from "@/lib/api"
 import type { CalendarDay } from "@/lib/types"
 import { ReportButtons } from "@/components/report-buttons"
+import { CalendarReport } from "@/components/calendar-report/calendar-report"
 import { ReportFilters } from "@/components/calendar-report/report-filters"
 import { format } from "date-fns"
 
