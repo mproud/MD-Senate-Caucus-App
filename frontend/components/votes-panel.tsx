@@ -280,7 +280,8 @@ export function VotesPanel({
                                     </Badge>
                                 )}
 
-                                {kind === "committee" && hasPartyVotes(action.votes) && (
+                                {/* {kind === "committee" && hasPartyVotes(action.votes) && ( */}
+                                { hasPartyVotes(action.votes) && (
                                     (() => {
                                         const result = computeStrictPartyLine(action.votes)
                                         const label = strictPartyLineLabel(result)
