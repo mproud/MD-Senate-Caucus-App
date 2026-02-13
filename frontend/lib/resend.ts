@@ -35,9 +35,9 @@ export async function sendTemplateEmail({
     return await resend.emails.send({
         from: from && from.trim() !== "" ? from : `"Caucus Report" <${process.env.RESEND_FROM!}>`,
         to: isProd ? to : debuggingEmail,
-        ...( isProd && {
-            bcc: debuggingEmail,
-        }),
+        // ...( isProd && {
+        //     bcc: debuggingEmail,
+        // }),
         subject,
         headers,
         react: EmailTemplate({ html, preview, to })
